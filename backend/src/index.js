@@ -1,8 +1,10 @@
+require("express-async-errors");
 require("dotenv").config();
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
 
+const prisma = require("./lib/prisma");
 const { setupSockets } = require("./sockets/orderSocket");
 const authRoutes = require("./routes/auth.routes");
 const vendorRoutes = require("./routes/vendors.routes");
@@ -39,7 +41,16 @@ app.use(cors({
 app.use("/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.json({ ok: true, name: "Route API", health: "/health", databaseHealth: "/health/db" });
+});
+
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.get("/health/db", async (req, res) => {
+  await prisma.$queryRaw`SELECT 1`;
+  res.json({ ok: true });
+});
 
 app.use("/auth", authRoutes);
 app.use("/vendors", vendorRoutes);
