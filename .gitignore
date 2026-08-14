@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm-cache/
+.expo/
+.expo-shared/
+
+# Build output
+dist/
+build/
+web-build/
+.next/
+coverage/
+
+# Native/generated Expo folders
+ios/
+android/
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Office temp files
+~$*

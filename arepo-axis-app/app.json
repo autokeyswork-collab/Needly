@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Route - Arepo & Axis",
+    "slug": "arepo-axis-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#232B4D"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#232B4D" }
+    },
+    "web": { "bundler": "metro" }
+  }
+}
