@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm install --prefix backend && npm run prisma:generate --prefix backend",
     "build": "npm install --prefix backend && npm run prisma:generate --prefix backend && npm run prisma:migrate:deploy --prefix backend",
     "start": "npm start --prefix backend"
   },
