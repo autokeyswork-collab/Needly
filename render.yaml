@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: needly-backend
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm install && npm run prisma:generate --prefix backend
+    preDeployCommand: npm run prisma:migrate:deploy --prefix backend
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "18"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: needly-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PORT
+        value: "4000"
+      - key: APP_BASE_URL
+        value: https://needly-backend.onrender.com
+      - key: ALLOWED_AREAS
+        value: Abeokuta,Adigbe,Panseke,Oke-Ilewo,Lafenwa,Kuto,Omida
+      - key: RIDER_PAYOUT_PER_DELIVERY
+        value: "600"
+      - key: ALLOWED_ORIGINS
+        value: "*"
+
+databases:
+  - name: needly-db
+    plan: free
+    region: oregon
+    databaseName: needly
+    user: needly
