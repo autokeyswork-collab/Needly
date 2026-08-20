@@ -31,7 +31,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
     await prisma.payment.delete({ where: { id: order.payment.id } });
   }
 
-  const reference = `route_${order.id}_${Date.now()}`;
+  const reference = `needly_${order.id}_${Date.now()}`;
 
   const txn = await initializeTransaction({
     email: order.customer.email,
@@ -135,7 +135,7 @@ router.get("/callback", (req, res) => {
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
     <style>body{font-family:-apple-system,sans-serif;background:#F5F4F0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box;}
     div{max-width:320px}h1{font-size:20px;color:#14171F}p{color:#6B6F76;font-size:14px}</style></head>
-    <body><div><h1>Thanks!</h1><p>You can close this window and return to the Route app — your order will update automatically once payment is confirmed.</p></div></body></html>
+    <body><div><h1>Thanks!</h1><p>You can close this window and return to the Needly app — your order will update automatically once payment is confirmed.</p></div></body></html>
   `);
 });
 

@@ -1,7 +1,7 @@
 {
-  "installCommand": "cd arepo-axis-app && npm install",
-  "buildCommand": "cd arepo-axis-app && EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-https://route-0xak.onrender.com} npm run build",
-  "outputDirectory": "arepo-axis-app/dist",
+  "installCommand": "cd needly-app && npm install",
+  "buildCommand": "cd needly-app && EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-https://needly.onrender.com} npm run build",
+  "outputDirectory": "needly-app/dist",
   "rewrites": [
     {
       "source": "/(.*)",

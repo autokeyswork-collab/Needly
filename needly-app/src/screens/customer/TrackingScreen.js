@@ -1,0 +1,378 @@
+import React, { useEffect, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { STATUS_FLOW, STATUS_LABEL } from "../../data/mockData";
+import { COLORS, fmtNaira } from "../../theme/colors";
+import { useOrders } from "../../context/OrdersContext";
+import { getSocket } from "../../api/socket";
+import { PaymentAPI, ReviewAPI } from "../../api/client";
+import StarRating from "../../components/StarRating";
+
+const DISPUTE_REASONS = ["Missing item", "Wrong item", "Item damaged", "Arrived late", "Other"];
+const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
+
+function hasCoords(point) {
+  return Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude);
+}
+
+function lerp(start, end, ratio) {
+  if (!hasCoords(start) || !hasCoords(end)) return null;
+  return {
+    latitude: start.latitude + (end.latitude - start.latitude) * ratio,
+    longitude: start.longitude + (end.longitude - start.longitude) * ratio,
+  };
+}
+
+function distanceKm(a, b) {
+  if (!hasCoords(a) || !hasCoords(b)) return null;
+  const earthRadiusKm = 6371;
+  const dLat = (b.latitude - a.latitude) * Math.PI / 180;
+  const dLng = (b.longitude - a.longitude) * Math.PI / 180;
+  const lat1 = a.latitude * Math.PI / 180;
+  const lat2 = b.latitude * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
+}
+
+function buildTrackingPoints(order) {
+  const vendor = hasCoords(order.vendor)
+    ? { latitude: order.vendor.latitude, longitude: order.vendor.longitude }
+    : ABEOKUTA_CENTER;
+  const customer = hasCoords({ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude })
+    ? { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+    : null;
+  const riderReported = hasCoords({ latitude: order.riderLatitude, longitude: order.riderLongitude })
+    ? { latitude: order.riderLatitude, longitude: order.riderLongitude }
+    : null;
+  const simulatedRider = order.status === "PICKED_UP" && customer
+    ? lerp(vendor, customer, 0.58)
+    : order.riderName
+      ? lerp(ABEOKUTA_CENTER, vendor, 0.72)
+      : null;
+  return { vendor, customer, rider: riderReported || simulatedRider };
+}
+
+function markerPosition(point, bounds) {
+  if (!hasCoords(point)) return { left: "50%", top: "50%" };
+  const x = ((point.longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
+  const y = (1 - ((point.latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat))) * 100;
+  return {
+    left: `${Math.max(8, Math.min(92, x))}%`,
+    top: `${Math.max(10, Math.min(90, y))}%`,
+  };
+}
+
+function TrackingMap({ order }) {
+  const points = buildTrackingPoints(order);
+  const allPoints = [points.vendor, points.customer, points.rider].filter(hasCoords);
+  const lats = allPoints.map((p) => p.latitude);
+  const lngs = allPoints.map((p) => p.longitude);
+  const bounds = {
+    minLat: Math.min(...lats, ABEOKUTA_CENTER.latitude) - 0.012,
+    maxLat: Math.max(...lats, ABEOKUTA_CENTER.latitude) + 0.012,
+    minLng: Math.min(...lngs, ABEOKUTA_CENTER.longitude) - 0.012,
+    maxLng: Math.max(...lngs, ABEOKUTA_CENTER.longitude) + 0.012,
+  };
+  const riderDistance = points.rider && points.customer ? distanceKm(points.rider, points.customer) : null;
+  const destination = points.customer || points.vendor;
+
+  const openDirections = () => {
+    if (!hasCoords(points.rider) || !hasCoords(destination)) return;
+    Linking.openURL(
+      `https://www.google.com/maps/dir/?api=1&origin=${points.rider.latitude},${points.rider.longitude}&destination=${destination.latitude},${destination.longitude}`,
+    );
+  };
+
+  return (
+    <View style={styles.mapCard}>
+      <View style={styles.mapHeader}>
+        <View>
+          <Text style={styles.mapTitle}>Live geo tracking</Text>
+          <Text style={styles.mapSubtitle}>Abeokuta rider, vendor and delivery points</Text>
+        </View>
+        <Pressable disabled={!hasCoords(points.rider)} onPress={openDirections} style={[styles.mapBtn, !hasCoords(points.rider) && { opacity: 0.45 }]}>
+          <Text style={styles.mapBtnText}>Open map</Text>
+        </Pressable>
+      </View>
+      <View style={styles.mapCanvas}>
+        <View style={[styles.routeLine, { transform: [{ rotate: "-18deg" }] }]} />
+        <View style={[styles.marker, styles.vendorMarker, markerPosition(points.vendor, bounds)]}><Text style={styles.markerText}>V</Text></View>
+        {points.customer && (
+          <View style={[styles.marker, styles.customerMarker, markerPosition(points.customer, bounds)]}><Text style={styles.markerText}>C</Text></View>
+        )}
+        {points.rider && (
+          <View style={[styles.marker, styles.riderMarker, markerPosition(points.rider, bounds)]}><Text style={styles.markerText}>R</Text></View>
+        )}
+      </View>
+      <View style={styles.geoRows}>
+        <Text style={styles.geoLine}>Vendor: {order.vendor.address || order.vendor.area} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
+        <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS not attached to this order"}</Text>
+        <Text style={styles.geoLine}>Rider: {points.rider ? `${points.rider.latitude.toFixed(5)}, ${points.rider.longitude.toFixed(5)}${riderDistance ? ` · ${riderDistance.toFixed(1)} km away` : ""}` : "Not assigned yet"}</Text>
+      </View>
+    </View>
+  );
+}
+
+export default function TrackingScreen({ route, navigation }) {
+  const { orderId } = route.params;
+  const { orders, refreshOrders, raiseDispute } = useOrders();
+  const order = orders.find((o) => o.id === orderId);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [payingAgain, setPayingAgain] = useState(false);
+  const [payError, setPayError] = useState(null);
+  const [vendorStars, setVendorStars] = useState(0);
+  const [riderStars, setRiderStars] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+
+  // Watch this specific order's room for instant pushes while this screen
+  // is open, on top of the context's coarser fallback poll/refresh.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    socket.emit("order:watch", orderId);
+    const onUpdate = () => refreshOrders();
+    socket.on("order:updated", onUpdate);
+    return () => {
+      socket.emit("order:unwatch", orderId);
+      socket.off("order:updated", onUpdate);
+    };
+  }, [orderId, refreshOrders]);
+
+  if (!order) return null;
+
+  const awaitingPayment = order.status === "placed" && order.paymentStatus !== "paid";
+
+  const retryPayment = async () => {
+    setPayingAgain(true);
+    setPayError(null);
+    try {
+      const { authorizationUrl } = await PaymentAPI.initialize(order.id);
+      await Linking.openURL(authorizationUrl);
+    } catch (err) {
+      setPayError(err.message);
+    } finally {
+      setPayingAgain(false);
+    }
+  };
+
+  const currentIdx = STATUS_FLOW.indexOf(order.status);
+  const existingDispute = order.dispute;
+
+  const submitReview = async () => {
+    setSubmittingReview(true);
+    setReviewError(null);
+    try {
+      await ReviewAPI.submit(order.id, vendorStars, order.riderId ? riderStars || null : null, reviewComment.trim() || null);
+      await refreshOrders();
+    } catch (err) {
+      setReviewError(err.message);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.paper }} contentContainerStyle={{ padding: 16 }}>
+      <Text style={styles.title}>Order #{order.id.slice(-6)}</Text>
+      <Text style={styles.subtitle}>{order.vendor.name} {"\u00B7"} {fmtNaira(order.total)}</Text>
+      {order.deliveryAddress && (
+        <Text style={styles.address}>{"\uD83D\uDCCD"} {order.deliveryAddress}</Text>
+      )}
+
+      <View style={{ marginTop: 20 }}>
+        {order.status === "cancelled" ? (
+          <View style={styles.cancelledBox}>
+            <Text style={{ fontWeight: "700", fontSize: 14.5, marginBottom: 6 }}>
+              {order.cancelReason ? `${order.vendor.name} couldn't take your order` : "Order cancelled"}
+            </Text>
+            {order.cancelReason && (
+              <Text style={{ fontSize: 13, color: COLORS.ink, marginBottom: 6 }}>{order.cancelReason} {"\u2014"} sorry about that!</Text>
+            )}
+            {order.paymentStatus === "refunded" ? (
+              <Text style={{ fontSize: 13, color: COLORS.mute, marginBottom: 12 }}>
+                Your payment of {fmtNaira(order.total)} has been refunded.
+              </Text>
+            ) : order.paymentStatus === "paid" ? (
+              // Real edge case, not hypothetical: if the refund call to
+              // Paystack itself fails, the order still ends up cancelled
+              // but the payment stays "paid," not "refunded" (see the
+              // backend's cancel route). Claiming a refund happened here
+              // would be false reassurance; staying silent would be worse.
+              <Text style={{ fontSize: 13, color: COLORS.mute, marginBottom: 12 }}>
+                This order was cancelled. If you were charged {fmtNaira(order.total)}, contact support {"\u2014"} your refund is still processing.
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 13, color: COLORS.mute, marginBottom: 12 }}>This order was cancelled before payment.</Text>
+            )}
+            <Pressable onPress={() => navigation.navigate("Browse")} style={styles.tryAgainBtn}>
+              <Text style={styles.tryAgainBtnText}>Try another vendor {"\u2192"}</Text>
+            </Pressable>
+          </View>
+        ) : awaitingPayment ? (
+          <View style={styles.paymentBox}>
+            <Text style={{ fontWeight: "700", fontSize: 14.5, marginBottom: 6 }}>Awaiting payment</Text>
+            <Text style={{ fontSize: 13, color: COLORS.mute, marginBottom: 12 }}>
+              Your order is saved but won't reach the vendor until payment is confirmed. If the payment page didn't open or you closed it, tap below to try again.
+            </Text>
+            <Pressable onPress={retryPayment} disabled={payingAgain} style={styles.payBtn}>
+              <Text style={styles.payBtnText}>{payingAgain ? "Opening\u2026" : "Complete payment"}</Text>
+            </Pressable>
+            {payError && <Text style={{ color: COLORS.chili, fontSize: 12.5, marginTop: 8 }}>{payError}</Text>}
+          </View>
+        ) : (
+          STATUS_FLOW.map((s, idx) => {
+            const done = idx <= currentIdx;
+            return (
+              <View key={s} style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ alignItems: "center" }}>
+                  <View style={[styles.dot, { backgroundColor: done ? COLORS.green : COLORS.line }]} />
+                  {idx < STATUS_FLOW.length - 1 && (
+                    <View style={[styles.connector, { backgroundColor: done ? COLORS.green : COLORS.line }]} />
+                  )}
+                </View>
+                <Text style={[styles.stepText, { fontWeight: done ? "700" : "500", color: done ? COLORS.ink : COLORS.mute }]}>
+                  {STATUS_LABEL[s]}
+                </Text>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      {order.status !== "cancelled" && <TrackingMap order={order} />}
+
+      {order.riderName && (
+        <View style={styles.riderBox}>
+          <Text style={{ fontSize: 13.5 }}>Rider assigned: <Text style={{ fontWeight: "700" }}>{order.riderName}</Text></Text>
+        </View>
+      )}
+
+      {order.status === "delivered" && (
+        <View style={{ marginBottom: 16 }}>
+          {order.review ? (
+            <View style={styles.reviewThanksBox}>
+              <Text style={{ fontSize: 13.5 }}>
+                Thanks for your feedback! You rated {order.vendor.name} {order.review.vendorRating}{"\u2605"}
+                {order.review.riderRating ? ` and your rider ${order.review.riderRating}\u2605` : ""}.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.reviewBox}>
+              <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 10 }}>Rate your order</Text>
+              <Text style={{ fontSize: 12.5, color: COLORS.mute, marginBottom: 6 }}>{order.vendor.name}</Text>
+              <StarRating value={vendorStars} onChange={setVendorStars} />
+              {order.riderId && (
+                <>
+                  <Text style={{ fontSize: 12.5, color: COLORS.mute, marginTop: 12, marginBottom: 6 }}>
+                    Your rider{order.riderName ? `, ${order.riderName}` : ""}
+                  </Text>
+                  <StarRating value={riderStars} onChange={setRiderStars} />
+                </>
+              )}
+              <TextInput
+                value={reviewComment} onChangeText={setReviewComment}
+                placeholder="Anything you'd like to add? (optional)" multiline numberOfLines={2}
+                style={[styles.commentInput, { marginTop: 12 }]}
+              />
+              <Pressable
+                onPress={submitReview} disabled={vendorStars === 0 || submittingReview}
+                style={[styles.submitReviewBtn, (vendorStars === 0 || submittingReview) && { opacity: 0.4 }]}
+              >
+                <Text style={styles.submitReviewBtnText}>{submittingReview ? "Submitting\u2026" : "Submit rating"}</Text>
+              </Pressable>
+              {reviewError && <Text style={{ color: COLORS.chili, fontSize: 12.5, marginTop: 8 }}>{reviewError}</Text>}
+            </View>
+          )}
+        </View>
+      )}
+
+      {order.status === "delivered" && (
+        <View style={{ marginBottom: 8 }}>
+          {existingDispute ? (
+            <View style={styles.disputeBox}>
+              <Text style={{ fontSize: 13.5 }}>
+                Issue reported: <Text style={{ fontWeight: "700" }}>{existingDispute.reason}</Text> {"\u2014"} our team is looking into it.
+              </Text>
+            </View>
+          ) : reportOpen ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 13, color: COLORS.mute }}>What went wrong?</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {DISPUTE_REASONS.map((reason) => (
+                  <Pressable key={reason} onPress={() => raiseDispute(order, reason)} style={styles.reasonChip}>
+                    <Text style={styles.reasonChipText}>{reason}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <Pressable onPress={() => setReportOpen(true)} style={styles.reportBtn}>
+              <Text style={styles.reportBtnText}>Report an issue</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      <Pressable onPress={() => navigation.popToTop()} style={{ marginTop: 12 }}>
+        <Text style={{ color: COLORS.indigo, fontWeight: "700", fontSize: 13.5 }}>{"\u2190"} Order something else</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: { fontWeight: "800", fontSize: 19, color: COLORS.ink },
+  subtitle: { fontSize: 13.5, color: COLORS.mute, marginTop: 2, marginBottom: 2 },
+  address: { fontSize: 12.5, color: COLORS.mute, marginBottom: 6 },
+  paymentBox: { backgroundColor: "#FFF1DA", borderWidth: 1, borderColor: COLORS.mango, borderRadius: 12, padding: 14 },
+  cancelledBox: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 14 },
+  tryAgainBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, alignSelf: "flex-start" },
+  tryAgainBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  payBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, alignItems: "center" },
+  payBtnText: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  connector: { width: 2, flex: 1, minHeight: 24 },
+  stepText: { fontSize: 14, paddingBottom: 20 },
+  mapCard: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 14, padding: 12, marginBottom: 16 },
+  mapHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 },
+  mapTitle: { color: COLORS.ink, fontWeight: "800", fontSize: 14.5 },
+  mapSubtitle: { color: COLORS.mute, fontSize: 12.2, marginTop: 2 },
+  mapBtn: { backgroundColor: COLORS.ink, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  mapBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  mapCanvas: {
+    height: 180, borderRadius: 12, overflow: "hidden", backgroundColor: "#E5F2E9",
+    borderWidth: 1, borderColor: COLORS.line, position: "relative",
+  },
+  routeLine: { position: "absolute", left: "16%", right: "14%", top: "50%", height: 3, backgroundColor: COLORS.mango, opacity: 0.75 },
+  marker: {
+    position: "absolute", width: 34, height: 34, marginLeft: -17, marginTop: -17,
+    borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff",
+  },
+  vendorMarker: { backgroundColor: COLORS.indigo },
+  customerMarker: { backgroundColor: COLORS.green },
+  riderMarker: { backgroundColor: COLORS.mango },
+  markerText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  geoRows: { gap: 4, marginTop: 10 },
+  geoLine: { color: COLORS.mute, fontSize: 12.2, lineHeight: 17 },
+  riderBox: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, marginBottom: 16 },
+  disputeBox: { backgroundColor: "#FCE8E6", borderWidth: 1, borderColor: COLORS.chili, borderRadius: 12, padding: 12 },
+  reviewThanksBox: { backgroundColor: "#E5F2E9", borderWidth: 1, borderColor: COLORS.green, borderRadius: 12, padding: 12 },
+  reviewBox: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 14 },
+  commentInput: {
+    borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12,
+    paddingVertical: 10, fontSize: 13.5, color: COLORS.ink, backgroundColor: "#fff", minHeight: 50, textAlignVertical: "top",
+  },
+  submitReviewBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, alignSelf: "flex-start", marginTop: 12 },
+  submitReviewBtnText: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+  reasonChip: {
+    borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.panel,
+    borderRadius: 20, paddingHorizontal: 13, paddingVertical: 7,
+  },
+  reasonChipText: { fontSize: 12.5, fontWeight: "600", color: COLORS.ink },
+  reportBtn: {
+    borderWidth: 1, borderColor: COLORS.chili, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8, alignSelf: "flex-start",
+  },
+  reportBtnText: { color: COLORS.chili, fontWeight: "700", fontSize: 13 },
+});

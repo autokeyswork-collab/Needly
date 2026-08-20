@@ -35,7 +35,7 @@ function emit(req, room, event, payload) {
  * cart math because there was nothing else touching it; a real API can't.
  */
 router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
-  const { vendorId, items, deliveryAddress, deliveryPhone } = req.body;
+  const { vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude } = req.body;
   if (!vendorId || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "vendorId and a non-empty items array are required" });
   }
@@ -86,6 +86,8 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
       total,
       deliveryAddress,
       deliveryPhone,
+      deliveryLatitude: deliveryLatitude === undefined || deliveryLatitude === null ? null : Number(deliveryLatitude),
+      deliveryLongitude: deliveryLongitude === undefined || deliveryLongitude === null ? null : Number(deliveryLongitude),
       items: { create: orderItems },
     },
     include: { items: true, vendor: true },
@@ -139,12 +141,12 @@ router.get("/mine", requireAuth, async (req, res) => {
     // order, not while it's still sitting with the vendor.
     const redactUntilPickup = (order) => {
       const revealed = order.status === "PICKED_UP" || order.status === "DELIVERED";
-      return revealed ? order : { ...order, deliveryAddress: null, deliveryPhone: null };
+      return revealed ? order : { ...order, deliveryAddress: null, deliveryPhone: null, deliveryLatitude: null, deliveryLongitude: null };
     };
 
     const assigned = await prisma.order.findMany({
       where: { riderId: rider?.id, status: { in: ["READY", "PICKED_UP"] } },
-      include: { items: true, vendor: true },
+      include: { items: true, vendor: true, rider: { include: { user: true } } },
     });
     const available = await prisma.order.findMany({
       where: { status: "READY", riderId: null },
@@ -154,12 +156,12 @@ router.get("/mine", requireAuth, async (req, res) => {
     // Real "today" stats — replaces the seed-baseline + live-session-data
     // pattern the mobile prototype used for Today/Week/Month, at least for
     // "today". Week/Month need a proper historical query and are deferred
-    // (see the Route Scope of Work's "Explicitly Deferred" section).
+    // (see the Needly Scope of Work's "Explicitly Deferred" section).
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const completedToday = await prisma.order.findMany({
       where: { riderId: rider?.id, status: "DELIVERED", updatedAt: { gte: startOfToday } },
-      include: { items: true, vendor: true },
+      include: { items: true, vendor: true, rider: { include: { user: true } } },
       orderBy: { updatedAt: "desc" },
     });
 

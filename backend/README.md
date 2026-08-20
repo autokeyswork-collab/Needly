@@ -1,4 +1,4 @@
-# Route — Backend (Phase 1: Foundation)
+# Needly — Backend (Phase 1: Foundation)
 
 A real Node.js + Express + PostgreSQL backend implementing everything in
 the Phase 1 roadmap: auth, orders, payments (Paystack), push notifications
@@ -51,10 +51,10 @@ npm run dev                          # starts the server on http://localhost:400
 ```
 
 Demo accounts (all use password `password123`):
-- `customer@demo.route` — a customer
-- `mamarisi@demo.route`, `axisgrill@demo.route`, `freshmarket@demo.route`, `quickbasket@demo.route`, `pharmacy@demo.route` — one owner account per seeded vendor
-- `rider@demo.route` — a rider, already online
-- `manager@demo.route`, `admin@demo.route`
+- `customer@demo.needly` — a customer
+- `mamarisi@demo.needly`, `citygrill@demo.needly`, `freshmarket@demo.needly`, `quickbasket@demo.needly`, `pharmacy@demo.needly` — one owner account per seeded vendor
+- `rider@demo.needly` — a rider, already online
+- `manager@demo.needly`, `admin@demo.needly`
 
 ## 3. Testing it works
 
@@ -64,7 +64,7 @@ curl http://localhost:4000/health
 
 curl -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"customer@demo.route","password":"password123"}'
+  -d '{"email":"customer@demo.needly","password":"password123"}'
 # returns { token, user }
 ```
 

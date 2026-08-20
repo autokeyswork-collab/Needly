@@ -2,56 +2,142 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
 
-/**
- * Sets up Socket.io on top of the existing HTTP server. Clients connect
- * with their JWT (same one used for REST calls) and get placed into rooms:
- *   - `order:<id>`   — anyone actively viewing that order's tracking screen
- *   - `riders:online` — every connected rider, used for dispatch broadcast
- *   - `vendor:<id>`   — the owner/manager of that store, used to alert
- *     them the instant a new order's payment confirms (see the Paystack
- *     webhook in payments.routes.js)
- *
- * Route handlers emit into these rooms (see orders.routes.js) so every
- * connected client sees status changes instantly, without polling.
- */
+let ioInstance = null;
+
 function setupSockets(httpServer) {
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean);
-  const io = new Server(httpServer, {
-    cors: { origin: allowedOrigins.length ? allowedOrigins : false },
+  ioInstance = new Server(httpServer, {
+    cors: { origin: allowedOrigins.length ? allowedOrigins : true },
   });
 
-  io.use((socket, next) => {
+  ioInstance.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Missing auth token"));
     try {
-      socket.user = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret_key_12345");
       next();
     } catch (err) {
       next(new Error("Invalid auth token"));
     }
   });
 
-  io.on("connection", async (socket) => {
-    if (socket.user.role === "RIDER") {
+  ioInstance.on("connection", async (socket) => {
+    const userId = socket.user.id;
+    const role = socket.user.role;
+
+    // Join personal user room
+    socket.join(`user:${userId}`);
+
+    if (role === "ADMIN") {
+      socket.join("admin:dashboard");
+    }
+
+    if (role === "RIDER") {
       socket.join("riders:online");
     }
-    if (socket.user.role === "VENDOR" || socket.user.role === "MANAGER") {
-      const vendor = socket.user.role === "VENDOR"
-        ? await prisma.vendor.findUnique({ where: { ownerId: socket.user.id } })
-        : await prisma.vendor.findUnique({ where: { managerId: socket.user.id } });
-      if (vendor) socket.join(`vendor:${vendor.id}`);
+
+    if (role === "VENDOR" || role === "MANAGER") {
+      try {
+        const vendor = role === "VENDOR"
+          ? await prisma.vendor.findUnique({ where: { ownerId: userId } })
+          : await prisma.vendor.findUnique({ where: { managerId: userId } });
+        if (vendor) socket.join(`vendor:${vendor.id}`);
+      } catch (e) {}
     }
 
-    // Client asks to watch a specific order's tracking screen.
-    socket.on("order:watch", (orderId) => {
-      socket.join(`order:${orderId}`);
-    });
-    socket.on("order:unwatch", (orderId) => {
-      socket.leave(`order:${orderId}`);
-    });
+    // Room subscription events
+    socket.on("order:watch", (orderId) => socket.join(`order:${orderId}`));
+    socket.on("order:unwatch", (orderId) => socket.leave(`order:${orderId}`));
+
+    socket.on("booking:watch", (bookingId) => socket.join(`booking:${bookingId}`));
+    socket.on("booking:unwatch", (bookingId) => socket.leave(`booking:${bookingId}`));
   });
 
-  return io;
+  return ioInstance;
 }
 
-module.exports = { setupSockets };
+function getIO() {
+  return ioInstance;
+}
+
+function broadcastOrderUpdate(order) {
+  if (!ioInstance) return;
+  ioInstance.to(`order:${order.id}`).emit("order:updated", order);
+  if (order.customerId) ioInstance.to(`user:${order.customerId}`).emit("order:updated", order);
+  if (order.vendorId) ioInstance.to(`vendor:${order.vendorId}`).emit("order:updated", order);
+  ioInstance.to("admin:dashboard").emit("order:updated", order);
+  if (order.status === "READY" || order.status === "PLACED") {
+    ioInstance.to("riders:online").emit("order:available", order);
+  }
+}
+
+function broadcastBookingUpdate(booking) {
+  if (!ioInstance) return;
+  ioInstance.to(`booking:${booking.id}`).emit("booking:updated", booking);
+  if (booking.customerId) ioInstance.to(`user:${booking.customerId}`).emit("booking:updated", booking);
+  if (booking.providerId) ioInstance.to(`user:${booking.providerId}`).emit("booking:updated", booking);
+  ioInstance.to("admin:dashboard").emit("booking:updated", booking);
+}
+
+function broadcastProviderStatus(providerData) {
+  if (!ioInstance) return;
+  ioInstance.emit("provider:status", providerData);
+  ioInstance.to("admin:dashboard").emit("provider:status", providerData);
+}
+
+function broadcastInventoryUpdate(productData) {
+  if (!ioInstance) return;
+  ioInstance.emit("inventory:updated", productData);
+  ioInstance.to("admin:dashboard").emit("inventory:updated", productData);
+}
+
+function broadcastNotification(userId, notification) {
+  if (!ioInstance) return;
+  ioInstance.to(`user:${userId}`).emit("notification:created", notification);
+}
+
+function broadcastAdminAlert(alert) {
+  if (!ioInstance) return;
+  ioInstance.to("admin:dashboard").emit("admin:alert", alert);
+}
+
+function broadcastContactInquiry(inquiry) {
+  if (!ioInstance) return;
+  ioInstance.emit("contact:new", inquiry);
+  ioInstance.to("admin:dashboard").emit("contact:new", inquiry);
+  ioInstance.to("admin:dashboard").emit("admin:alert", {
+    type: "contact_inquiry",
+    title: "New Contact Message",
+    message: `${inquiry.name} sent an inquiry: "${inquiry.subject}"`,
+    id: inquiry.id,
+  });
+}
+
+function broadcastContactUpdate(inquiry) {
+  if (!ioInstance) return;
+  ioInstance.emit("contact:updated", inquiry);
+  ioInstance.to("admin:dashboard").emit("contact:updated", inquiry);
+  if (inquiry.userId) {
+    ioInstance.to(`user:${inquiry.userId}`).emit("contact:updated", inquiry);
+  }
+}
+
+function broadcastContactSettings(settings) {
+  if (!ioInstance) return;
+  ioInstance.emit("contact_settings:updated", settings);
+  ioInstance.to("admin:dashboard").emit("contact_settings:updated", settings);
+}
+
+module.exports = {
+  setupSockets,
+  getIO,
+  broadcastOrderUpdate,
+  broadcastBookingUpdate,
+  broadcastProviderStatus,
+  broadcastInventoryUpdate,
+  broadcastNotification,
+  broadcastAdminAlert,
+  broadcastContactInquiry,
+  broadcastContactUpdate,
+  broadcastContactSettings,
+};

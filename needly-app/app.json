@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Needly",
+    "slug": "needly-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#063B2A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#063B2A" }
+    },
+    "web": { "bundler": "metro" }
+  }
+}

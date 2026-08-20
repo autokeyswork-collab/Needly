@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String
+  email             String             @unique
+  phone             String?
+  passwordHash      String
+  role              String             @default("CUSTOMER")
+  approved          Boolean            @default(true)
+  suspendedAt       DateTime?
+  expoPushToken     String?
+  createdAt         DateTime           @default(now())
+  vendor            Vendor?            @relation("VendorOwner")
+  managedVendor     Vendor?            @relation("VendorManager")
+  rider             Rider?
+  orders            Order[]            @relation("CustomerOrders")
+  operationalIssues OperationalIssue[]
+  reviews           Review[]           @relation("CustomerReviews")
+  bookings          Booking[]          @relation("CustomerBookings")
+  notifications     Notification[]     @relation("UserNotifications")
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  orderId      String   @unique
+  order        Order    @relation(fields: [orderId], references: [id])
+  customerId   String
+  customer     User     @relation("CustomerReviews", fields: [customerId], references: [id])
+  vendorId     String
+  vendor       Vendor   @relation(fields: [vendorId], references: [id])
+  riderId      String?
+  rider        Rider?   @relation(fields: [riderId], references: [id])
+  vendorRating Int
+  riderRating  Int?
+  comment      String?
+  createdAt    DateTime @default(now())
+}
+
+model Vendor {
+  id                String             @id @default(cuid())
+  ownerId           String?            @unique
+  owner             User?              @relation("VendorOwner", fields: [ownerId], references: [id])
+  managerId         String?            @unique
+  manager           User?              @relation("VendorManager", fields: [managerId], references: [id])
+  name              String
+  area              String
+  category          String
+  eta               String
+  rating            Float              @default(4.5)
+  emoji             String             @default("🍛")
+  isOpen            Boolean            @default(true)
+  address           String?
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime           @default(now())
+  businessRegNumber String?
+  ownerIdType       String?
+  ownerIdNumber     String?
+  verified          Boolean            @default(false)
+  verifiedAt        DateTime?
+  verificationNotes String?
+  products          Product[]
+  reviews           Review[]
+  orders            Order[]
+  disputes          Dispute[]
+}
+
+model Product {
+  id          String         @id @default(cuid())
+  vendorId    String
+  vendor      Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name        String
+  price       Int
+  emoji       String         @default("🍽️")
+  subcategory String?
+  stock       Int            @default(50)
+  isAvailable Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  addOns      ProductAddOn[]
+}
+
+model ProductAddOn {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  price     Int
+}
+
+model Rider {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id])
+  zone              String
+  isOnline          Boolean   @default(false)
+  rating            Float     @default(4.8)
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime  @default(now())
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  idType            String?
+  idNumber          String?
+  verified          Boolean   @default(false)
+  verifiedAt        DateTime?
+  verificationNotes String?
+  orders            Order[]
+  reviews           Review[]
+  payouts           Payout[]
+}
+
+model Payout {
+  id          String    @id @default(cuid())
+  riderId     String
+  rider       Rider     @relation(fields: [riderId], references: [id])
+  amount      Int
+  status      String    @default("PENDING")
+  note        String?
+  requestedAt DateTime  @default(now())
+  processedAt DateTime?
+}
+
+model Order {
+  id                String             @id @default(cuid())
+  customerId        String
+  customer          User               @relation("CustomerOrders", fields: [customerId], references: [id])
+  vendorId          String
+  vendor            Vendor             @relation(fields: [vendorId], references: [id])
+  riderId           String?
+  rider             Rider?             @relation(fields: [riderId], references: [id])
+  status            String             @default("PLACED")
+  cancelReason      String?
+  total             Int
+  deliveryAddress   String
+  deliveryPhone     String
+  deliveryLatitude  Float?
+  deliveryLongitude Float?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  items             OrderItem[]
+  dispute           Dispute?
+  review            Review?
+  payment           Payment?
+  operationalIssues OperationalIssue[]
+}
+
+model OrderItem {
+  id      String  @id @default(cuid())
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name    String
+  price   Int
+  qty     Int
+  emoji   String?
+}
+
+model Dispute {
+  id         String    @id @default(cuid())
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id])
+  vendorId   String
+  vendor     Vendor    @relation(fields: [vendorId], references: [id])
+  reason     String
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+}
+
+model OperationalIssue {
+  id           String    @id @default(cuid())
+  orderId      String?
+  order        Order?    @relation(fields: [orderId], references: [id])
+  reporterId   String
+  reporter     User      @relation(fields: [reporterId], references: [id])
+  reporterRole String
+  reason       String
+  status       String    @default("OPEN")
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  actorName   String
+  action      String
+  targetType  String
+  targetId    String?
+  targetLabel String
+  createdAt   DateTime @default(now())
+}
+
+model Payment {
+  id         String    @id @default(cuid())
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id])
+  reference  String    @unique
+  amount     Int
+  status     String    @default("PENDING")
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+  refundedAt DateTime?
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  providerId  String
+  name        String
+  category    String
+  price       Int
+  description String?
+  emoji       String    @default("🛠️")
+  isAvailable Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  bookings    Booking[]
+}
+
+model Booking {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     User     @relation("CustomerBookings", fields: [customerId], references: [id])
+  serviceId    String
+  service      Service  @relation(fields: [serviceId], references: [id])
+  providerName String
+  status       String   @default("PENDING")
+  address      String
+  phone        String
+  total        Int
+  scheduledAt  DateTime @default(now())
+  cancelReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+  title     String
+  body      String
+  type      String   @default("INFO")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ContactInquiry {
+  id         String   @id @default(cuid())
+  userId     String?
+  name       String
+  email      String
+  phone      String?
+  role       String   @default("GUEST")
+  subject    String
+  message    String
+  status     String   @default("UNREAD")
+  replyNote  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ContactConfig {
+  id             String   @id @default("default")
+  supportPhone   String   @default("+234 800 NEEDLY")
+  supportEmail   String   @default("support@needly.market")
+  whatsappNumber String   @default("+234 803 123 4567")
+  officeAddress  String   @default("Panseke Commercial Hub, Abeokuta, Ogun State")
+  operatingHours String   @default("24/7 Everyday")
+  updatedAt      DateTime @updatedAt
+}

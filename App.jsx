@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------
-   ROUTE — a delivery marketplace prototype for Arepo & Axis
+   NEEDLY — an everyday services & delivery marketplace prototype
    Single-file demo: Customer / Vendor / Rider / Admin
    All four share one live `orders` state to simulate the
    real flow: placed → accepted → ready → picked up → delivered
@@ -23,6 +23,24 @@ const COLORS = {
 
 const CATEGORIES = ["Restaurant", "Grills", "Supermarket", "Local Market", "Pharmacy"];
 
+const MARKETPLACE_SHORTCUTS = [
+  { key: "Supermarket", emoji: "🛒", title: "Shop", subtitle: "Buy everyday products", flow: "BUY" },
+  { key: "Restaurant", emoji: "🍽️", title: "Food", subtitle: "Order meals & drinks", flow: "BUY" },
+  { key: "Home Services", emoji: "🏠", title: "Home Services", subtitle: "Cleaners, laundry, repairs", flow: "BOOK" },
+  { key: "Auto", emoji: "🚗", title: "Auto", subtitle: "Mechanics, car wash, drivers", flow: "BOOK" },
+  { key: "Pharmacy", emoji: "💊", title: "Health", subtitle: "Pharmacy & medical supplies", flow: "BUY" },
+  { key: "Stay & Dine", emoji: "🏨", title: "Stay & Dine", subtitle: "Hotels & restaurant tables", flow: "RESERVE" },
+  { key: "Learn", emoji: "👩🏽‍🏫", title: "Learn", subtitle: "Home and online tutors", flow: "BOOK" },
+  { key: "Utilities", emoji: "🔥", title: "Utilities", subtitle: "Gas refill & water supply", flow: "BUY" },
+  { key: "Local Market", emoji: "🛍️", title: "Open Market", subtitle: "Fresh local market runs", flow: "BUY" },
+];
+
+const TRANSACTION_TRACKS = [
+  { label: "BUY", detail: "Products → cart → payment → delivery" },
+  { label: "BOOK", detail: "Provider → schedule → location → service" },
+  { label: "RESERVE", detail: "Place → date/time → people/rooms → confirmation" },
+];
+
 const CATEGORY_TINT = {
   Restaurant: "#FFF1DA",
   Grills: "#FCE8E6",
@@ -39,18 +57,18 @@ const COMMON_SIDES = [
 ];
 
 const INITIAL_VENDORS = [
-  { id: "v1", name: "Mama Risi Kitchen", area: "Arepo", category: "Restaurant", eta: "25–35 min", rating: 4.7, emoji: "🍛", isOpen: true, isActive: true, ownerName: "Risikat Adewale", ownerPhone: "0803 220 1141", businessRegNumber: "BN-2184773", ownerIdType: "NIN", ownerIdNumber: "10293847561", verified: true, verificationNotes: "CAC and owner NIN checked, matches.",
+  { id: "v1", name: "Mama Risi Kitchen", area: "Central Zone", category: "Restaurant", eta: "25–35 min", rating: 4.7, emoji: "🍛", isOpen: true, isActive: true, ownerName: "Risikat Adewale", ownerPhone: "0803 220 1141", businessRegNumber: "BN-2184773", ownerIdType: "NIN", ownerIdNumber: "10293847561", verified: true, verificationNotes: "CAC and owner NIN checked, matches.",
     items: [
       { id: "p1", name: "Jollof Rice & Chicken", price: 2500, emoji: "🍛", isAvailable: true, addOns: COMMON_SIDES },
       { id: "p2", name: "Efo Riro & Swallow", price: 2200, emoji: "🥘", isAvailable: true, addOns: [COMMON_SIDES[3], { id: "add-fish", name: "Extra Fried Fish", price: 900 }, { id: "add-swallow", name: "Extra Swallow", price: 500 }] },
       { id: "p3", name: "Peppered Turkey (Plate)", price: 3000, emoji: "🍗", isAvailable: true, addOns: [COMMON_SIDES[0], COMMON_SIDES[1]] },
     ] },
-  { id: "v2", name: "Axis Grill House", area: "Axis", category: "Grills", eta: "30–40 min", rating: 4.5, emoji: "🍢", isOpen: true, isActive: true, ownerName: "Emeka Obi", ownerPhone: "0810 442 7736", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v2", name: "City Grill House", area: "Central Zone", category: "Grills", eta: "30–40 min", rating: 4.5, emoji: "🍢", isOpen: true, isActive: true, ownerName: "Emeka Obi", ownerPhone: "0810 442 7736", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p4", name: "Suya Platter", price: 3500, emoji: "🍢", isAvailable: true },
       { id: "p5", name: "Grilled Fish & Plantain", price: 4000, emoji: "🐟", isAvailable: true },
     ] },
-  { id: "v3", name: "Arepo Fresh Market", area: "Arepo", category: "Local Market", eta: "40–55 min", rating: 4.6, emoji: "🥬", isOpen: true, isActive: true, managerName: "Funmi Balogun", managerPhone: "0701 883 5502", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v3", name: "Needly Fresh Market", area: "Central Zone", category: "Local Market", eta: "40–55 min", rating: 4.6, emoji: "🥬", isOpen: true, isActive: true, managerName: "Funmi Balogun", managerPhone: "0701 883 5502", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p6", name: "Tomatoes (Basket)", price: 4500, emoji: "🍅", isAvailable: true, subcategory: "Peppers" },
       { id: "p7", name: "Scotch Bonnet Pepper (Bag)", price: 3200, emoji: "🌶️", isAvailable: true, subcategory: "Peppers" },
@@ -68,7 +86,7 @@ const INITIAL_VENDORS = [
       { id: "p40", name: "Stock Fish (Piece)", price: 3500, emoji: "🐟", isAvailable: true, subcategory: "Soup Ingredients" },
       { id: "p41", name: "Locust Beans - Iru (Bag)", price: 900, emoji: "🫘", isAvailable: true, subcategory: "Soup Ingredients" },
     ] },
-  { id: "v4", name: "QuickBasket Supermarket", area: "Axis", category: "Supermarket", eta: "20–30 min", rating: 4.8, emoji: "🛒", isOpen: true, isActive: true, ownerName: "Tolu Adeyemi", ownerPhone: "0816 990 3324", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v4", name: "QuickBasket Supermarket", area: "North Zone", category: "Supermarket", eta: "20–30 min", rating: 4.8, emoji: "🛒", isOpen: true, isActive: true, ownerName: "Tolu Adeyemi", ownerPhone: "0816 990 3324", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p9", name: "Rice (5kg Bag)", price: 6800, emoji: "🌾", isAvailable: true, subcategory: "Staples" },
       { id: "p10", name: "Vegetable Oil (2L)", price: 5200, emoji: "🛢️", isAvailable: true, subcategory: "Staples" },
@@ -87,24 +105,24 @@ const INITIAL_VENDORS = [
       { id: "p28", name: "Trebor Mints (Pack)", price: 300, emoji: "🍬", isAvailable: true, subcategory: "Sweets & Chocolate" },
       { id: "p29", name: "KitKat Chocolate (4 finger)", price: 700, emoji: "🍫", isAvailable: true, subcategory: "Sweets & Chocolate" },
     ] },
-  { id: "v5", name: "Sweet Treats Bakery", area: "Arepo", category: "Restaurant", eta: "15–25 min", rating: 4.9, emoji: "🍰", isOpen: true, isActive: true, ownerName: "Blessing Nwosu", ownerPhone: "0902 118 6650", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v5", name: "Sweet Treats Bakery", area: "Central Zone", category: "Restaurant", eta: "15–25 min", rating: 4.9, emoji: "🍰", isOpen: true, isActive: true, ownerName: "Blessing Nwosu", ownerPhone: "0902 118 6650", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p12", name: "Red Velvet Slice", price: 1800, emoji: "🍰", isAvailable: true },
       { id: "p13", name: "Meat Pie (Pack of 4)", price: 2000, emoji: "🥧", isAvailable: true },
       { id: "p14", name: "Chin Chin (500g)", price: 1500, emoji: "🍪", isAvailable: true },
     ] },
-  { id: "v6", name: "Axis Spice Corner", area: "Axis", category: "Restaurant", eta: "25–35 min", rating: 4.4, emoji: "🍚", isOpen: true, isActive: true, ownerName: "Ngozi Eze", ownerPhone: "0813 771 4498", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v6", name: "Spice Corner", area: "North Zone", category: "Restaurant", eta: "25–35 min", rating: 4.4, emoji: "🍚", isOpen: true, isActive: true, ownerName: "Ngozi Eze", ownerPhone: "0813 771 4498", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p15", name: "Native Jollof & Beef", price: 2800, emoji: "🍛", isAvailable: true, addOns: COMMON_SIDES },
       { id: "p16", name: "Ofada Rice Special", price: 3100, emoji: "🍚", isAvailable: true, addOns: [COMMON_SIDES[3], { id: "add-sauce", name: "Extra Ayamase Sauce", price: 500 }, { id: "add-beef", name: "Extra Beef", price: 800 }] },
     ] },
-  { id: "v7", name: "Arepo Bonfire Grill", area: "Arepo", category: "Grills", eta: "25–35 min", rating: 4.6, emoji: "🔥", isOpen: true, isActive: true, ownerName: "Segun Bakare", ownerPhone: "0807 335 2291", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v7", name: "Bonfire Grill", area: "Central Zone", category: "Grills", eta: "25–35 min", rating: 4.6, emoji: "🔥", isOpen: true, isActive: true, ownerName: "Segun Bakare", ownerPhone: "0807 335 2291", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p42", name: "Grilled Chicken (Half)", price: 3200, emoji: "🍗", isAvailable: true },
       { id: "p43", name: "Beef Kebab (Skewer)", price: 1500, emoji: "🍢", isAvailable: true },
       { id: "p44", name: "Grilled Plantain - Bole", price: 800, emoji: "🍌", isAvailable: true },
     ] },
-  { id: "v8", name: "Arepo Health Pharmacy", area: "Arepo", category: "Pharmacy", eta: "20–30 min", rating: 4.8, emoji: "💊", isOpen: true, isActive: true, ownerName: "Dr. Aisha Mohammed", ownerPhone: "0705 664 8817", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
+  { id: "v8", name: "Health Pharmacy", area: "Central Zone", category: "Pharmacy", eta: "20–30 min", rating: 4.8, emoji: "💊", isOpen: true, isActive: true, ownerName: "Dr. Aisha Mohammed", ownerPhone: "0705 664 8817", businessRegNumber: "", ownerIdType: "", ownerIdNumber: "", verified: false, verificationNotes: "",
     items: [
       { id: "p45", name: "Paracetamol Tablets (Pack)", price: 800, emoji: "💊", isAvailable: true, subcategory: "Pain Relief" },
       { id: "p46", name: "Ibuprofen Tablets (Pack)", price: 900, emoji: "💊", isAvailable: true, subcategory: "Pain Relief" },
@@ -123,9 +141,9 @@ const INITIAL_VENDORS = [
 // Admin can suspend/reactivate here the same way, and RiderApp gets a
 // demo identity switcher the same way CustomerApp already has one.
 const INITIAL_RIDERS = [
-  { id: "r1", name: "Tunde A.", phone: "0812 774 3390", zone: "Arepo/Axis", rating: 4.9, emoji: "🛵", isOnline: true, isActive: true, bankName: "GTBank", bankAccountNumber: "0123456789", bankAccountName: "Tunde Adewale", idType: "NIN", idNumber: "12345678901", verified: true, verificationNotes: "Checked in person, matches bank account name." },
-  { id: "r2", name: "Chioma K.", phone: "0908 221 6674", zone: "Arepo/Axis", rating: 4.7, emoji: "🛵", isOnline: false, isActive: true, bankName: "", bankAccountNumber: "", bankAccountName: "", idType: "", idNumber: "", verified: false, verificationNotes: "" },
-  { id: "r3", name: "Yusuf B.", phone: "0704 559 1128", zone: "Arepo/Axis", rating: 4.8, emoji: "🛵", isOnline: false, isActive: true, bankName: "", bankAccountNumber: "", bankAccountName: "", idType: "", idNumber: "", verified: false, verificationNotes: "" },
+  { id: "r1", name: "Tunde A.", phone: "0812 774 3390", zone: "Central Zone", rating: 4.9, emoji: "🛵", isOnline: true, isActive: true, bankName: "GTBank", bankAccountNumber: "0123456789", bankAccountName: "Tunde Adewale", idType: "NIN", idNumber: "12345678901", verified: true, verificationNotes: "Checked in person, matches bank account name." },
+  { id: "r2", name: "Chioma K.", phone: "0908 221 6674", zone: "Central Zone", rating: 4.7, emoji: "🛵", isOnline: false, isActive: true, bankName: "", bankAccountNumber: "", bankAccountName: "", idType: "", idNumber: "", verified: false, verificationNotes: "" },
+  { id: "r3", name: "Yusuf B.", phone: "0704 559 1128", zone: "Central Zone", rating: 4.8, emoji: "🛵", isOnline: false, isActive: true, bankName: "", bankAccountNumber: "", bankAccountName: "", idType: "", idNumber: "", verified: false, verificationNotes: "" },
 ];
 
 const STATUS_FLOW = ["placed", "accepted", "ready", "picked_up", "delivered"];
@@ -188,8 +206,8 @@ function GlobalStyle() {
   );
 }
 
-/* Signature nav: a delivery route line — one stop per interface */
-function RouteSwitcher({ role, setRole, orders }) {
+/* Signature nav: a Needly delivery line — one stop per interface */
+function RoleSwitcher({ role, setRole, orders }) {
   const stops = [
     { key: "customer", label: "Customer" },
     { key: "vendor", label: "Vendor" },
@@ -208,10 +226,10 @@ function RouteSwitcher({ role, setRole, orders }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div className="rt-display" style={{ color: "#fff", fontSize: 20, letterSpacing: 0.5 }}>
-          ROUTE
+          NEEDLY
         </div>
         <div className="rt-mono" style={{ color: COLORS.mango, fontSize: 11, letterSpacing: 1 }}>
-          AREPO ⇄ AXIS
+          NEEDLY HUB
         </div>
       </div>
 
@@ -377,10 +395,10 @@ function groupBySubcategory(items) {
 // `COUNT(*) ... WHERE created_at >= <period start>` query once there's a
 // backend tracking actual order history per area.
 const AREA_ACTIVITY_SEED = {
-  day: { Arepo: 128, Axis: 94 },
-  week: { Arepo: 890, Axis: 640 },
-  month: { Arepo: 3650, Axis: 2600 },
-  year: { Arepo: 41200, Axis: 29800 },
+  day: { Central: 128, North: 94 },
+  week: { Central: 890, North: 640 },
+  month: { Central: 3650, North: 2600 },
+  year: { Central: 41200, North: 29800 },
 };
 const PERIOD_LABEL = { day: "today", week: "this week", month: "this month", year: "this year" };
 
@@ -446,13 +464,15 @@ function CustomerApp({ orders, placeOrder, disputes, raiseDispute, vendors, soci
   const [selectedAddOnQtys, setSelectedAddOnQtys] = useState({});
 
   const localMarketVendor = vendors.find((v) => v.id === LOCAL_MARKET_VENDOR.id);
+  const selectedShortcut = MARKETPLACE_SHORTCUTS.find((s) => s.key === category);
+  const hasLiveBuyFlow = CATEGORIES.includes(category);
   const isLocalMarket = category === "Local Market";
   // Local Market always maps to the one local-market vendor regardless of
   // vendorId — vendorId can legitimately be null here (e.g. right after
   // "Order something else" resets it) while the category is still Local
   // Market, and cart/checkout must keep working in that case.
   const vendor = isLocalMarket ? localMarketVendor : (vendors.find((v) => v.id === vendorId) || null);
-  const filteredVendors = vendors.filter((v) => v.category === category);
+  const filteredVendors = hasLiveBuyFlow ? vendors.filter((v) => v.category === category) : [];
 
   const selectCategory = (c) => {
     setCategory(c);
@@ -597,19 +617,84 @@ function CustomerApp({ orders, placeOrder, disputes, raiseDispute, vendors, soci
             </button>
           </div>
 
+          <div style={{ padding: "16px 20px 0" }}>
+            <div style={{ marginBottom: 12 }}>
+              <label className="rt-mono" style={{ fontSize: 10.5, color: COLORS.mute, letterSpacing: 0.5 }}>DELIVER OR SERVE AT</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                <span style={{ fontSize: 16 }}>📍</span>
+                <strong style={{ fontSize: 14.5 }}>Needly Service Zone</strong>
+              </div>
+            </div>
+            <h1 className="rt-display" style={{ fontSize: 25, lineHeight: 1.05, margin: "0 0 10px" }}>What do you need today?</h1>
+            <input
+              placeholder="Search for food, groceries, services, pharmacies..."
+              style={{
+                width: "100%", boxSizing: "border-box", border: `1px solid ${COLORS.line}`,
+                background: COLORS.panel, borderRadius: 12, padding: "12px 14px",
+                fontSize: 14.5, outline: "none",
+              }}
+            />
+          </div>
+
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 10, padding: "14px 20px 4px",
+          }}>
+            {MARKETPLACE_SHORTCUTS.map((item) => {
+              const active = category === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => selectCategory(item.key)}
+                  style={{
+                    textAlign: "left", border: `1px solid ${active ? COLORS.ink : COLORS.line}`,
+                    background: active ? COLORS.ink : COLORS.panel,
+                    color: active ? "#fff" : COLORS.ink,
+                    borderRadius: 12, padding: 12, display: "flex", gap: 10,
+                    minHeight: 82, cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontSize: 22, lineHeight: 1 }}>{item.emoji}</span>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <strong style={{ fontSize: 14 }}>{item.title}</strong>
+                      <span className="rt-mono" style={{
+                        fontSize: 9.5, color: active ? COLORS.mango : COLORS.mute,
+                        border: `1px solid ${active ? COLORS.mango : COLORS.line}`,
+                        borderRadius: 8, padding: "1px 5px",
+                      }}>{item.flow}</span>
+                    </span>
+                    <span style={{ color: active ? "rgba(255,255,255,0.72)" : COLORS.mute, fontSize: 12.5, lineHeight: 1.25 }}>
+                      {item.subtitle}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, padding: "10px 20px 0" }}>
+            {TRANSACTION_TRACKS.map((track) => (
+              <div key={track.label} style={{ background: COLORS.panel, border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: "9px 10px" }}>
+                <div className="rt-mono" style={{ color: COLORS.mango, fontSize: 10.5, marginBottom: 4 }}>{track.label}</div>
+                <div style={{ color: COLORS.mute, fontSize: 11.5, lineHeight: 1.25 }}>{track.detail}</div>
+              </div>
+            ))}
+          </div>
+
           {socialProofPeriod !== "off" && (
             <div style={{ padding: "12px 20px 0" }}>
               <div style={{
                 background: "#FFF1DA", border: `1px solid ${COLORS.mango}`, borderRadius: 12,
                 padding: "10px 14px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 6,
               }}>
-                🔥 <strong>{areaActivity.Arepo}</strong> orders delivered in Arepo {PERIOD_LABEL[socialProofPeriod]} · <strong>{areaActivity.Axis}</strong> in Axis
+                🔥 <strong>{areaActivity.Central || 128}</strong> orders delivered in Central Zone {PERIOD_LABEL[socialProofPeriod]} · <strong>{areaActivity.North || 94}</strong> in North Zone
               </div>
             </div>
           )}
 
           <div className="rt-scroll" style={{ display: "flex", gap: 8, padding: "16px 20px 8px", overflowX: "auto" }}>
-            {CATEGORIES.map((c) => (
+            {["Restaurant", "Grills", "Supermarket", "Local Market", "Pharmacy"].map((c) => (
               <button key={c} onClick={() => selectCategory(c)} style={{
                 border: "none", padding: "8px 14px", borderRadius: 20, fontSize: 13.5, fontWeight: 600,
                 background: category === c ? COLORS.ink : COLORS.panel,
@@ -622,7 +707,38 @@ function CustomerApp({ orders, placeOrder, disputes, raiseDispute, vendors, soci
             ))}
           </div>
 
-          {isLocalMarket ? (
+          {!hasLiveBuyFlow ? (
+            <div style={{ padding: "8px 20px 90px" }}>
+              <div style={{
+                background: COLORS.panel, border: `1px solid ${COLORS.line}`, borderRadius: 14,
+                padding: 16, display: "flex", flexDirection: "column", gap: 12,
+              }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ fontSize: 30 }}>{selectedShortcut?.emoji || "🧰"}</span>
+                  <div>
+                    <div className="rt-mono" style={{ color: COLORS.mango, fontSize: 11 }}>{selectedShortcut?.flow || "BOOK"}</div>
+                    <h2 style={{ margin: "2px 0 0", fontSize: 18 }}>{selectedShortcut?.title || category}</h2>
+                  </div>
+                </div>
+                <p style={{ color: COLORS.mute, fontSize: 13.5, lineHeight: 1.45, margin: 0 }}>
+                  This service line belongs in Needly's shared marketplace engine, but it needs provider onboarding,
+                  verification, scheduling, pricing rules, and location availability before it should go live.
+                </p>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {[
+                    selectedShortcut?.flow === "RESERVE" ? "Choose date/time and party or room details" : "Choose service and preferred date/time",
+                    "Confirm customer location and provider coverage",
+                    "Pay or confirm, then track the booking status",
+                  ].map((step, idx) => (
+                    <div key={step} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                      <span className="rt-mono" style={{ background: "#E7E9F1", borderRadius: 10, padding: "2px 7px", fontSize: 11 }}>{idx + 1}</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : isLocalMarket ? (
             <div style={{ padding: "6px 20px 90px" }}>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5 }}>{LOCAL_MARKET_VENDOR.name}</div>
@@ -642,13 +758,13 @@ function CustomerApp({ orders, placeOrder, disputes, raiseDispute, vendors, soci
                 <div style={{
                   background: "#FCE8E6", border: `1px solid ${COLORS.chili}`, borderRadius: 12, padding: 14, fontSize: 13.5,
                 }}>
-                  Arepo Fresh Market is currently unavailable. Check back soon.
+                  Needly Fresh Market is currently unavailable. Check back soon.
                 </div>
               ) : !localMarketVendor.isOpen ? (
                 <div style={{
                   background: "#FCE8E6", border: `1px solid ${COLORS.chili}`, borderRadius: 12, padding: 14, fontSize: 13.5,
                 }}>
-                  Arepo Fresh Market is currently closed. Check back soon.
+                  Needly Fresh Market is currently closed. Check back soon.
                 </div>
               ) : (
               <>
@@ -1014,7 +1130,7 @@ function CustomerApp({ orders, placeOrder, disputes, raiseDispute, vendors, soci
               <textarea
                 value={deliveryAddress}
                 onChange={(e) => setDeliveryAddress(e.target.value)}
-                placeholder="House/street, closest landmark, area (e.g. Arepo)…"
+                placeholder="House/street, closest landmark, area (e.g. Central Zone)…"
                 rows={2}
                 style={{
                   display: "block", width: "100%", marginTop: 4, padding: "10px 12px",
@@ -1650,7 +1766,7 @@ function VendorApp({ orders, advanceOrder, cancelOrder, vendors, updatePrice, ad
         <div style={{
           background: "#FCE8E6", border: `1px solid ${COLORS.chili}`, borderRadius: 12, padding: 12, marginBottom: 18, fontSize: 13.5,
         }}>
-          Your store has been <strong>suspended</strong> by Route. Contact support if you believe this is a mistake — customers can't see you in Browse or place new orders until this is lifted.
+          Your store has been <strong>suspended</strong> by Needly. Contact support if you believe this is a mistake — customers can't see you in Browse or place new orders until this is lifted.
         </div>
       ) : !activeVendor.isOpen && (
         <div style={{
@@ -2030,7 +2146,7 @@ function ManagerApp({ orders, advanceOrder, cancelOrder, vendors, toggleVendorOp
         <div style={{
           background: "#FCE8E6", border: `1px solid ${COLORS.chili}`, borderRadius: 12, padding: 12, marginBottom: 18, fontSize: 13.5,
         }}>
-          Local Market has been <strong>suspended</strong> by Route. Contact support if you believe this is a mistake — customers can't browse or order from Local Market until this is lifted.
+          Local Market has been <strong>suspended</strong> by Needly. Contact support if you believe this is a mistake — customers can't browse or order from Local Market until this is lifted.
         </div>
       ) : !localMarketVendor.isOpen && (
         <div style={{
@@ -2331,7 +2447,7 @@ function RiderApp({ orders, advanceOrder, assignRider, riders, toggleRiderOnline
         <div style={{
           background: "#FCE8E6", border: `1px solid ${COLORS.chili}`, borderRadius: 12, padding: 12, marginBottom: 18, fontSize: 13.5,
         }}>
-          Your account has been suspended by Route. Contact support if you believe this is a mistake — you won't be able to go online or accept deliveries until this is lifted.
+          Your account has been suspended by Needly. Contact support if you believe this is a mistake — you won't be able to go online or accept deliveries until this is lifted.
         </div>
       )}
 
@@ -2343,7 +2459,7 @@ function RiderApp({ orders, advanceOrder, assignRider, riders, toggleRiderOnline
           </div>
           {reportSubmitted ? (
             <div style={{ background: "#E5F2E9", border: `1px solid ${COLORS.green}`, borderRadius: 10, padding: 12, fontSize: 13 }}>
-              🛡️ Sent to Route admin — they'll follow up if needed.
+              🛡️ Sent to Needly admin — they'll follow up if needed.
             </div>
           ) : (
             <>
@@ -2632,8 +2748,8 @@ function AdminApp({ orders, disputes, setDisputeStatus, vendors, operationalIssu
   const [riderVerificationDraft, setRiderVerificationDraft] = useState(null);
   const [showAddVendorForm, setShowAddVendorForm] = useState(false);
   const [showAddRiderForm, setShowAddRiderForm] = useState(false);
-  const [newVendor, setNewVendor] = useState({ name: "", category: "Restaurant", area: "Arepo", eta: "", ownerName: "", ownerPhone: "" });
-  const [newRider, setNewRider] = useState({ name: "", phone: "", zone: "Arepo/Axis" });
+  const [newVendor, setNewVendor] = useState({ name: "", category: "Restaurant", area: "Central Zone", eta: "", ownerName: "", ownerPhone: "" });
+  const [newRider, setNewRider] = useState({ name: "", phone: "", zone: "Central Zone" });
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [orderPaymentFilter, setOrderPaymentFilter] = useState("all");
@@ -2758,7 +2874,7 @@ function AdminApp({ orders, disputes, setDisputeStatus, vendors, operationalIssu
       ownerName: newVendor.ownerName.trim(), ownerPhone: newVendor.ownerPhone.trim(),
     });
     addAuditEntry(activeAdmin, "Added vendor", newVendor.name.trim());
-    setNewVendor({ name: "", category: "Restaurant", area: "Arepo", eta: "", ownerName: "", ownerPhone: "" });
+    setNewVendor({ name: "", category: "Restaurant", area: "Central Zone", eta: "", ownerName: "", ownerPhone: "" });
     setShowAddVendorForm(false);
   };
 
@@ -2767,7 +2883,7 @@ function AdminApp({ orders, disputes, setDisputeStatus, vendors, operationalIssu
     riderCounter += 1;
     addRider({ id: `r${riderCounter}`, name: newRider.name.trim(), phone: newRider.phone.trim(), zone: newRider.zone, rating: 4.5, emoji: "🛵" });
     addAuditEntry(activeAdmin, "Added rider", newRider.name.trim());
-    setNewRider({ name: "", phone: "", zone: "Arepo/Axis" });
+    setNewRider({ name: "", phone: "", zone: "Central Zone" });
     setShowAddRiderForm(false);
   };
 
@@ -3064,8 +3180,8 @@ function AdminApp({ orders, disputes, setDisputeStatus, vendors, operationalIssu
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={newVendor.area} onChange={(e) => setNewVendor((v) => ({ ...v, area: e.target.value }))} style={{ flex: 1, border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 8px", fontSize: 13 }}>
-              <option value="Arepo">Arepo</option>
-              <option value="Axis">Axis</option>
+              <option value="Central Zone">Central Zone</option>
+              <option value="North Zone">North Zone</option>
             </select>
           </div>
           <input
@@ -3128,8 +3244,8 @@ function AdminApp({ orders, disputes, setDisputeStatus, vendors, operationalIssu
                             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                           <select value={vendorProfileDraft.area} onChange={(e) => setVendorProfileDraft((d) => ({ ...d, area: e.target.value }))} style={{ ...miniInput, flex: 1 }}>
-                            <option value="Arepo">Arepo</option>
-                            <option value="Axis">Axis</option>
+                            <option value="Central Zone">Central Zone</option>
+                            <option value="North Zone">North Zone</option>
                           </select>
                         </div>
                         <input value={vendorProfileDraft.eta} onChange={(e) => setVendorProfileDraft((d) => ({ ...d, eta: e.target.value }))} placeholder="Delivery ETA" style={miniInput} />
@@ -3707,7 +3823,7 @@ export default function App() {
 
   // Admin-level account control — separate from a vendor's own isOpen
   // toggle ("we're closed right now, temporarily") or a rider's own
-  // isOnline toggle ("I'm off shift"). isActive is Route's kill switch: a
+  // isOnline toggle ("I'm off shift"). isActive is Needly's kill switch: a
   // suspended account can't operate no matter what it sets its own status
   // to. Pairs with the backend's PATCH /auth/users/:id/suspend, which
   // reuses the same `approved` flag that gates login in the first place.
@@ -3798,7 +3914,7 @@ export default function App() {
   return (
     <div className="rt-app">
       <GlobalStyle />
-      <RouteSwitcher role={role} setRole={setRole} orders={orders} />
+      <RoleSwitcher role={role} setRole={setRole} orders={orders} />
       {role === "customer" && <CustomerApp orders={orders} placeOrder={placeOrder} disputes={disputes} raiseDispute={raiseDispute} vendors={vendors} socialProofPeriod={socialProofPeriod} raiseOperationalIssue={raiseOperationalIssue} confirmPayment={confirmPayment} cancelOrder={cancelOrder} reviews={reviews} submitReview={submitReview} riders={riders} />}
       {role === "vendor" && <VendorApp orders={orders} advanceOrder={advanceOrder} cancelOrder={cancelOrder} vendors={vendors} updatePrice={updatePrice} addProduct={addProduct} disputes={disputes} toggleVendorOpen={toggleVendorOpen} addAddOn={addAddOn} removeAddOn={removeAddOn} toggleProductAvailable={toggleProductAvailable} />}
       {role === "manager" && <ManagerApp orders={orders} advanceOrder={advanceOrder} cancelOrder={cancelOrder} vendors={vendors} toggleVendorOpen={toggleVendorOpen} />}

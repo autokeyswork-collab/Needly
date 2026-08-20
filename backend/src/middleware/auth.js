@@ -25,14 +25,40 @@ async function requireAuth(req, res, next) {
   }
 }
 
-/** Restricts a route to specific roles. Use after requireAuth. */
+/** Restricts a route to specific roles. SUPER_ADMIN always has access. */
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: "Not authorized for this action" });
+    if (!req.user) return res.status(403).json({ error: "Not authorized for this action" });
+    if (req.user.role === "SUPER_ADMIN" || roles.includes(req.user.role)) {
+      return next();
     }
-    next();
+    return res.status(403).json({ error: "Not authorized for this action" });
   };
 }
 
-module.exports = { requireAuth, requireRole };
+/** Restricts a route to users with a specific permission. SUPER_ADMIN bypasses. */
+function requirePermission(permissionCode) {
+  return async (req, res, next) => {
+    if (!req.user) return res.status(403).json({ error: "Not authorized for this action" });
+    if (req.user.role === "SUPER_ADMIN") return next();
+
+    try {
+      const userRoleObjs = await prisma.userRole.findMany({
+        where: { userId: req.user.id },
+        include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
+      });
+
+      const hasPerm = userRoleObjs.some((ur) =>
+        ur.role.rolePermissions.some((rp) => rp.permission.code === permissionCode)
+      );
+
+      if (hasPerm) return next();
+    } catch (e) {
+      /* fallback */
+    }
+
+    return res.status(403).json({ error: `Missing required permission: ${permissionCode}` });
+  };
+}
+
+module.exports = { requireAuth, requireRole, requirePermission };

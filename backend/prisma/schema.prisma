@@ -1,86 +1,37 @@
-// Route — Phase 1 database schema
-// Run: npx prisma migrate dev --name init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum Role {
-  CUSTOMER
-  VENDOR
-  RIDER
-  MANAGER
-  ADMIN
-}
-
-enum OrderStatus {
-  PLACED
-  ACCEPTED
-  READY
-  PICKED_UP
-  DELIVERED
-  CANCELLED
-}
-
-enum DisputeStatus {
-  OPEN
-  RESOLVED
-}
-
-enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
-  REFUNDED
-}
-
-enum PayoutStatus {
-  PENDING
-  PAID
-  REJECTED
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  phone         String?
-  passwordHash  String
-  role          Role
-  // CUSTOMER/MANAGER/ADMIN are approved on creation; VENDOR/RIDER start
-  // false and are flipped by an admin via PATCH /auth/users/:id/approve
-  // (see auth.routes.js — this is what closes the "anyone can self-register
-  // as a vendor or rider" gap called out in the backend README).
-  approved      Boolean  @default(true)
-  // Set when an admin suspends this account, cleared on re-approval.
-  // Distinguishes "never approved yet" from "was approved, now suspended"
-  // — both look identical as just approved: false otherwise, which used
-  // to give a suspended rider the same "pending approval" login message
-  // as a brand-new signup, which is the wrong message for that case.
-  suspendedAt   DateTime?
-  expoPushToken String? // set via PATCH /users/me/push-token, used for delivery notifications
-  createdAt     DateTime @default(now())
-
-  vendor        Vendor? @relation("VendorOwner") // present if role = VENDOR (one user owns one storefront in Phase 1)
-  managedVendor Vendor? @relation("VendorManager") // present if role = MANAGER and assigned to a vendor-less category (e.g. Local Market)
-  rider         Rider? // present if role = RIDER
-  orders        Order[] @relation("CustomerOrders")
+  id                String             @id @default(cuid())
+  name              String
+  email             String             @unique
+  phone             String?
+  passwordHash      String
+  role              String             @default("CUSTOMER")
+  approved          Boolean            @default(true)
+  suspendedAt       DateTime?
+  expoPushToken     String?
+  createdAt         DateTime           @default(now())
+  vendor            Vendor?            @relation("VendorOwner")
+  managedVendor     Vendor?            @relation("VendorManager")
+  rider             Rider?
+  orders            Order[]            @relation("CustomerOrders")
   operationalIssues OperationalIssue[]
-  reviews           Review[] @relation("CustomerReviews")
-
-  @@index([role])
+  reviews           Review[]           @relation("CustomerReviews")
+  bookings          Booking[]          @relation("CustomerBookings")
+  notifications     Notification[]     @relation("UserNotifications")
+  userRoles         UserRole[]
+  assignedTickets   SupportTicket[]    @relation("AssignedAdminTickets")
+  tickets           SupportTicket[]    @relation("UserSupportTickets")
+  securityLogs      SecurityLog[]
 }
 
-// One review per delivered order. vendorRating is required; riderRating
-// is optional (matches the reference prototype: a review captures both,
-// but only vendorRating gets blended into a displayed number anywhere -
-// riderRating is stored as real data without a corresponding "blended
-// rider score" feature, since the reference doesn't have one either).
 model Review {
   id           String   @id @default(cuid())
   orderId      String   @unique
@@ -98,59 +49,46 @@ model Review {
 }
 
 model Vendor {
-  id        String   @id @default(cuid())
-  // Most categories have a VENDOR owner. Local Market is the one exception
-  // in the product spec — there's no vendor for that category, so a
-  // MANAGER runs it instead. Exactly one of ownerId/managerId should be
-  // set; app-layer code enforces that (Prisma can't express an XOR).
-  ownerId   String?  @unique
-  owner     User?    @relation("VendorOwner", fields: [ownerId], references: [id])
-  managerId String?  @unique
-  manager   User?    @relation("VendorManager", fields: [managerId], references: [id])
-  name      String
-  area      String // must be one of ALLOWED_AREAS
-  category  String // Restaurant | Grills | Supermarket | Local Market | Pharmacy
-  eta       String
-  rating    Float    @default(4.5)
-  emoji     String   @default("🍽️")
-  isOpen    Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  // Verification is a record, not a document upload — that would need real
-  // file storage (S3/Cloudinary) that can't be wired up and verified from
-  // here. Admin checks the business registration and owner ID by whatever
-  // means (in person, WhatsApp photo, etc.) and logs the outcome here —
-  // realistic for how a small pilot actually verifies people anyway.
+  id                String             @id @default(cuid())
+  ownerId           String?            @unique
+  owner             User?              @relation("VendorOwner", fields: [ownerId], references: [id])
+  managerId         String?            @unique
+  manager           User?              @relation("VendorManager", fields: [managerId], references: [id])
+  name              String
+  area              String
+  category          String
+  eta               String
+  rating            Float              @default(4.5)
+  emoji             String             @default("🍛")
+  isOpen            Boolean            @default(true)
+  address           String?
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime           @default(now())
   businessRegNumber String?
-  ownerIdType       String? // e.g. "NIN", "Driver's License", "Voter's Card"
+  ownerIdType       String?
   ownerIdNumber     String?
-  verified          Boolean   @default(false)
+  verified          Boolean            @default(false)
   verifiedAt        DateTime?
   verificationNotes String?
-
-  products Product[]
-  reviews  Review[]
-  orders   Order[]
-  disputes Dispute[]
-
-  @@index([category])
-  @@index([area])
+  products          Product[]
+  reviews           Review[]
+  orders            Order[]
+  disputes          Dispute[]
 }
 
 model Product {
-  id           String   @id @default(cuid())
-  vendorId     String
-  vendor       Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  name         String
-  price        Int // kobo-free integer Naira, matching the prototype (e.g. 2500 = ₦2,500)
-  emoji        String   @default("🍽️")
-  subcategory  String?
-  isAvailable  Boolean  @default(true) // separate from the vendor's store-wide isOpen toggle
-  createdAt    DateTime @default(now())
-
-  addOns ProductAddOn[]
-
-  @@index([vendorId])
+  id          String         @id @default(cuid())
+  vendorId    String
+  vendor      Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name        String
+  price       Int
+  emoji       String         @default("🍽️")
+  subcategory String?
+  stock       Int            @default(50)
+  isAvailable Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  addOns      ProductAddOn[]
 }
 
 model ProductAddOn {
@@ -162,154 +100,300 @@ model ProductAddOn {
 }
 
 model Rider {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-  zone      String // e.g. "Arepo/Axis"
-  isOnline  Boolean  @default(false)
-  rating    Float    @default(4.8)
-  createdAt DateTime @default(now())
-
-  // Payout destination — entered by the rider themselves, taken at face
-  // value for MVP. Before this handles real money at scale, worth adding
-  // Paystack's account-resolution endpoint here to confirm the account
-  // name matches before a transfer ever goes out, rather than trusting
-  // free-text entry.
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id])
+  zone              String
+  isOnline          Boolean   @default(false)
+  rating            Float     @default(4.8)
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime  @default(now())
   bankName          String?
   bankAccountNumber String?
   bankAccountName   String?
-
-  // Same reasoning as Vendor's verification fields — a record of what was
-  // checked, not a stored document image.
-  idType            String? // e.g. "NIN", "Driver's License", "Voter's Card"
+  idType            String?
   idNumber          String?
   verified          Boolean   @default(false)
   verifiedAt        DateTime?
   verificationNotes String?
-
-  orders  Order[]
-  reviews Review[]
-  payouts Payout[]
-
-  @@index([isOnline])
+  orders            Order[]
+  reviews           Review[]
+  payouts           Payout[]
 }
 
-// A rider-initiated withdrawal request. Deliberately a request-then-admin-
-// confirms flow, not an automatic bank transfer - actually executing a
-// Paystack Transfer needs a verified business account, recipient codes,
-// and OTP-based finalization, none of which can be verified without live
-// credentials. A human marking a payout PAID after actually sending the
-// money (via Paystack's dashboard or any other means) is the realistic
-// model for a new pilot anyway, and it's the same manual-confirmation
-// pattern already used for admin order intervention.
 model Payout {
-  id          String       @id @default(cuid())
+  id          String    @id @default(cuid())
   riderId     String
-  rider       Rider        @relation(fields: [riderId], references: [id])
+  rider       Rider     @relation(fields: [riderId], references: [id])
   amount      Int
-  status      PayoutStatus @default(PENDING)
-  note        String? // e.g. rejection reason, or a transfer reference once actually paid
-  requestedAt DateTime     @default(now())
+  status      String    @default("PENDING")
+  note        String?
+  requestedAt DateTime  @default(now())
   processedAt DateTime?
-
-  @@index([status])
 }
 
 model Order {
-  id         String      @id @default(cuid())
-  customerId String
-  customer   User        @relation("CustomerOrders", fields: [customerId], references: [id])
-  vendorId   String
-  vendor     Vendor      @relation(fields: [vendorId], references: [id])
-  riderId    String?
-  rider      Rider?      @relation(fields: [riderId], references: [id])
-  status     OrderStatus @default(PLACED)
-  // Set when a vendor/manager declines an order — the customer sees this
-  // instead of a bare "cancelled" with no explanation. Optional since a
-  // customer cancelling their own order doesn't need to explain it to themselves.
-  cancelReason String?
-  total      Int
-  deliveryAddress String // required at checkout — matches the web prototype's checkout gate
-  deliveryPhone   String // shown to the rider only at pickup confirmation, not before (privacy)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  items    OrderItem[]
-  dispute  Dispute?
-  review   Review?
-  payment  Payment?
+  id                String             @id @default(cuid())
+  customerId        String
+  customer          User               @relation("CustomerOrders", fields: [customerId], references: [id])
+  vendorId          String
+  vendor            Vendor             @relation(fields: [vendorId], references: [id])
+  riderId           String?
+  rider             Rider?             @relation(fields: [riderId], references: [id])
+  status            String             @default("PLACED")
+  cancelReason      String?
+  total             Int
+  deliveryAddress   String
+  deliveryPhone     String
+  deliveryLatitude  Float?
+  deliveryLongitude Float?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  items             OrderItem[]
+  dispute           Dispute?
+  review            Review?
+  payment           Payment?
   operationalIssues OperationalIssue[]
-
-  @@index([customerId])
-  @@index([vendorId])
-  @@index([riderId])
-  @@index([status])
 }
 
 model OrderItem {
-  id        String   @id @default(cuid())
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  name      String // includes add-on names baked in, e.g. "Jollof Rice & Chicken + Plantain, Salad"
-  price     Int // unit price including selected add-ons
-  qty       Int
-  emoji     String?
+  id      String  @id @default(cuid())
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name    String
+  price   Int
+  qty     Int
+  emoji   String?
 }
 
 model Dispute {
-  id        String        @id @default(cuid())
-  orderId   String        @unique
-  order     Order         @relation(fields: [orderId], references: [id])
-  vendorId  String
-  vendor    Vendor        @relation(fields: [vendorId], references: [id])
-  reason    String
-  status    DisputeStatus @default(OPEN)
-  createdAt DateTime      @default(now())
+  id         String    @id @default(cuid())
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id])
+  vendorId   String
+  vendor     Vendor    @relation(fields: [vendorId], references: [id])
+  reason     String
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
   resolvedAt DateTime?
 }
 
-// App/payment/logistics problems that aren't a vendor's fault - a
-// customer charged with no order appearing, or a rider unable to reach a
-// customer or find an address. Deliberately separate from Dispute: a
-// Dispute is always vendor-scoped (shown to that vendor, tied to their
-// order), and routing something like "customer not answering" through
-// that model would mean showing it to a vendor who has nothing to do
-// with it. Two-state (OPEN/RESOLVED), matching the same simplification
-// already applied to Dispute for the pilot.
 model OperationalIssue {
-  id           String        @id @default(cuid())
+  id           String    @id @default(cuid())
   orderId      String?
-  order        Order?        @relation(fields: [orderId], references: [id])
+  order        Order?    @relation(fields: [orderId], references: [id])
   reporterId   String
-  reporter     User          @relation(fields: [reporterId], references: [id])
-  reporterRole Role
+  reporter     User      @relation(fields: [reporterId], references: [id])
+  reporterRole String
   reason       String
-  status       DisputeStatus @default(OPEN)
-  createdAt    DateTime      @default(now())
+  status       String    @default("OPEN")
+  createdAt    DateTime  @default(now())
   resolvedAt   DateTime?
 }
 
 model AuditLog {
   id          String   @id @default(cuid())
   actorId     String
-  actorName   String // denormalized at write time — survives even if the actor is later renamed/removed
-  action      String // e.g. "Suspended vendor", "Resolved dispute", "Force-cancelled order"
-  targetType  String // "Vendor" | "Rider" | "Order" | "Dispute"
+  actorName   String
+  action      String
+  targetType  String
   targetId    String?
-  targetLabel String // human-readable — vendor/rider name, or order id
+  targetLabel String
   createdAt   DateTime @default(now())
-
-  @@index([createdAt])
 }
 
 model Payment {
-  id         String        @id @default(cuid())
-  orderId    String        @unique
-  order      Order         @relation(fields: [orderId], references: [id])
-  reference  String        @unique // Paystack transaction reference
+  id         String    @id @default(cuid())
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id])
+  reference  String    @unique
   amount     Int
-  status     PaymentStatus @default(PENDING)
-  createdAt  DateTime      @default(now())
+  status     String    @default("PENDING")
+  createdAt  DateTime  @default(now())
   paidAt     DateTime?
   refundedAt DateTime?
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  providerId  String
+  name        String
+  category    String
+  price       Int
+  description String?
+  emoji       String    @default("🛠️")
+  isAvailable Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  bookings    Booking[]
+}
+
+model Booking {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     User     @relation("CustomerBookings", fields: [customerId], references: [id])
+  serviceId    String
+  service      Service  @relation(fields: [serviceId], references: [id])
+  providerName String
+  status       String   @default("PENDING")
+  address      String
+  phone        String
+  total        Int
+  scheduledAt  DateTime @default(now())
+  cancelReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+  title     String
+  body      String
+  type      String   @default("INFO")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Role {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  isSystem        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  code            String           @unique
+  module          String
+  description     String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   @default("CITY") // CITY, ZONE, AREA
+  parentId    String?
+  active      Boolean  @default(true)
+  deliveryFee Int      @default(500)
+  maxDistance Int      @default(25)
+  createdAt   DateTime @default(now())
+}
+
+model CommissionRule {
+  id          String   @id @default(cuid())
+  targetType  String   @default("GLOBAL") // GLOBAL, CATEGORY, VENDOR
+  targetId    String?
+  targetName  String?
+  ratePercent Float    @default(10.0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Promotion {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  title         String
+  discountType  String    @default("PERCENT") // PERCENT, FLAT
+  discountValue Int
+  minSpend      Int       @default(0)
+  usageLimit    Int       @default(100)
+  timesUsed     Int       @default(0)
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+}
+
+model SupportTicket {
+  id              String    @id @default(cuid())
+  ticketNumber    String    @unique
+  userId          String
+  user            User      @relation("UserSupportTickets", fields: [userId], references: [id])
+  userRole        String    @default("CUSTOMER")
+  relatedOrderId  String?
+  category        String    @default("GENERAL")
+  priority        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status          String    @default("OPEN") // OPEN, ASSIGNED, WAITING, RESOLVED, CLOSED
+  assignedAdminId String?
+  assignedAdmin   User?     @relation("AssignedAdminTickets", fields: [assignedAdminId], references: [id])
+  subject         String
+  description     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Refund {
+  id          String    @id @default(cuid())
+  paymentId   String?
+  orderId     String?
+  customerId  String
+  amount      Int
+  reason      String
+  requestedBy String
+  approvedBy  String?
+  status      String    @default("REQUESTED") // REQUESTED, UNDER_REVIEW, APPROVED, REJECTED, PROCESSING, REFUNDED
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+}
+
+model SecurityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  ipAddress String?
+  userAgent String?
+  event     String
+  status    String   @default("SUCCESS") // SUCCESS, FAILED, WARNING
+  createdAt DateTime @default(now())
+}
+
+model ContactInquiry {
+  id         String   @id @default(cuid())
+  userId     String?
+  name       String
+  email      String
+  phone      String?
+  role       String   @default("GUEST")
+  subject    String
+  message    String
+  status     String   @default("UNREAD")
+  replyNote  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ContactConfig {
+  id             String   @id @default("default")
+  supportPhone   String   @default("+234 800 NEEDLY")
+  supportEmail   String   @default("support@needly.market")
+  whatsappNumber String   @default("+234 803 123 4567")
+  officeAddress  String   @default("Panseke Commercial Hub, Abeokuta, Ogun State")
+  operatingHours String   @default("24/7 Everyday")
+  updatedAt      DateTime @updatedAt
 }

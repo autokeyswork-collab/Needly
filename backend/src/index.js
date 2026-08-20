@@ -16,6 +16,7 @@ const auditRoutes = require("./routes/audit.routes");
 const payoutRoutes = require("./routes/payouts.routes");
 const operationalIssueRoutes = require("./routes/operationalIssues.routes");
 const reviewRoutes = require("./routes/reviews.routes");
+const bookingRoutes = require("./routes/bookings.routes");
 
 const app = express();
 
@@ -27,10 +28,8 @@ const app = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
-    // Requests with no Origin header (native mobile apps, curl, server-to-server)
-    // are allowed through — CORS only governs browser-originated requests.
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
+    // Always allow requests during dev/local testing
+    return callback(null, true);
   },
 }));
 
@@ -42,7 +41,7 @@ app.use("/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.json({ ok: true, name: "Route API", health: "/health", databaseHealth: "/health/db" });
+  res.json({ ok: true, name: "Needly API", health: "/health", databaseHealth: "/health/db" });
 });
 
 app.get("/health", (req, res) => res.json({ ok: true }));
@@ -52,7 +51,10 @@ app.get("/health/db", async (req, res) => {
   res.json({ ok: true });
 });
 
+const adminRoutes = require("./routes/admin.routes");
+
 app.use("/auth", authRoutes);
+app.use("/admin", adminRoutes);
 app.use("/vendors", vendorRoutes);
 app.use("/orders", orderRoutes);
 app.use("/disputes", disputeRoutes);
@@ -62,6 +64,7 @@ app.use("/audit-log", auditRoutes);
 app.use("/payouts", payoutRoutes);
 app.use("/operational-issues", operationalIssueRoutes);
 app.use("/reviews", reviewRoutes);
+app.use("/bookings", bookingRoutes);
 
 // Fallback error handler — keeps a stray thrown error from crashing the
 // process and returns a consistent JSON shape instead of an HTML stack trace.
@@ -75,6 +78,6 @@ const io = setupSockets(httpServer);
 app.set("io", io); // lets route handlers do req.app.get("io").emit(...)
 
 const PORT = process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
-  console.log(`Route backend listening on http://localhost:${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Needly backend listening on http://0.0.0.0:${PORT}`);
 });
