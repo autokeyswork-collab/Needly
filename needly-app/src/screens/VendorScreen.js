@@ -164,6 +164,7 @@ export default function VendorScreen() {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [addOnDrafts, setAddOnDrafts] = useState({});
   const [actionError, setActionError] = useState(null);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [decliningOrderId, setDecliningOrderId] = useState(null);
   const [declineOtherNote, setDeclineOtherNote] = useState(null);
@@ -266,15 +267,35 @@ export default function VendorScreen() {
     }
   };
 
-  const submitNewProduct = () => {
+  const submitNewProduct = async () => {
+    setActionError(null);
     const price = parseInt(newPrice, 10);
-    if (!newName.trim() || isNaN(price) || price <= 0) return;
-    addProduct(myVendorId, { name: newName.trim(), price, emoji: newEmoji || "🍽️", imageUrl: newImageUrl || null });
-    setNewName("");
-    setNewPrice("");
-    setNewEmoji("🍽️");
-    setNewImageUrl("");
-    setShowAddForm(false);
+    const targetVendorId = myVendorId || activeVendor?.id;
+    if (!targetVendorId) {
+      setActionError("Could not find your vendor store. Please log out and sign in again.");
+      return;
+    }
+    if (!newName.trim()) {
+      setActionError("Enter a product name before saving.");
+      return;
+    }
+    if (isNaN(price) || price <= 0) {
+      setActionError("Enter a valid product price before saving.");
+      return;
+    }
+    setSavingProduct(true);
+    try {
+      await addProduct(targetVendorId, { name: newName.trim(), price, emoji: newEmoji || "🍽️", imageUrl: newImageUrl || null });
+      setNewName("");
+      setNewPrice("");
+      setNewEmoji("🍽️");
+      setNewImageUrl("");
+      setShowAddForm(false);
+    } catch (err) {
+      setActionError(err.message || "Could not add product. Please try again.");
+    } finally {
+      setSavingProduct(false);
+    }
   };
 
   const setDraft = (productId, patch) =>
@@ -645,8 +666,8 @@ export default function VendorScreen() {
               style={[styles.input, { flex: 1 }]}
             />
           </View>
-          <Pressable onPress={submitNewProduct} style={styles.saveProductBtn}>
-            <Text style={styles.saveProductBtnText}>Save Product to Menu</Text>
+          <Pressable onPress={submitNewProduct} disabled={savingProduct} style={[styles.saveProductBtn, savingProduct && styles.saveProductBtnDisabled]}>
+            <Text style={styles.saveProductBtnText}>{savingProduct ? "Saving Product..." : "Save Product to Menu"}</Text>
           </Pressable>
         </View>
       )}
@@ -945,6 +966,7 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, backgroundColor: "#ffffff", color: INK },
   miniInput: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: "#ffffff", color: INK },
   saveProductBtn: { backgroundColor: DARK_PURPLE, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
+  saveProductBtnDisabled: { opacity: 0.62 },
   saveProductBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 13.5 },
 
   productCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },

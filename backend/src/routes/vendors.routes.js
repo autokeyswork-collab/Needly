@@ -235,15 +235,25 @@ router.patch("/:id/open", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN")
 });
 
 /** POST /vendors/:id/products — add a new product. */
-router.post("/:id/products", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
+router.post("/:id/products", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
   const { name, price, emoji, subcategory, imageUrl } = req.body;
-  if (!name || !price) return res.status(400).json({ error: "name and price are required" });
+  const parsedPrice = Number.parseInt(price, 10);
+  if (!name || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+    return res.status(400).json({ error: "name and a valid price are required" });
+  }
   if (imageUrl && String(imageUrl).length > 1800000) {
     return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
   }
 
   const product = await prisma.product.create({
-    data: { vendorId: req.params.id, name, price, emoji: emoji || "🍽️", subcategory, imageUrl: imageUrl || null },
+    data: {
+      vendorId: req.params.id,
+      name: String(name).trim(),
+      price: parsedPrice,
+      emoji: emoji || "🍽️",
+      subcategory,
+      imageUrl: imageUrl || null,
+    },
   });
   broadcastInventoryUpdate({ vendorId: req.params.id, product, action: "create" });
   res.status(201).json(product);
