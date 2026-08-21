@@ -31,7 +31,7 @@ const ACTIONS = [
   { key: "Book", icon: "calendar-check-o", color: "#FF7A1A", target: "CategoryResults", params: { category: "Auto" } },
   { key: "Reserve", icon: "bookmark-o", color: "#08A85A", target: "CategoryResults", params: { category: "Stay & Dine" } },
   { key: "Deals", icon: "tag", color: "#F82763", target: "CategoryResults", params: { category: "Supermarket" } },
-  { key: "Wallet", icon: "credit-card", color: "#1E63E9", target: "CustomerOrders" },
+  { key: "Wallet", icon: "credit-card", color: "#1E63E9", target: "NeedlyPay" },
 ];
 
 const CATEGORY_GRID = [
@@ -459,7 +459,7 @@ export default function BrowseScreen({ navigation }) {
             <View style={styles.payLeft}>
               <Text style={styles.payTitle}>Needly Pay</Text>
               <Text style={styles.paySubtitle}>Pay fast, safe & secure</Text>
-              <Pressable style={styles.payButton} onPress={() => navigation.navigate("CustomerOrders")}>
+              <Pressable style={styles.payButton} onPress={() => navigation.navigate("NeedlyPay")}>
                 <Text style={styles.payButtonText}>Pay Now</Text>
                 <FontAwesome name="arrow-right" size={14} color="#fff" />
               </Pressable>
@@ -470,7 +470,7 @@ export default function BrowseScreen({ navigation }) {
                 ["file-text", "Pay Bills"],
                 ["mobile", "Airtime & Data"],
               ].map(([icon, label], index) => (
-                <Pressable key={label} style={[styles.payMini, index > 0 && styles.payDivider]}>
+                <Pressable key={label} style={[styles.payMini, index > 0 && styles.payDivider]} onPress={() => navigation.navigate("NeedlyPay")}>
                   <View style={styles.payMiniIcon}>
                     <FontAwesome name={icon} size={22} color={PURPLE} />
                   </View>

@@ -24,7 +24,6 @@ export default function CustomerBottomNav({ navigation, active, unreadMessages =
   const isTiny = width < 370;
 
   const navigate = (item) => {
-    if (item.key === "NeedlyPay") return navigation.navigate("CustomerOrders");
     navigation.navigate(item.key);
   };
 

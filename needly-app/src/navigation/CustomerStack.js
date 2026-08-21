@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BrowseScreen from "../screens/customer/BrowseScreen";
 import CategoryResultsScreen from "../screens/customer/CategoryResultsScreen";
 import CustomerOrdersScreen from "../screens/customer/CustomerOrdersScreen";
+import CustomerWalletScreen from "../screens/customer/CustomerWalletScreen";
 import CustomerBookingsScreen from "../screens/customer/CustomerBookingsScreen";
 import CustomerAccountScreen from "../screens/customer/CustomerAccountScreen";
 import AutoBookingScreen from "../screens/customer/AutoBookingScreen";
@@ -25,6 +26,7 @@ export default function CustomerStack() {
       <Stack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CategoryResults" component={CategoryResultsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NeedlyPay" component={CustomerWalletScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerBookings" component={CustomerBookingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerAccount" component={CustomerAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AutoBooking" component={AutoBookingScreen} options={{ title: "Book auto service" }} />
