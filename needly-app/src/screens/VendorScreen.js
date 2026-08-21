@@ -375,10 +375,9 @@ export default function VendorScreen() {
           <View style={styles.vendorLeftCluster}>
             <Image source={vendorAvatarSource} style={styles.vendorAvatar} />
             <View style={styles.vendorIdentity}>
-              <Pressable style={styles.vendorLocationPill}>
-                <Ionicons name="location" size={16} color="#fff" />
-                <Text numberOfLines={1} style={styles.vendorLocationText}>{activeVendor.area || "Abeokuta"}</Text>
-                <Ionicons name="chevron-down" size={14} color="#fff" />
+              <Pressable style={styles.vendorPersonPill}>
+                <Ionicons name="person" size={16} color="#fff" />
+                <Text numberOfLines={1} style={styles.vendorPersonText}>{user?.name || "Vendor"}</Text>
               </Pressable>
               <Text style={styles.vendorEyebrow}>Vendor Dashboard</Text>
             </View>
@@ -416,6 +415,10 @@ export default function VendorScreen() {
             <View style={styles.heroMetaRow}>
               <View style={styles.heroPill}>
                 <Text style={styles.heroPillText}>{activeVendor.category}</Text>
+              </View>
+              <View style={styles.heroPill}>
+                <Ionicons name="location" size={12} color="rgba(255,255,255,0.92)" />
+                <Text style={styles.heroPillText}>{activeVendor.area || "Abeokuta"}</Text>
               </View>
               <View style={styles.liveBadge}>
                 <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
@@ -897,8 +900,8 @@ const styles = StyleSheet.create({
   vendorLeftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   vendorAvatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
   vendorIdentity: { flex: 1, minWidth: 0, gap: 5 },
-  vendorLocationPill: { alignSelf: "flex-start", maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 34, borderRadius: 17 },
-  vendorLocationText: { color: "#fff", fontSize: 13, fontWeight: "900", maxWidth: 116 },
+  vendorPersonPill: { alignSelf: "flex-start", maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 34, borderRadius: 17 },
+  vendorPersonText: { color: "#fff", fontSize: 13, fontWeight: "900", maxWidth: 132 },
   vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, fontWeight: "900" },
   vendorTopActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
@@ -918,7 +921,7 @@ const styles = StyleSheet.create({
   vendorStoreCopy: { flex: 1, minWidth: 0 },
   heroStoreName: { fontSize: 18, fontWeight: "900", color: "#ffffff", marginBottom: 5 },
   heroMetaRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  heroPill: { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  heroPill: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   heroPillText: { color: "rgba(255,255,255,0.92)", fontSize: 11, fontWeight: "800" },
 
   heroStatusWrap: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
