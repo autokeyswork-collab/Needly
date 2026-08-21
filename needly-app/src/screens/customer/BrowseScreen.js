@@ -325,11 +325,6 @@ export default function BrowseScreen({ navigation }) {
                 </Pressable>
               </View>
 
-              <View style={styles.brandBlock}>
-                <Text style={styles.brand}>Needly</Text>
-                <Text style={styles.tagline}>Everything you need, in one place.</Text>
-              </View>
-
               <View style={styles.rightCluster}>
                 <IconButton
                   name="shopping-cart"
@@ -579,14 +574,11 @@ const styles = StyleSheet.create({
   batteryPill: { height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.14)", flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8 },
   liveStatusText: { color: "#fff", fontSize: 10.5, fontWeight: "900" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  leftCluster: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1.05, minWidth: 0 },
+  leftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
   locationPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 112 },
   locationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
-  brandBlock: { alignItems: "center", flex: 0.95, minWidth: 86 },
-  brand: { color: "#fff", fontSize: 29, lineHeight: 33, fontWeight: "900", letterSpacing: 0 },
-  tagline: { color: "#FFFFFF", fontSize: 9.5, lineHeight: 12, fontWeight: "600", marginTop: 1, textAlign: "center" },
-  rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 6, flex: 0.75 },
+  rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 0.48 },
   headerIconButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: -5, right: -4, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   badgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
