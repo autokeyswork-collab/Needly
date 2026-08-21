@@ -302,14 +302,14 @@ export default function VendorScreen() {
         </View>
       )}
 
-      <View style={styles.quickActionCard}>
+      <View style={[styles.quickActionCard, compact && styles.quickActionCardCompact]}>
         {[
           { label: "Orders", value: queue.length, color: PURPLE },
           { label: "Menu", value: vendorItems.length, color: MANGO },
           { label: "Ready", value: queue.filter((o) => (o.status || "").toLowerCase() === "ready").length, color: EMERALD },
           { label: "Issues", value: openDisputes.length, color: CHILI },
         ].map((item) => (
-          <View key={item.label} style={styles.quickActionItem}>
+          <View key={item.label} style={[styles.quickActionItem, compact && styles.quickActionItemCompact]}>
             <View style={[styles.quickIcon, { backgroundColor: `${item.color}18` }]}>
               <Text style={[styles.quickIconText, { color: item.color }]}>{item.value}</Text>
             </View>
@@ -715,6 +715,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginBottom: 18,
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-around",
     shadowColor: PURPLE,
     shadowOpacity: 0.08,
@@ -722,7 +723,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
-  quickActionItem: { flex: 1, alignItems: "center", gap: 7 },
+  quickActionCardCompact: { paddingHorizontal: 10, rowGap: 12, columnGap: 8 },
+  quickActionItem: { flexGrow: 1, flexBasis: 0, minWidth: 68, alignItems: "center", gap: 7 },
+  quickActionItemCompact: { flexBasis: "47%", minWidth: 0 },
   quickIcon: { width: 46, height: 46, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   quickIconText: { fontSize: 16, fontWeight: "900" },
   quickActionLabel: { color: INK, fontSize: 12, fontWeight: "900" },
