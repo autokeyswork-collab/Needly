@@ -170,14 +170,15 @@ export default function LoginScreen({ navigation }) {
 
           <View style={[styles.panel, { width: panelWidth }, isDesktop ? styles.panelDesktop : styles.panelMobile]}>
             <View style={styles.panelScrollProxy}>
-              <View style={styles.langRow}>
-                {!isDesktop && <View />}
-                <Pressable style={styles.langPill}>
-                  <Ionicons name="globe-outline" size={20} color={INK} />
-                  <Text style={styles.langText}>English</Text>
-                  <Ionicons name="chevron-down" size={18} color={INK} />
-                </Pressable>
-              </View>
+              {isDesktop && (
+                <View style={styles.langRow}>
+                  <Pressable style={styles.langPill}>
+                    <Ionicons name="globe-outline" size={20} color={INK} />
+                    <Text style={styles.langText}>English</Text>
+                    <Ionicons name="chevron-down" size={18} color={INK} />
+                  </Pressable>
+                </View>
+              )}
 
               <View style={[styles.welcomeBlock, isCompact && styles.welcomeBlockCompact]}>
                 <Text style={[styles.welcomeTitle, !isDesktop && styles.welcomeTitleMobile, isCompact && styles.welcomeTitleCompact]}>Welcome back! 👋</Text>
@@ -302,13 +303,13 @@ export default function LoginScreen({ navigation }) {
                 ))}
               </View>
 
-              <View style={[styles.securityCard, isCompact && styles.securityCardCompact]}>
-                <View style={styles.securityIcon}>
-                  <Ionicons name="shield-checkmark-outline" size={34} color={PURPLE} />
+              <View style={[styles.securityCard, !isDesktop && styles.securityCardMobile, isCompact && styles.securityCardCompact]}>
+                <View style={[styles.securityIcon, !isDesktop && styles.securityIconMobile]}>
+                  <Ionicons name="shield-checkmark-outline" size={!isDesktop ? 18 : 34} color={PURPLE} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.securityTitle}>Your data is protected with Needly.</Text>
-                  <Text style={styles.securityText}>Fast, secure and reliable.</Text>
+                  <Text style={[styles.securityTitle, !isDesktop && styles.securityTitleMobile]}>Protected with Needly.</Text>
+                  {isDesktop && <Text style={styles.securityText}>Fast, secure and reliable.</Text>}
                 </View>
               </View>
 
@@ -412,7 +413,7 @@ const styles = StyleSheet.create({
   langPill: { marginLeft: "auto", minHeight: 36, borderRadius: 18, borderWidth: 1, borderColor: "#E6E7EF", backgroundColor: "#fff", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 6, shadowColor: "#17113A", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   langText: { color: INK, fontSize: 12.5, fontWeight: "900" },
   welcomeBlock: { marginTop: 48, marginBottom: 28 },
-  welcomeBlockCompact: { marginTop: 16, marginBottom: 14 },
+  welcomeBlockCompact: { marginTop: 2, marginBottom: 12 },
   welcomeTitle: { color: INK, fontSize: 40, lineHeight: 48, fontWeight: "900" },
   welcomeTitleMobile: { fontSize: 22, lineHeight: 27 },
   welcomeTitleCompact: { fontSize: 22, lineHeight: 27 },
@@ -466,9 +467,12 @@ const styles = StyleSheet.create({
   socialButtonMobile: { width: 48, height: 44, minHeight: 44, borderRadius: 14, paddingHorizontal: 0 },
   socialButtonCompact: { minHeight: 44 },
   securityCard: { marginTop: 32, borderRadius: 16, backgroundColor: "#F3EDFF", padding: 20, flexDirection: "row", alignItems: "center", gap: 16 },
-  securityCardCompact: { marginTop: 14, padding: 10, gap: 8 },
+  securityCardMobile: { marginTop: 10, borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10, gap: 6 },
+  securityCardCompact: { marginTop: 10, paddingVertical: 7, paddingHorizontal: 10, gap: 6 },
   securityIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  securityIconMobile: { width: 24, height: 24, borderRadius: 12 },
   securityTitle: { color: "#5B5C7D", fontSize: 12.5, fontWeight: "800", marginBottom: 3 },
+  securityTitleMobile: { fontSize: 10.5, marginBottom: 0 },
   securityText: { color: "#787A99", fontSize: 11.5, fontWeight: "600" },
   signupRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 36 },
   signupRowCompact: { marginTop: 14, flexWrap: "wrap" },
