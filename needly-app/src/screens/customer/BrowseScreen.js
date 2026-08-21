@@ -402,9 +402,9 @@ export default function BrowseScreen({ navigation }) {
                       <Text style={styles.heroBadgeText}>{slide.badge}</Text>
                     </View>
                     <View style={styles.heroCopy}>
-                      <Text style={styles.heroKicker}>{slide.kicker}</Text>
-                      <Text style={styles.heroTitle}>{slide.title}</Text>
-                      <Text style={styles.heroBody}>{slide.body}</Text>
+                      <Text numberOfLines={2} style={styles.heroKicker}>{slide.kicker}</Text>
+                      <Text numberOfLines={2} style={styles.heroTitle}>{slide.title}</Text>
+                      <Text numberOfLines={2} style={styles.heroBody}>{slide.body}</Text>
                       <Pressable style={styles.heroCta} onPress={() => goCategory(slide.category)}>
                         <Text style={styles.heroCtaText}>{slide.cta}</Text>
                         <FontAwesome name="arrow-right" size={15} color="#fff" />
@@ -595,14 +595,14 @@ const styles = StyleSheet.create({
   heroImage: { flex: 1 },
   heroImageRadius: { borderRadius: 24 },
   heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-  heroBadge: { position: "absolute", top: 14, right: 14, maxWidth: 145, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 },
-  heroBadgeText: { color: INK, fontSize: 10.5, lineHeight: 15, fontWeight: "900" },
-  heroCopy: { position: "absolute", left: 20, bottom: 20, width: "62%" },
-  heroKicker: { color: "#fff", fontSize: 26, lineHeight: 29, fontWeight: "900" },
-  heroTitle: { color: "#fff", fontSize: 15.5, lineHeight: 20, fontWeight: "900", marginTop: 8 },
-  heroBody: { color: "#fff", fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
-  heroCta: { marginTop: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
-  heroCtaText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  heroBadge: { position: "absolute", top: 12, right: 12, maxWidth: 126, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 9, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5 },
+  heroBadgeText: { color: INK, fontSize: 9.5, lineHeight: 13, fontWeight: "900" },
+  heroCopy: { position: "absolute", left: 18, bottom: 18, width: "58%" },
+  heroKicker: { color: "#fff", fontSize: 21, lineHeight: 24, fontWeight: "900" },
+  heroTitle: { color: "#fff", fontSize: 13, lineHeight: 17, fontWeight: "900", marginTop: 6 },
+  heroBody: { color: "#fff", fontSize: 10.5, lineHeight: 14, fontWeight: "700", marginTop: 2 },
+  heroCta: { marginTop: 8, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
+  heroCtaText: { color: "#fff", fontSize: 10.5, fontWeight: "900" },
   dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 7, marginTop: -20, marginBottom: 20 },
   dot: { width: 18, height: 8, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.86)" },
   dotActive: { width: 30, backgroundColor: PURPLE },
