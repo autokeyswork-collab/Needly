@@ -31,7 +31,7 @@ export default function RootNavigator() {
 
   const isSuperAdmin = roleKey === "SUPER_ADMIN";
 
-  const usesOwnHeader = isSuperAdmin || roleKey === "CUSTOMER";
+  const usesOwnHeader = isSuperAdmin || roleKey === "CUSTOMER" || roleKey === "VENDOR";
 
   return (
     <View style={{ flex: 1 }}>
