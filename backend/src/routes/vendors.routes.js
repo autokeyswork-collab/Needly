@@ -34,8 +34,8 @@ router.get("/", async (req, res) => {
         ...(category ? { category } : {}),
         ...(allowedAreas.length && !cityWideArea ? { area: { in: allowedAreas } } : {}),
         OR: [
-          { ownerId: { not: null }, owner: { approved: true } },
-          { managerId: { not: null }, manager: { approved: true } },
+          { owner: { is: { approved: true } } },
+          { manager: { is: { approved: true } } },
         ],
       },
       include: { products: { include: { addOns: true } } },
@@ -50,7 +50,8 @@ router.get("/", async (req, res) => {
     });
     res.json(withBlendedRatings);
   } catch (err) {
-    res.json([]);
+    console.error("Public vendor list failed:", err);
+    res.status(500).json({ error: err.message || "Failed to load vendors" });
   }
 });
 
