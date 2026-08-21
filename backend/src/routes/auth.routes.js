@@ -6,21 +6,49 @@ const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { logAction } = require("../lib/auditLog");
 const { broadcastProviderStatus, broadcastAdminAlert } = require("../sockets/orderSocket");
+const { appUrl, escapeHtml, sendMail } = require("../lib/mailer");
 
 const router = express.Router();
 const confirmationMailTray = [];
 
-function queueConfirmationMail({ to, subject, body, type }) {
-  confirmationMailTray.unshift({
+async function queueConfirmationMail({ to, subject, body, type, actionUrl, actionLabel }) {
+  const item = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     to,
     subject,
     body,
     type,
     status: "queued",
+    actionUrl,
+    actionLabel,
     createdAt: new Date().toISOString(),
-  });
+  };
+
+  try {
+    const mailResult = await sendMail({
+      to,
+      subject,
+      text: actionUrl ? `${body}\n\n${actionLabel || "Open Needly"}: ${actionUrl}` : body,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.55;color:#15183F">
+          <h2 style="color:#6F45E9;margin-bottom:8px">Needly</h2>
+          <p>${escapeHtml(body)}</p>
+          ${actionUrl ? `<p><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#6F45E9;color:#fff;padding:12px 18px;border-radius:12px;text-decoration:none;font-weight:700">${escapeHtml(actionLabel || "Open Needly")}</a></p>` : ""}
+          <p style="color:#747792;font-size:12px">Everything you need, in one place.</p>
+        </div>
+      `,
+    });
+    item.status = mailResult.sent ? "sent" : "queued";
+    item.providerMessageId = mailResult.messageId || null;
+    item.note = mailResult.reason || null;
+  } catch (err) {
+    item.status = "failed";
+    item.error = err.message;
+  }
+
+  confirmationMailTray.unshift(item);
   if (confirmationMailTray.length > 80) confirmationMailTray.length = 80;
+  return item;
 }
 
 function vendorEmoji(category) {
@@ -170,11 +198,13 @@ router.post("/register", authLimiter, async (req, res) => {
         },
       });
 
-      queueConfirmationMail({
+      await queueConfirmationMail({
         to: cleanEmail,
         type: "vendor_signup",
         subject: "Welcome to Needly — Vendor Storefront Under Review",
-        body: `Hello ${name}, your vendor store registration for '${vendorProfile.name}' has been received. Needly Admin will review and approve your store profile.`,
+        body: `Hello ${name}, your vendor store registration for '${vendorProfile.name || `${name}'s Store`}' has been received. Needly Admin will review and approve your store profile. We will email you a login link once your vendor account is approved.`,
+        actionUrl: appUrl(`/?role=VENDOR&email=${encodeURIComponent(cleanEmail)}`),
+        actionLabel: "Open Needly Login",
       });
     } else if (targetRole === "RIDER" && riderProfile) {
       await prisma.rider.create({
@@ -185,22 +215,32 @@ router.post("/register", authLimiter, async (req, res) => {
         },
       });
 
-      queueConfirmationMail({
+      await queueConfirmationMail({
         to: cleanEmail,
         type: "rider_signup",
         subject: "Welcome to Needly — Rider Profile Under Review",
-        body: `Hello ${name}, your rider registration for zone '${riderProfile.zone || "Abeokuta"}' has been received. Needly Admin will verify your profile shortly.`,
+        body: `Hello ${name}, your rider registration for zone '${riderProfile.zone || "Abeokuta"}' has been received. Needly Admin will verify your profile shortly. We will email you a login link once your rider account is approved.`,
+        actionUrl: appUrl(`/?role=RIDER&email=${encodeURIComponent(cleanEmail)}`),
+        actionLabel: "Open Needly Login",
       });
     }
 
     if (requiresApproval) {
       return res.json({
         pendingApproval: true,
-        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted! Needly Admin will review and activate your account shortly.`,
+        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
       });
     }
 
     const token = signToken(user);
+    await queueConfirmationMail({
+      to: cleanEmail,
+      type: "customer_signup",
+      subject: "Welcome to Needly — Your customer account is ready",
+      body: `Hello ${name}, welcome to Needly. Your customer account is ready and you can start shopping, booking, and paying securely.`,
+      actionUrl: appUrl(`/?role=CUSTOMER&email=${encodeURIComponent(cleanEmail)}`),
+      actionLabel: "Open Needly",
+    });
     return res.status(201).json({
       token,
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
@@ -297,17 +337,19 @@ router.post("/social", authLimiter, async (req, res) => {
         });
       }
 
-      queueConfirmationMail({
+      await queueConfirmationMail({
         to: cleanEmail,
         type: "social_signup",
         subject: `Welcome to Needly — Signed in via ${prov.charAt(0).toUpperCase() + prov.slice(1)}`,
-        body: `Hello ${userName}, welcome to Needly Everyday Marketplace! Your ${targetRole} account was created via ${prov.charAt(0).toUpperCase() + prov.slice(1)}.`,
+        body: `Hello ${userName}, welcome to Needly Everyday Marketplace. Your ${targetRole.toLowerCase()} account was created via ${prov.charAt(0).toUpperCase() + prov.slice(1)}.${requiresApproval ? " Needly Admin will email you again once your account is approved." : ""}`,
+        actionUrl: appUrl(`/?role=${encodeURIComponent(targetRole)}&email=${encodeURIComponent(cleanEmail)}`),
+        actionLabel: "Open Needly Login",
       });
 
       if (requiresApproval) {
         return res.json({
           pendingApproval: true,
-          message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${prov.charAt(0).toUpperCase() + prov.slice(1)} has been submitted! Needly Admin will review and activate your account shortly.`,
+          message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${prov.charAt(0).toUpperCase() + prov.slice(1)} has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
         });
       }
     }
@@ -683,11 +725,13 @@ router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req
   broadcastAdminAlert({ type: "account_approved", userId: user.id, role: user.role, name: user.name });
 
   if (user.role === "VENDOR" || user.role === "RIDER") {
-    queueConfirmationMail({
+    await queueConfirmationMail({
       to: user.email,
       type: "account_approved",
       subject: `Needly ${user.role.toLowerCase()} account approved`,
-      body: `Hello ${user.name}, your Needly ${user.role.toLowerCase()} account${user.vendor?.name ? ` for ${user.vendor.name}` : ""} has been approved. You can now log in.`,
+      body: `Hello ${user.name}, your Needly ${user.role.toLowerCase()} account${user.vendor?.name ? ` for ${user.vendor.name}` : ""} has been approved. You can now log in with this email and the password you created during registration.`,
+      actionUrl: appUrl(`/?role=${encodeURIComponent(user.role)}&email=${encodeURIComponent(user.email)}`),
+      actionLabel: "Log in to Needly",
     });
   }
   const { passwordHash, ...safeUser } = user;

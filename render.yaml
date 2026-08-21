@@ -26,6 +26,20 @@ services:
         value: "4000"
       - key: APP_BASE_URL
         value: https://needly-backend.onrender.com
+      - key: FRONTEND_BASE_URL
+        value: https://needly-frontend-seven.vercel.app
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        value: Needly <hello@needly.market>
       - key: ALLOWED_AREAS
         value: Abeokuta,Adigbe,Panseke,Oke-Ilewo,Lafenwa,Kuto,Omida
       - key: RIDER_PAYOUT_PER_DELIVERY

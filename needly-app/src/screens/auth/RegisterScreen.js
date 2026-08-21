@@ -143,8 +143,9 @@ export default function RegisterScreen({ navigation, route }) {
           <Text style={styles.pendingTitle}>Registration Submitted</Text>
           <Text style={styles.pendingText}>{pendingMessage}</Text>
           <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>⚡ Status: Pending Admin Setup</Text>
+            <Text style={styles.pendingBadgeText}>Status: Pending Admin Review</Text>
           </View>
+          <Text style={styles.pendingHint}>Check your email for the Needly notification. Vendors can log in from the approval email after Admin activates the store.</Text>
           <Pressable style={styles.backLoginBtn} onPress={() => navigation.navigate("Login")}>
             <Text style={styles.backLoginBtnText}>Return to Login</Text>
           </Pressable>
@@ -459,6 +460,7 @@ const styles = StyleSheet.create({
   pendingText: { fontSize: 13.5, color: "#64748B", textAlign: "center", lineHeight: 20, marginBottom: 16 },
   pendingBadge: { backgroundColor: "#FEF3C7", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: "#FDE68A", marginBottom: 20 },
   pendingBadgeText: { color: "#92400E", fontSize: 12, fontWeight: "800" },
+  pendingHint: { color: "#64748B", fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: -8, marginBottom: 18 },
   backLoginBtn: { backgroundColor: "#6F45E9", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 24, width: "100%", alignItems: "center" },
   backLoginBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
 });

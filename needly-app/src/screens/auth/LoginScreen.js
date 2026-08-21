@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
@@ -71,6 +71,19 @@ export default function LoginScreen({ navigation }) {
   const [forgotInput, setForgotInput] = useState("");
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const emailParam = params.get("email");
+    const roleParam = (params.get("role") || "").toUpperCase();
+    if (emailParam) setEmail(emailParam.trim().toLowerCase());
+    if (["CUSTOMER", "VENDOR", "RIDER", "PROVIDER"].includes(roleParam)) {
+      setAccountType(roleParam);
+    } else if (roleParam === "MANAGER" || roleParam === "ADMIN") {
+      setAccountType("PROVIDER");
+    }
+  }, []);
 
   const panelWidth = useMemo(() => {
     if (!isDesktop) return Math.min(width - 42, 360);
