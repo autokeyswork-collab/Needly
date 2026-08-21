@@ -260,7 +260,7 @@ router.post("/:id/products", requireAuth, requireRole("VENDOR", "MANAGER", "ADMI
 });
 
 /** PATCH /vendors/:vendorId/products/:productId — update price (or name/emoji). */
-router.patch("/:vendorId/products/:productId", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
+router.patch("/:vendorId/products/:productId", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
   const { price, name, emoji, imageUrl } = req.body;
   if (imageUrl && String(imageUrl).length > 1800000) {
     return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
@@ -279,7 +279,7 @@ router.patch("/:vendorId/products/:productId", requireAuth, requireRole("VENDOR"
 });
 
 /** POST /vendors/:vendorId/products/:productId/addons — add an add-on option. */
-router.post("/:vendorId/products/:productId/addons", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
+router.post("/:vendorId/products/:productId/addons", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
   const { name, price } = req.body;
   if (!name || !price) return res.status(400).json({ error: "name and price are required" });
 
@@ -291,7 +291,7 @@ router.post("/:vendorId/products/:productId/addons", requireAuth, requireRole("V
 });
 
 /** PATCH /vendors/:vendorId/products/:productId/available — toggle one product's availability. */
-router.patch("/:vendorId/products/:productId/available", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
+router.patch("/:vendorId/products/:productId/available", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
   const product = await prisma.product.findUnique({ where: { id: req.params.productId } });
   if (!product || product.vendorId !== req.vendor.id) return res.status(404).json({ error: "Product not found" });
 
@@ -304,7 +304,7 @@ router.patch("/:vendorId/products/:productId/available", requireAuth, requireRol
 });
 
 /** DELETE /vendors/:vendorId/products/:productId/addons/:addOnId */
-router.delete("/:vendorId/products/:productId/addons/:addOnId", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
+router.delete("/:vendorId/products/:productId/addons/:addOnId", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
   await prisma.productAddOn.delete({ where: { id: req.params.addOnId } });
   res.json({ ok: true });
 });

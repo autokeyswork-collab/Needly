@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Alert, FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -168,6 +168,9 @@ export default function VendorScreen() {
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [decliningOrderId, setDecliningOrderId] = useState(null);
   const [declineOtherNote, setDeclineOtherNote] = useState(null);
+  const [orderView, setOrderView] = useState("active");
+  const scrollRef = useRef(null);
+  const sectionOffsets = useRef({ orders: 0, menu: 0, issues: 0 });
 
   const acceptOrder = async (orderId) => {
     setActionError(null);
@@ -210,14 +213,20 @@ export default function VendorScreen() {
   }
 
   const vendorItems = activeVendor.items || [];
-  const myOrders = (orders || []).filter((o) => o && o.vendor && (o.vendor.id === myVendorId || o.vendorId === myVendorId));
+  const activeVendorId = myVendorId || activeVendor.id;
+  const myOrders = (orders || []).filter((o) => {
+    const orderVendorId = o?.vendor?.id || o?.vendorId;
+    return orderVendorId && orderVendorId === activeVendorId;
+  });
   const queue = myOrders.filter((o) => {
     const st = (o.status || "").toLowerCase();
     return st !== "delivered" && st !== "cancelled";
   });
   const history = myOrders.filter((o) => (o.status || "").toLowerCase() === "delivered");
   const declined = myOrders.filter((o) => (o.status || "").toLowerCase() === "cancelled");
-  const myDisputes = (disputes || []).filter((d) => d.vendorId === myVendorId);
+  const readyOrders = queue.filter((o) => (o.status || "").toLowerCase() === "ready");
+  const visibleOrders = orderView === "ready" ? readyOrders : queue;
+  const myDisputes = (disputes || []).filter((d) => d.vendorId === activeVendorId);
   const openDisputes = myDisputes.filter((d) => (d.status || "").toLowerCase() === "open");
   const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const vendorAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
@@ -237,13 +246,40 @@ export default function VendorScreen() {
     );
   };
 
+  const scrollToSection = (section) => {
+    const y = sectionOffsets.current[section] || 0;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  };
+
+  const handleQuickAction = (key) => {
+    setActionError(null);
+    if (key === "Orders") {
+      setOrderView("active");
+      scrollToSection("orders");
+      return;
+    }
+    if (key === "Menu") {
+      setShowAddForm(true);
+      scrollToSection("menu");
+      return;
+    }
+    if (key === "Ready") {
+      setOrderView("ready");
+      scrollToSection("orders");
+      return;
+    }
+    if (key === "Issues") {
+      scrollToSection("issues");
+    }
+  };
+
   const startEdit = (item) => {
     setEditingItemId(item.id);
     setEditPrice(String(item.price));
   };
   const saveEdit = (itemId) => {
     const price = parseInt(editPrice, 10);
-    if (!isNaN(price) && price > 0) updatePrice(myVendorId, itemId, price);
+    if (!isNaN(price) && price > 0) updatePrice(activeVendorId, itemId, price);
     setEditingItemId(null);
   };
 
@@ -261,7 +297,7 @@ export default function VendorScreen() {
     setActionError(null);
     try {
       const imageUrl = await pickResizedProductImage();
-      if (imageUrl) await updateProductDetails(myVendorId, productId, { imageUrl });
+      if (imageUrl) await updateProductDetails(activeVendorId, productId, { imageUrl });
     } catch (err) {
       setActionError(err.message || "Could not update product image.");
     }
@@ -270,7 +306,7 @@ export default function VendorScreen() {
   const submitNewProduct = async () => {
     setActionError(null);
     const price = parseInt(newPrice, 10);
-    const targetVendorId = myVendorId || activeVendor?.id;
+    const targetVendorId = activeVendorId;
     if (!targetVendorId) {
       setActionError("Could not find your vendor store. Please log out and sign in again.");
       return;
@@ -305,12 +341,12 @@ export default function VendorScreen() {
     const draft = addOnDrafts[productId] || {};
     const price = parseInt(draft.price, 10);
     if (!draft.name?.trim() || isNaN(price) || price <= 0) return;
-    addAddOn(myVendorId, productId, { name: draft.name.trim(), price });
+    addAddOn(activeVendorId, productId, { name: draft.name.trim(), price });
     setAddOnDrafts((prev) => ({ ...prev, [productId]: { name: "", price: "" } }));
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.shell}>
       <View style={styles.heroStoreCard}>
         <View style={styles.vendorStatusRow}>
@@ -389,7 +425,7 @@ export default function VendorScreen() {
           </View>
           <Switch
             value={!!activeVendor.isOpen}
-            onValueChange={() => toggleVendorOpen(myVendorId)}
+              onValueChange={() => toggleVendorOpen(activeVendorId)}
             trackColor={{ true: EMERALD, false: "#475569" }}
             thumbColor="#ffffff"
           />
@@ -448,35 +484,42 @@ export default function VendorScreen() {
         {[
           { label: "Orders", value: queue.length, color: PURPLE },
           { label: "Menu", value: vendorItems.length, color: MANGO },
-          { label: "Ready", value: queue.filter((o) => (o.status || "").toLowerCase() === "ready").length, color: EMERALD },
+          { label: "Ready", value: readyOrders.length, color: EMERALD },
           { label: "Issues", value: openDisputes.length, color: CHILI },
         ].map((item) => (
-          <View key={item.label} style={[styles.quickActionItem, statsCompact && styles.quickActionItemCompact]}>
+          <Pressable key={item.label} onPress={() => handleQuickAction(item.label)} style={[styles.quickActionItem, statsCompact && styles.quickActionItemCompact]}>
             <View style={[styles.quickIcon, { backgroundColor: `${item.color}18` }]}>
               <Text style={[styles.quickIconText, { color: item.color }]}>{item.value}</Text>
             </View>
             <Text style={styles.quickActionLabel} numberOfLines={1}>{item.label}</Text>
-          </View>
+          </Pressable>
         ))}
       </View>
 
       {/* Active Orders Queue */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Active Orders</Text>
+      <View
+        style={styles.sectionHeaderRow}
+        onLayout={(event) => { sectionOffsets.current.orders = event.nativeEvent.layout.y; }}
+      >
+        <Text style={styles.sectionTitle}>{orderView === "ready" ? "Ready Orders" : "Active Orders"}</Text>
         <View style={styles.badgePill}>
-          <Text style={styles.badgePillText}>{queue.length} active</Text>
+          <Text style={styles.badgePillText}>{visibleOrders.length} {orderView === "ready" ? "ready" : "active"}</Text>
         </View>
       </View>
 
       <FlatList
-        data={queue}
+        data={visibleOrders}
         keyExtractor={(o) => o.id}
         scrollEnabled={false}
         ListEmptyComponent={
           <View style={styles.emptyCard}>
             <Text style={styles.emptyCardIcon}>📦</Text>
-            <Text style={styles.emptyCardTitle}>No Active Orders</Text>
-            <Text style={styles.emptyCardText}>New customer orders will appear here automatically in real time.</Text>
+            <Text style={styles.emptyCardTitle}>{orderView === "ready" ? "No Ready Orders" : "No Active Orders"}</Text>
+            <Text style={styles.emptyCardText}>
+              {orderView === "ready"
+                ? "Orders marked ready for rider pickup will appear here."
+                : "New customer orders will appear here automatically in real time."}
+            </Text>
           </View>
         }
         contentContainerStyle={{ gap: 12, marginBottom: 20 }}
@@ -615,7 +658,7 @@ export default function VendorScreen() {
 
       {/* Product Catalog Management */}
       <View style={styles.productsHeaderRow}>
-        <View>
+        <View onLayout={(event) => { sectionOffsets.current.menu = event.nativeEvent.layout.y; }}>
           <Text style={styles.sectionTitle}>Product Catalog</Text>
           <Text style={styles.sectionSubTitle}>{vendorItems.length} active menu items</Text>
         </View>
@@ -725,7 +768,7 @@ export default function VendorScreen() {
                   </Text>
                   <Switch
                     value={isAvailable}
-                    onValueChange={() => toggleProductAvailable(myVendorId, item.id)}
+                    onValueChange={() => toggleProductAvailable(activeVendorId, item.id)}
                     trackColor={{ true: EMERALD, false: "#CBD5E1" }}
                     thumbColor="#ffffff"
                   />
@@ -739,7 +782,7 @@ export default function VendorScreen() {
                 {(item.addOns || []).map((addon) => (
                   <View key={addon.id} style={styles.addonRow}>
                     <Text style={styles.addonText}>+ {addon.name} ({fmtNaira(addon.price)})</Text>
-                    <Pressable onPress={() => removeAddOn(myVendorId, item.id, addon.id)} style={styles.removeAddonBtn}>
+                    <Pressable onPress={() => removeAddOn(activeVendorId, item.id, addon.id)} style={styles.removeAddonBtn}>
                       <Text style={styles.removeAddonText}>✕</Text>
                     </Pressable>
                   </View>
@@ -770,6 +813,39 @@ export default function VendorScreen() {
           );
         }}
       />
+
+      <View
+        style={styles.issuesSection}
+        onLayout={(event) => { sectionOffsets.current.issues = event.nativeEvent.layout.y; }}
+      >
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Issues</Text>
+          <View style={[styles.badgePill, openDisputes.length > 0 && styles.issueBadgePill]}>
+            <Text style={[styles.badgePillText, openDisputes.length > 0 && styles.issueBadgePillText]}>
+              {openDisputes.length} open
+            </Text>
+          </View>
+        </View>
+        {openDisputes.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyCardIcon}>✓</Text>
+            <Text style={styles.emptyCardTitle}>No Open Issues</Text>
+            <Text style={styles.emptyCardText}>Customer disputes and store issues will appear here for review.</Text>
+          </View>
+        ) : (
+          <View style={styles.issueList}>
+            {openDisputes.map((issue) => (
+              <View key={issue.id} style={styles.issueCard}>
+                <Text style={styles.issueTitle}>Order #{String(issue.orderId || "").slice(-6)}</Text>
+                <Text style={styles.issueReason}>{issue.reason || "Customer reported an issue."}</Text>
+                <Text style={styles.issueMeta}>
+                  {issue.customerName ? `${issue.customerName} • ` : ""}{new Date(issue.createdAt || Date.now()).toLocaleString()}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
       </View>
     </ScrollView>
   );
@@ -896,6 +972,8 @@ const styles = StyleSheet.create({
   sectionSubTitle: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: "700" },
   badgePill: { backgroundColor: "#F4EDFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   badgePillText: { color: PURPLE, fontSize: 11.5, fontWeight: "800" },
+  issueBadgePill: { backgroundColor: "#FEF2F2" },
+  issueBadgePillText: { color: CHILI },
 
   /* Empty State */
   emptyCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 24, alignItems: "center", shadowColor: PURPLE, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
@@ -990,4 +1068,10 @@ const styles = StyleSheet.create({
   removeAddonText: { color: CHILI, fontSize: 13, fontWeight: "800" },
   addAddonBtn: { backgroundColor: DARK_PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, justifyContent: "center" },
   addAddonBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 12 },
+  issuesSection: { marginTop: 22, marginBottom: 10 },
+  issueList: { gap: 10 },
+  issueCard: { backgroundColor: "#FFF7F7", borderWidth: 1, borderColor: "#FECACA", borderRadius: 18, padding: 13 },
+  issueTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
+  issueReason: { color: "#7F1D1D", fontSize: 12.5, fontWeight: "700", marginTop: 4, lineHeight: 18 },
+  issueMeta: { color: MUTED, fontSize: 11, fontWeight: "700", marginTop: 8 },
 });
