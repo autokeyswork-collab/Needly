@@ -136,6 +136,8 @@ export default function BrowseScreen({ navigation }) {
   const [now, setNow] = useState(Date.now());
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installHidden, setInstallHidden] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [batteryLevel, setBatteryLevel] = useState(null);
 
   const cartCount = 0;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
@@ -191,6 +193,40 @@ export default function BrowseScreen({ navigation }) {
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
+    const updateOnline = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    updateOnline();
+    return () => {
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.getBattery) return undefined;
+    let battery;
+    let mounted = true;
+    const updateBattery = () => {
+      if (!battery || !mounted) return;
+      setBatteryLevel(Math.round(battery.level * 100));
+    };
+    navigator.getBattery().then((value) => {
+      if (!mounted) return;
+      battery = value;
+      updateBattery();
+      battery.addEventListener("levelchange", updateBattery);
+      battery.addEventListener("chargingchange", updateBattery);
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+      battery?.removeEventListener("levelchange", updateBattery);
+      battery?.removeEventListener("chargingchange", updateBattery);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
     const handlePrompt = (event) => {
       event.preventDefault();
       setInstallPrompt(event);
@@ -209,6 +245,7 @@ export default function BrowseScreen({ navigation }) {
   }, []);
 
   const remaining = Math.max(0, dealEnd - now);
+  const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const hrs = String(Math.floor(remaining / 3600000)).padStart(2, "0");
   const mins = String(Math.floor((remaining % 3600000) / 60000)).padStart(2, "0");
   const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
@@ -257,7 +294,7 @@ export default function BrowseScreen({ navigation }) {
         >
           <View style={[styles.header, { paddingHorizontal: sidePad }]}>
             <View style={styles.statusRow}>
-              <Text style={styles.statusTime}>9:41</Text>
+              <Text style={styles.statusTime}>{displayTime}</Text>
               <View style={styles.statusIcons}>
                 {Platform.OS === "web" && !installHidden && (
                   <Pressable style={styles.installPill} onPress={installApp}>
@@ -265,9 +302,16 @@ export default function BrowseScreen({ navigation }) {
                     <Text style={styles.installText}>Install</Text>
                   </Pressable>
                 )}
-                <Ionicons name="cellular" size={19} color="#fff" />
-                <Ionicons name="wifi" size={19} color="#fff" />
-                <Ionicons name="battery-full" size={24} color="#fff" />
+                <View style={[styles.liveStatusPill, !isOnline && styles.liveStatusPillOffline]}>
+                  <Ionicons name={isOnline ? "wifi" : "cloud-offline-outline"} size={15} color="#fff" />
+                  <Text style={styles.liveStatusText}>{isOnline ? "Online" : "Offline"}</Text>
+                </View>
+                {batteryLevel !== null && (
+                  <View style={styles.batteryPill}>
+                    <Ionicons name={batteryLevel > 20 ? "battery-full" : "battery-dead-outline"} size={17} color="#fff" />
+                    <Text style={styles.liveStatusText}>{batteryLevel}%</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -530,6 +574,10 @@ const styles = StyleSheet.create({
   statusIcons: { flexDirection: "row", gap: 7, alignItems: "center" },
   installPill: { height: 28, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.14)", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, marginRight: 2 },
   installText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  liveStatusPill: { height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.14)", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9 },
+  liveStatusPillOffline: { backgroundColor: "rgba(255,54,87,0.28)" },
+  batteryPill: { height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.14)", flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8 },
+  liveStatusText: { color: "#fff", fontSize: 10.5, fontWeight: "900" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   leftCluster: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1.05, minWidth: 0 },
   avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
