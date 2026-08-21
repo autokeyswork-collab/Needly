@@ -195,10 +195,10 @@ export const AuthAPI = {
   login: async (email, password) => {
     return await request("/auth/login", { method: "POST", body: { email, password }, auth: false });
   },
-  socialLogin: async ({ provider, email, name, role }) => {
+  socialLogin: async (payload) => {
     return await request("/auth/social", {
       method: "POST",
-      body: { provider, email, name, role },
+      body: payload,
       auth: false,
     });
   },

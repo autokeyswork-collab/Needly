@@ -8,6 +8,7 @@ export const CATEGORY_IMAGES = {
   Learn: require("../assets/marketplace/learn.jpg"),
   Utilities: require("../assets/marketplace/utilities.jpg"),
   "Local Market": require("../assets/marketplace/local-market.jpg"),
+  "Open Market Hero": require("../assets/marketplace/open-market-abeokuta.png"),
   Grills: require("../assets/marketplace/grills.jpg"),
 };
 
@@ -17,3 +18,4 @@ export const CATEGORY_AVATAR_IMAGES = {
 
 export const CUSTOMER_AVATAR = require("../assets/marketplace/customer.jpg");
 export const LOGIN_AVATAR = require("../assets/marketplace/login-avatar-transparent-v2.png");
+export const LOGIN_HERO_MARKET = require("../assets/marketplace/login-hero-market.png");

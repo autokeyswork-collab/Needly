@@ -15,6 +15,11 @@ const ROLES = [
 const VENDOR_CATEGORIES = ["Restaurant", "Supermarket", "Grills", "Local Market", "Pharmacy", "Stay & Dine"];
 const ABEOKUTA_AREAS = ["Oke-Ilewo", "Ibara", "Panseke", "Adigbe", "Kuto", "Ita Eko", "Lafenwa", "Hilltop"];
 const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
+const GOOGLE_ROLE_IDENTITIES = {
+  CUSTOMER: { name: "Ada Customer", email: "customer@demo.needly" },
+  VENDOR: { name: "Mama Risi", email: "mamarisi@demo.needly" },
+  RIDER: { name: "Tunde A.", email: "rider@demo.needly" },
+};
 
 export default function RegisterScreen({ navigation, route }) {
   const { register, socialLogin, authError } = useAuth();
@@ -90,8 +95,9 @@ export default function RegisterScreen({ navigation, route }) {
 
   const handleSocialRegister = async (providerKey) => {
     setSocialLoading(providerKey);
+    const googleDef = GOOGLE_ROLE_IDENTITIES[role] || GOOGLE_ROLE_IDENTITIES.CUSTOMER;
     const defaults = {
-      google: { name: name.trim() || "Amina Lawal", email: email.trim().toLowerCase() || "amina.google@gmail.com" },
+      google: { name: name.trim() || googleDef.name, email: email.trim().toLowerCase() || googleDef.email },
       apple: { name: name.trim() || "Alex", email: email.trim().toLowerCase() || "alex.apple@icloud.com" },
       facebook: { name: name.trim() || "Tunde Bakare", email: email.trim().toLowerCase() || "tunde.facebook@fb.com" },
     };
