@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
       return false;
     } catch (err) {
       setAuthError(err.message);
-      return false;
+      return { error: err.message };
     }
   }, [loadMe]);
 
@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
       return { pendingApproval: false };
     } catch (err) {
       setAuthError(err.message);
-      return null;
+      return { error: err.message };
     }
   }, [loadMe]);
 

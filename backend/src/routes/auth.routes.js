@@ -62,6 +62,98 @@ function vendorEmoji(category) {
   return map[category] || "🛍️";
 }
 
+function normalizeAuthRole(role) {
+  const targetRole = String(role || "CUSTOMER").trim().toUpperCase();
+  const allowed = ["CUSTOMER", "VENDOR", "RIDER"];
+  return allowed.includes(targetRole) ? targetRole : null;
+}
+
+function cleanRegistrationIdentity({ name, email, phone }) {
+  const cleanName = String(name || "").trim();
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const cleanPhone = String(phone || "").trim();
+
+  if (!cleanName || !cleanEmail) {
+    return { error: "Name and email are required" };
+  }
+  if (!cleanEmail.includes("@")) {
+    return { error: "Enter a valid email address" };
+  }
+
+  return { cleanName, cleanEmail, cleanPhone };
+}
+
+function normalizeVendorProfile(profile, ownerName) {
+  const clean = profile || {};
+  const storeName = String(clean.name || "").trim();
+  const address = String(clean.address || "").trim();
+
+  if (!storeName) return { error: "Store or business name is required" };
+  if (!address) return { error: "Store street address is required" };
+
+  return {
+    name: storeName,
+    category: String(clean.category || "Restaurant").trim() || "Restaurant",
+    area: String(clean.area || "Abeokuta").trim() || "Abeokuta",
+    address,
+    eta: String(clean.eta || "20-35 min").trim() || "20-35 min",
+    emoji: vendorEmoji(clean.category),
+    ownerName,
+  };
+}
+
+function normalizeRiderProfile(profile) {
+  const clean = profile || {};
+  const zone = String(clean.zone || "").trim();
+  if (!zone) return { error: "Rider operating zone is required" };
+  return { zone };
+}
+
+function rememberPendingUser(user, related = {}) {
+  if (!user || !(user.role === "VENDOR" || user.role === "RIDER")) return;
+  const existingIdx = IN_MEMORY_PENDING_USERS.findIndex((pending) => pending.id === user.id || pending.email === user.email);
+  if (existingIdx !== -1) IN_MEMORY_PENDING_USERS.splice(existingIdx, 1);
+  IN_MEMORY_PENDING_USERS.unshift({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    createdAt: user.createdAt?.toISOString?.() || new Date().toISOString(),
+    vendor: related.vendor || null,
+    rider: related.rider || null,
+  });
+}
+
+async function queuePendingApprovalMail({ user, vendor, rider, provider }) {
+  const roleLabel = user.role === "VENDOR" ? "vendor store" : "rider profile";
+  const subject = user.role === "VENDOR"
+    ? "Welcome to Needly — Vendor Storefront Under Review"
+    : "Welcome to Needly — Rider Profile Under Review";
+  const details = user.role === "VENDOR"
+    ? `your vendor store registration for '${vendor?.name || "your store"}'`
+    : `your rider registration for zone '${rider?.zone || "your selected zone"}'`;
+  const via = provider ? ` via ${provider}` : "";
+
+  await queueConfirmationMail({
+    to: user.email,
+    type: `${user.role.toLowerCase()}_signup`,
+    subject,
+    body: `Hello ${user.name}, ${details} has been received${via}. Needly Admin will review and approve your ${roleLabel}. We will email you a login link once your account is approved.`,
+    actionUrl: appUrl(`/?role=${encodeURIComponent(user.role)}&email=${encodeURIComponent(user.email)}`),
+    actionLabel: "Open Needly Login",
+  });
+
+  broadcastAdminAlert({
+    type: "account_pending_approval",
+    userId: user.id,
+    role: user.role,
+    name: user.name,
+    vendorName: vendor?.name,
+    riderZone: rider?.zone,
+  });
+}
+
 // Closes the "no rate limiting on auth endpoints" gap the README flagged
 // as a pre-launch requirement. 10 attempts per 15 minutes per IP is
 // generous for a real user, tight enough to blunt brute-forcing.
@@ -124,46 +216,24 @@ function maybeDemoLogin(inputStr, password) {
 router.post("/register", authLimiter, async (req, res) => {
   const { name, email, phone, password, role = "CUSTOMER", vendorProfile, riderProfile } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Name, email, and password are required" });
-  }
+  const identity = cleanRegistrationIdentity({ name, email, phone });
+  if (identity.error) return res.status(400).json({ error: identity.error });
+  if (!password) return res.status(400).json({ error: "Password is required" });
 
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanPhone = (phone || "").trim();
-
-  const targetRole = (role || "CUSTOMER").toUpperCase();
+  const targetRole = normalizeAuthRole(role);
+  if (!targetRole) return res.status(400).json({ error: "Choose Customer, Vendor, or Rider to register" });
   const requiresApproval = targetRole === "VENDOR" || targetRole === "RIDER";
-
-  const newPendingObj = {
-    id: `pending-${Date.now()}`,
-    name: name.trim(),
-    email: cleanEmail,
-    phone: cleanPhone,
-    role: targetRole,
-    createdAt: new Date().toISOString(),
-    vendor: vendorProfile ? {
-      id: `v-pending-${Date.now()}`,
-      name: vendorProfile.name || `${name}'s Store`,
-      category: vendorProfile.category || "Restaurant",
-      area: vendorProfile.area || "Abeokuta",
-      address: vendorProfile.address || "Abeokuta",
-    } : null,
-    rider: riderProfile ? {
-      id: `r-pending-${Date.now()}`,
-      zone: riderProfile.zone || "Abeokuta",
-    } : null,
-  };
-
-  if (requiresApproval) {
-    IN_MEMORY_PENDING_USERS.unshift(newPendingObj);
-  }
+  const normalizedVendor = targetRole === "VENDOR" ? normalizeVendorProfile(vendorProfile, identity.cleanName) : null;
+  if (normalizedVendor?.error) return res.status(400).json({ error: normalizedVendor.error });
+  const normalizedRider = targetRole === "RIDER" ? normalizeRiderProfile(riderProfile) : null;
+  if (normalizedRider?.error) return res.status(400).json({ error: normalizedRider.error });
 
   try {
     const existing = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: cleanEmail },
-          ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+          { email: identity.cleanEmail },
+          ...(identity.cleanPhone ? [{ phone: identity.cleanPhone }] : []),
         ],
       },
     });
@@ -174,71 +244,65 @@ router.post("/register", authLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const user = await prisma.user.create({
-      data: {
-        name: name.trim(),
-        email: cleanEmail,
-        phone: cleanPhone,
-        passwordHash,
-        role: targetRole,
-        approved: !requiresApproval,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: identity.cleanName,
+          email: identity.cleanEmail,
+          phone: identity.cleanPhone || null,
+          passwordHash,
+          role: targetRole,
+          approved: !requiresApproval,
+        },
+      });
+
+      if (targetRole === "VENDOR") {
+        const vendor = await tx.vendor.create({
+          data: {
+            ownerId: user.id,
+            name: normalizedVendor.name,
+            category: normalizedVendor.category,
+            area: normalizedVendor.area,
+            address: normalizedVendor.address,
+            eta: normalizedVendor.eta,
+            emoji: normalizedVendor.emoji,
+          },
+        });
+        return { user, vendor };
+      }
+
+      if (targetRole === "RIDER") {
+        const rider = await tx.rider.create({
+          data: {
+            userId: user.id,
+            zone: normalizedRider.zone,
+            isOnline: false,
+          },
+        });
+        return { user, rider };
+      }
+
+      return { user };
     });
 
-    if (targetRole === "VENDOR" && vendorProfile) {
-      await prisma.vendor.create({
-        data: {
-          ownerId: user.id,
-          name: vendorProfile.name || `${name}'s Store`,
-          category: vendorProfile.category || "Restaurant",
-          area: vendorProfile.area || "Abeokuta",
-          address: vendorProfile.address || "Abeokuta",
-          eta: vendorProfile.eta || "20-35 min",
-          emoji: vendorEmoji(vendorProfile.category),
-        },
-      });
-
-      await queueConfirmationMail({
-        to: cleanEmail,
-        type: "vendor_signup",
-        subject: "Welcome to Needly — Vendor Storefront Under Review",
-        body: `Hello ${name}, your vendor store registration for '${vendorProfile.name || `${name}'s Store`}' has been received. Needly Admin will review and approve your store profile. We will email you a login link once your vendor account is approved.`,
-        actionUrl: appUrl(`/?role=VENDOR&email=${encodeURIComponent(cleanEmail)}`),
-        actionLabel: "Open Needly Login",
-      });
-    } else if (targetRole === "RIDER" && riderProfile) {
-      await prisma.rider.create({
-        data: {
-          userId: user.id,
-          zone: riderProfile.zone || "Abeokuta",
-          isOnline: false,
-        },
-      });
-
-      await queueConfirmationMail({
-        to: cleanEmail,
-        type: "rider_signup",
-        subject: "Welcome to Needly — Rider Profile Under Review",
-        body: `Hello ${name}, your rider registration for zone '${riderProfile.zone || "Abeokuta"}' has been received. Needly Admin will verify your profile shortly. We will email you a login link once your rider account is approved.`,
-        actionUrl: appUrl(`/?role=RIDER&email=${encodeURIComponent(cleanEmail)}`),
-        actionLabel: "Open Needly Login",
-      });
-    }
+    const { user, vendor, rider } = result;
 
     if (requiresApproval) {
+      rememberPendingUser(user, { vendor, rider });
+      await queuePendingApprovalMail({ user, vendor, rider });
       return res.json({
         pendingApproval: true,
-        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
+        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted. We sent a notification email to ${identity.cleanEmail}. Needly Admin will review and activate your account shortly.`,
       });
     }
 
     const token = signToken(user);
     await queueConfirmationMail({
-      to: cleanEmail,
+      to: identity.cleanEmail,
       type: "customer_signup",
       subject: "Welcome to Needly — Your customer account is ready",
-      body: `Hello ${name}, welcome to Needly. Your customer account is ready and you can start shopping, booking, and paying securely.`,
-      actionUrl: appUrl(`/?role=CUSTOMER&email=${encodeURIComponent(cleanEmail)}`),
+      body: `Hello ${identity.cleanName}, welcome to Needly. Your customer account is ready and you can start shopping, booking, and paying securely.`,
+      actionUrl: appUrl(`/?role=CUSTOMER&email=${encodeURIComponent(identity.cleanEmail)}`),
       actionLabel: "Open Needly",
     });
     return res.status(201).json({
@@ -246,16 +310,8 @@ router.post("/register", authLimiter, async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
-    if (requiresApproval) {
-      return res.json({
-        pendingApproval: true,
-        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted! Needly Admin will review and activate your account shortly.`,
-      });
-    }
-
-    const newUser = { id: `u-${Date.now()}`, name: name.trim(), email: cleanEmail, role: targetRole };
-    const token = signToken(newUser);
-    return res.status(201).json({ token, user: newUser });
+    console.error("Registration failed", err);
+    return res.status(500).json({ error: "Registration failed. Please try again or contact Needly support." });
   }
 });
 
@@ -282,10 +338,19 @@ router.post("/social", authLimiter, async (req, res) => {
     return res.status(400).json({ error: "Unsupported social provider" });
   }
 
-  const cleanEmail = (email || `${prov}_user_${Date.now().toString().slice(-6)}@needly.app`).trim().toLowerCase();
-  const userName = (name || `${prov.charAt(0).toUpperCase() + prov.slice(1)} User`).trim();
-  const targetRole = (role || "CUSTOMER").toUpperCase();
+  const providerName = prov.charAt(0).toUpperCase() + prov.slice(1);
+  const targetRole = normalizeAuthRole(role);
+  if (!targetRole) return res.status(400).json({ error: "Choose Customer, Vendor, or Rider to register" });
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const userName = String(name || `${providerName} User`).trim();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return res.status(400).json({ error: `${providerName} did not provide a valid email. Enter your email first and try again.` });
+  }
   const requiresApproval = targetRole === "VENDOR" || targetRole === "RIDER";
+  const normalizedVendor = targetRole === "VENDOR" ? normalizeVendorProfile(vendorProfile, userName) : null;
+  if (normalizedVendor?.error) return res.status(400).json({ error: normalizedVendor.error });
+  const normalizedRider = targetRole === "RIDER" ? normalizeRiderProfile(riderProfile) : null;
+  if (normalizedRider?.error) return res.status(400).json({ error: normalizedRider.error });
 
   try {
     let user = await prisma.user.findFirst({
@@ -300,75 +365,78 @@ router.post("/social", authLimiter, async (req, res) => {
       if (!user.approved) {
         return res.json({
           pendingApproval: true,
-          message: `Your ${user.role === "VENDOR" ? "Store Profile" : "Rider Account"} signed in via ${prov.charAt(0).toUpperCase() + prov.slice(1)} is pending admin approval.`,
+          message: `Your ${user.role === "VENDOR" ? "Store Profile" : "Rider Account"} signed in via ${providerName} is pending admin approval.`,
         });
       }
     } else {
       const passwordHash = await bcrypt.hash(`social_${prov}_${Date.now()}`, 10);
-      user = await prisma.user.create({
-        data: {
-          name: userName,
-          email: cleanEmail,
-          passwordHash,
-          role: targetRole,
-          approved: !requiresApproval,
-        },
-        include: { vendor: true, managedVendor: true, rider: true },
-      });
-
-      if (targetRole === "VENDOR" && vendorProfile) {
-        await prisma.vendor.create({
+      const result = await prisma.$transaction(async (tx) => {
+        const createdUser = await tx.user.create({
           data: {
-            ownerId: user.id,
-            name: vendorProfile.name || `${userName}'s Store`,
-            category: vendorProfile.category || "Restaurant",
-            area: vendorProfile.area || "Abeokuta",
-            address: vendorProfile.address || "Abeokuta",
-            eta: vendorProfile.eta || "20-35 min",
-            emoji: vendorEmoji(vendorProfile.category),
+            name: userName,
+            email: cleanEmail,
+            passwordHash,
+            role: targetRole,
+            approved: !requiresApproval,
           },
         });
-      } else if (targetRole === "RIDER" && riderProfile) {
-        await prisma.rider.create({
-          data: {
-            userId: user.id,
-            zone: riderProfile.zone || "Abeokuta",
-            isOnline: false,
-          },
+
+        if (targetRole === "VENDOR") {
+          const vendor = await tx.vendor.create({
+            data: {
+              ownerId: createdUser.id,
+              name: normalizedVendor.name,
+              category: normalizedVendor.category,
+              area: normalizedVendor.area,
+              address: normalizedVendor.address,
+              eta: normalizedVendor.eta,
+              emoji: normalizedVendor.emoji,
+            },
+          });
+          return { user: createdUser, vendor };
+        }
+
+        if (targetRole === "RIDER") {
+          const rider = await tx.rider.create({
+            data: {
+              userId: createdUser.id,
+              zone: normalizedRider.zone,
+              isOnline: false,
+            },
+          });
+          return { user: createdUser, rider };
+        }
+
+        return { user: createdUser };
+      });
+
+      user = result.user;
+
+      if (requiresApproval) {
+        rememberPendingUser(user, { vendor: result.vendor, rider: result.rider });
+        await queuePendingApprovalMail({ user, vendor: result.vendor, rider: result.rider, provider: providerName });
+        return res.json({
+          pendingApproval: true,
+          message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${providerName} has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
         });
       }
 
       await queueConfirmationMail({
         to: cleanEmail,
         type: "social_signup",
-        subject: `Welcome to Needly — Signed in via ${prov.charAt(0).toUpperCase() + prov.slice(1)}`,
-        body: `Hello ${userName}, welcome to Needly Everyday Marketplace. Your ${targetRole.toLowerCase()} account was created via ${prov.charAt(0).toUpperCase() + prov.slice(1)}.${requiresApproval ? " Needly Admin will email you again once your account is approved." : ""}`,
+        subject: `Welcome to Needly — Signed in via ${providerName}`,
+        body: `Hello ${userName}, welcome to Needly Everyday Marketplace. Your customer account was created via ${providerName}.`,
         actionUrl: appUrl(`/?role=${encodeURIComponent(targetRole)}&email=${encodeURIComponent(cleanEmail)}`),
-        actionLabel: "Open Needly Login",
+        actionLabel: "Open Needly",
       });
-
-      if (requiresApproval) {
-        return res.json({
-          pendingApproval: true,
-          message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${prov.charAt(0).toUpperCase() + prov.slice(1)} has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
-        });
-      }
     }
 
     const token = signToken(user);
     const { passwordHash, ...safeUser } = user;
     return res.json({ token, user: safeUser });
   } catch (err) {
-    if (requiresApproval) {
-      return res.json({
-        pendingApproval: true,
-        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${prov.charAt(0).toUpperCase() + prov.slice(1)} has been submitted for admin approval.`,
-      });
-    }
-
-    const fallbackUser = { id: `u-social-${Date.now()}`, name: userName, email: cleanEmail, role: targetRole };
-    const token = signToken(fallbackUser);
-    return res.json({ token, user: fallbackUser });
+    console.error("Social registration failed", err);
+    return res.status(500).json({ error: "Social registration failed. Please try again or contact Needly support." });
   }
 });
 

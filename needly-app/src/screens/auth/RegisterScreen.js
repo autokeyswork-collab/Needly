@@ -15,11 +15,6 @@ const ROLES = [
 const VENDOR_CATEGORIES = ["Restaurant", "Supermarket", "Grills", "Local Market", "Pharmacy", "Stay & Dine"];
 const ABEOKUTA_AREAS = ["Oke-Ilewo", "Ibara", "Panseke", "Adigbe", "Kuto", "Ita Eko", "Lafenwa", "Hilltop"];
 const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
-const GOOGLE_ROLE_IDENTITIES = {
-  CUSTOMER: { name: "Ada Customer", email: "customer@demo.needly" },
-  VENDOR: { name: "Mama Risi", email: "mamarisi@demo.needly" },
-  RIDER: { name: "Tunde A.", email: "rider@demo.needly" },
-};
 
 export default function RegisterScreen({ navigation, route }) {
   const { register, socialLogin, authError } = useAuth();
@@ -82,26 +77,51 @@ export default function RegisterScreen({ navigation, route }) {
       };
     }
 
-    const result = await register(payload);
-    setSubmitting(false);
+    try {
+      const result = await register(payload);
 
-    if (result?.pendingApproval) {
-      setPendingMessage(
-        result.message ||
-        `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted! Needly Admin will review and activate your account shortly.`
-      );
+      if (result?.pendingApproval) {
+        setPendingMessage(
+          result.message ||
+          `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted! Needly Admin will review and activate your account shortly.`
+        );
+      } else if (result?.error) {
+        setValidationError(result.error);
+      } else if (!result) {
+        setValidationError("Registration could not be completed. Please check the details and try again.");
+      }
+    } catch (err) {
+      setValidationError(err.message || "Registration could not be completed. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleSocialRegister = async (providerKey) => {
+    setValidationError(null);
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setValidationError("Enter your email first so Needly can send your registration and approval emails.");
+      return;
+    }
+    if (!cleanName) {
+      setValidationError("Enter your full name before continuing.");
+      return;
+    }
+    if (role === "VENDOR") {
+      if (!businessName.trim()) { setValidationError("Please enter your store or business name."); return; }
+      if (!vendorAddress.trim()) { setValidationError("Please enter your business street address."); return; }
+    }
+
     setSocialLoading(providerKey);
-    const googleDef = GOOGLE_ROLE_IDENTITIES[role] || GOOGLE_ROLE_IDENTITIES.CUSTOMER;
     const defaults = {
-      google: { name: name.trim() || googleDef.name, email: email.trim().toLowerCase() || googleDef.email },
-      apple: { name: name.trim() || "Alex", email: email.trim().toLowerCase() || "alex.apple@icloud.com" },
-      facebook: { name: name.trim() || "Tunde Bakare", email: email.trim().toLowerCase() || "tunde.facebook@fb.com" },
+      google: { name: cleanName, email: cleanEmail },
+      apple: { name: cleanName, email: cleanEmail },
+      facebook: { name: cleanName, email: cleanEmail },
     };
-    const target = defaults[providerKey] || { name: name.trim() || "Social User", email: email.trim().toLowerCase() || `${providerKey}@needly.app` };
+    const target = defaults[providerKey] || { name: cleanName, email: cleanEmail };
 
     const payload = {
       provider: providerKey,
@@ -112,10 +132,10 @@ export default function RegisterScreen({ navigation, route }) {
 
     if (role === "VENDOR") {
       payload.vendorProfile = {
-        name: businessName.trim() || `${target.name}'s Store`,
+        name: businessName.trim(),
         category: vendorCategory,
         area: vendorArea,
-        address: vendorAddress.trim() || "Abeokuta",
+        address: vendorAddress.trim(),
       };
     } else if (role === "RIDER") {
       payload.riderProfile = {
@@ -123,14 +143,23 @@ export default function RegisterScreen({ navigation, route }) {
       };
     }
 
-    const result = await socialLogin(payload);
-    setSocialLoading(null);
+    try {
+      const result = await socialLogin(payload);
 
-    if (result && result.pendingApproval) {
-      setPendingMessage(
-        result.message ||
-        `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted via ${providerKey}! Needly Admin will review and activate your account shortly.`
-      );
+      if (result && result.pendingApproval) {
+        setPendingMessage(
+          result.message ||
+          `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted via ${providerKey}! Needly Admin will review and activate your account shortly.`
+        );
+      } else if (result?.error) {
+        setValidationError(result.error);
+      } else if (!result) {
+        setValidationError("Social registration could not be completed. Please try again.");
+      }
+    } catch (err) {
+      setValidationError(err.message || "Social registration could not be completed. Please try again.");
+    } finally {
+      setSocialLoading(null);
     }
   };
 
