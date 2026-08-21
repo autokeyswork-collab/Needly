@@ -140,6 +140,7 @@ export default function BrowseScreen({ navigation }) {
   const [batteryLevel, setBatteryLevel] = useState(null);
   const customerCity = user?.locationCity || "Abeokuta";
   const customerState = user?.locationState || "Ogun";
+  const customerAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
 
   const cartCount = 0;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
@@ -328,7 +329,7 @@ export default function BrowseScreen({ navigation }) {
 
             <View style={styles.topRow}>
               <View style={styles.leftCluster}>
-                <Image source={CUSTOMER_AVATAR} style={styles.avatar} />
+                <Image source={customerAvatarSource} style={styles.avatar} />
                 <Pressable
                   style={styles.locationPill}
                   onPress={() => navigation.navigate("CustomerAccount")}

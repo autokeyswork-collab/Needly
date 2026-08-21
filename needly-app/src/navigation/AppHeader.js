@@ -20,6 +20,7 @@ export default function AppHeader() {
   const { user, logout } = useAuth();
   if (!user) return null;
   const isTiny = width < 360;
+  const avatarSource = user.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
 
   if (user.role === "CUSTOMER") {
     return (
@@ -30,7 +31,7 @@ export default function AppHeader() {
           </View>
           <View style={[styles.profileBlock, isTiny && styles.profileBlockTiny]}>
             <Image
-              source={CUSTOMER_AVATAR}
+              source={avatarSource}
               style={[styles.avatar, isTiny && styles.avatarTiny]}
               resizeMode="cover"
             />

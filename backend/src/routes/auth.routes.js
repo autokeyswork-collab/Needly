@@ -398,7 +398,7 @@ router.get("/me", requireAuth, async (req, res) => {
 
 /** PATCH /auth/me/profile — customer/provider self-service profile update. */
 router.patch("/me/profile", requireAuth, async (req, res) => {
-  const { name, phone, locationState, locationCity, address } = req.body;
+  const { name, phone, locationState, locationCity, address, avatarUrl } = req.body;
   const data = {};
 
   if (name !== undefined) {
@@ -410,6 +410,16 @@ router.patch("/me/profile", requireAuth, async (req, res) => {
   if (locationState !== undefined) data.locationState = String(locationState).trim() || null;
   if (locationCity !== undefined) data.locationCity = String(locationCity).trim() || null;
   if (address !== undefined) data.address = String(address).trim() || null;
+  if (avatarUrl !== undefined) {
+    const cleanAvatarUrl = String(avatarUrl).trim();
+    if (cleanAvatarUrl && cleanAvatarUrl.length > 1800000) {
+      return res.status(400).json({ error: "Profile image is too large. Please choose a smaller photo." });
+    }
+    if (cleanAvatarUrl && !/^data:image\/(png|jpe?g|webp);base64,/.test(cleanAvatarUrl) && !/^https?:\/\//.test(cleanAvatarUrl)) {
+      return res.status(400).json({ error: "Profile image must be a valid image URL." });
+    }
+    data.avatarUrl = cleanAvatarUrl || null;
+  }
 
   if (Object.keys(data).length === 0) {
     return res.status(400).json({ error: "Provide profile fields to update" });

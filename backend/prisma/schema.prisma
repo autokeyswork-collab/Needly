@@ -52,6 +52,7 @@ model User {
   locationState     String?            @default("Ogun")
   locationCity      String?            @default("Abeokuta")
   address           String?
+  avatarUrl         String?
   passwordHash      String
   role              UserRoleType       @default(CUSTOMER)
   approved          Boolean            @default(true)

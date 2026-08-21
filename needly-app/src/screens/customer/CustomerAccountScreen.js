@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { COLORS } from "../../theme/colors";
 import { AuthAPI } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { CUSTOMER_AVATAR } from "../../data/customerAssets";
 
 const INK = "#15183F";
 const MUTED = "#747792";
@@ -70,6 +72,7 @@ export default function CustomerAccountScreen({ navigation }) {
   const [locationState, setLocationState] = useState(user?.locationState || "Ogun");
   const [locationCity, setLocationCity] = useState(user?.locationCity || "Abeokuta");
   const [address, setAddress] = useState(user?.address || "");
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
   const [locations, setLocations] = useState(FALLBACK_LOCATIONS);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -81,6 +84,7 @@ export default function CustomerAccountScreen({ navigation }) {
     setLocationState(user?.locationState || "Ogun");
     setLocationCity(user?.locationCity || "Abeokuta");
     setAddress(user?.address || "");
+    setAvatarUrl(user?.avatarUrl || "");
   }, [user]);
 
   useEffect(() => {
@@ -125,12 +129,53 @@ export default function CustomerAccountScreen({ navigation }) {
         locationState,
         locationCity,
         address,
+        avatarUrl,
       });
       setMessage("Profile updated. Your marketplace location is now saved.");
     } catch (err) {
       setError(err.message || "Could not update profile. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const avatarSource = avatarUrl ? { uri: avatarUrl } : CUSTOMER_AVATAR;
+
+  const chooseProfileImage = async () => {
+    setError("");
+    setMessage("");
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("Please allow photo access to choose a profile image.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.55,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      if (asset.base64) {
+        const mimeType = asset.mimeType || "image/jpeg";
+        const nextAvatar = `data:${mimeType};base64,${asset.base64}`;
+        if (nextAvatar.length > 1800000) {
+          setError("That photo is too large. Please choose a smaller image.");
+          return;
+        }
+        setAvatarUrl(nextAvatar);
+        setMessage("Photo selected. Tap Save Profile to update it.");
+      } else if (asset.uri) {
+        setAvatarUrl(asset.uri);
+        setMessage("Photo selected. Tap Save Profile to update it.");
+      }
+    } catch (err) {
+      setError(err.message || "Could not open your photos. Please try again.");
     }
   };
 
@@ -142,22 +187,27 @@ export default function CustomerAccountScreen({ navigation }) {
             <Pressable style={styles.backButton} onPress={() => navigation.navigate("Browse")}>
               <Ionicons name="chevron-back" size={22} color="#fff" />
             </Pressable>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || "N"}</Text>
-            </View>
+            <Pressable style={styles.avatar} onPress={chooseProfileImage}>
+              <Image source={avatarSource} style={styles.avatarImage} />
+              <View style={styles.avatarEditBadge}>
+                <FontAwesome name="camera" size={11} color="#fff" />
+              </View>
+            </Pressable>
             <Text style={styles.title}>My Profile</Text>
             <Text style={styles.subtitle}>Update your customer details and delivery location.</Text>
           </View>
 
           <View style={styles.card}>
             <View style={styles.identityRow}>
-              <View style={styles.smallAvatar}>
-                <Text style={styles.smallAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "N"}</Text>
-              </View>
+              <Image source={avatarSource} style={styles.smallAvatar} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{user?.name || "Needly Customer"}</Text>
                 <Text numberOfLines={1} style={styles.meta}>{user?.email}</Text>
               </View>
+              <Pressable style={styles.photoButton} onPress={chooseProfileImage}>
+                <FontAwesome name="camera" size={13} color={PURPLE} />
+                <Text style={styles.photoButtonText}>Change</Text>
+              </Pressable>
             </View>
 
             <Field label="Full name" icon="user">
@@ -289,14 +339,16 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 124 },
   header: { backgroundColor: PURPLE_DARK, paddingTop: 20, paddingHorizontal: 18, paddingBottom: 26, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  avatar: { width: 58, height: 58, borderRadius: 22, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
-  avatarText: { color: PURPLE, fontSize: 25, fontWeight: "900" },
+  avatar: { width: 64, height: 64, borderRadius: 24, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  avatarImage: { width: 60, height: 60, borderRadius: 22 },
+  avatarEditBadge: { position: "absolute", right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: PURPLE_DARK },
   title: { color: "#fff", fontSize: 24, fontWeight: "900", marginTop: 12 },
   subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 12.5, lineHeight: 18, fontWeight: "700", marginTop: 4 },
   card: { margin: 16, marginTop: -12, borderRadius: 22, backgroundColor: "#fff", borderWidth: 1, borderColor: "#EFEAF9", padding: 16, shadowColor: "#1E164C", shadowOpacity: 0.09, shadowRadius: 18, shadowOffset: { width: 0, height: 9 } },
   identityRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
-  smallAvatar: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#F2EEFF", alignItems: "center", justifyContent: "center" },
-  smallAvatarText: { color: PURPLE, fontSize: 18, fontWeight: "900" },
+  smallAvatar: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#F2EEFF" },
+  photoButton: { height: 34, borderRadius: 17, backgroundColor: "#F4F1FE", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10 },
+  photoButtonText: { color: PURPLE, fontSize: 11.5, fontWeight: "900" },
   name: { color: INK, fontSize: 15, fontWeight: "900" },
   meta: { color: MUTED, fontSize: 12, marginTop: 3, fontWeight: "700" },
   field: { marginTop: 12 },
