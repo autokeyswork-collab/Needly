@@ -158,8 +158,9 @@ export default function LoginScreen({ navigation }) {
             </ImageBackground>
           ) : (
             <View style={styles.mobileBrandBlock}>
-              <Text style={styles.mobileBrandName}>Needly</Text>
-              <Text style={styles.mobileBrandTagline}>EVERYDAY MARKETPLACE</Text>
+              <View style={styles.mobileLogoMark}>
+                <NeedlyLogo size="medium" theme="dark" variant="icon" showBadges={false} />
+              </View>
               <View style={styles.mobileLocationChip}>
                 <Ionicons name="location" size={16} color="#fff" />
                 <Text style={styles.mobileLocationText}>Abeokuta, Nigeria</Text>
@@ -377,8 +378,7 @@ const styles = StyleSheet.create({
   layoutDesktop: { maxWidth: 1180, minHeight: 760, flexDirection: "row", justifyContent: "center", alignItems: "stretch" },
   layoutMobile: { maxWidth: 430, gap: 16, alignItems: "center" },
   mobileBrandBlock: { width: "100%", minHeight: 132, justifyContent: "flex-end", paddingHorizontal: 24, paddingBottom: 8 },
-  mobileBrandName: { color: "#fff", fontSize: 28, lineHeight: 32, fontWeight: "900" },
-  mobileBrandTagline: { color: "#FBBF24", fontSize: 9, lineHeight: 12, fontWeight: "900" },
+  mobileLogoMark: { width: 58, height: 58, alignItems: "center", justifyContent: "center" },
   mobileLocationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, marginTop: 12 },
   mobileLocationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
   mobileStoryTitle: { color: "#fff", fontSize: 16, lineHeight: 21, fontWeight: "900", marginTop: 10 },
