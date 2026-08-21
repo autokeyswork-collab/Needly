@@ -75,7 +75,7 @@ export default function VendorScreen() {
     toggleVendorOpen,
     disputes,
   } = useOrders();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { width } = useWindowDimensions();
   const compact = width < 380;
   const myVendorId = user?.vendor?.id || user?.managedVendor?.id;
@@ -135,6 +135,9 @@ export default function VendorScreen() {
         <View style={styles.noStoreBadge}>
           <Text style={styles.noStoreBadgeText}>⚡ Status: Pending Setup</Text>
         </View>
+        <Pressable style={styles.noStoreLogoutBtn} onPress={logout}>
+          <Text style={styles.noStoreLogoutText}>Log out</Text>
+        </Pressable>
       </View>
     );
   }
@@ -208,9 +211,14 @@ export default function VendorScreen() {
       <View style={styles.heroStoreCard}>
         <View style={styles.vendorTopLine}>
           <Text style={styles.vendorEyebrow}>Vendor Dashboard</Text>
-          <View style={styles.liveBadge}>
-            <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
-            <Text style={styles.liveBadgeText}>{activeVendor.isOpen ? "Live" : "Paused"}</Text>
+          <View style={styles.vendorTopActions}>
+            <View style={styles.liveBadge}>
+              <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
+              <Text style={styles.liveBadgeText}>{activeVendor.isOpen ? "Live" : "Paused"}</Text>
+            </View>
+            <Pressable style={styles.logoutBtn} onPress={logout}>
+              <Text style={styles.logoutBtnText}>Log out</Text>
+            </Pressable>
           </View>
         </View>
         <View style={styles.heroTopRow}>
@@ -645,6 +653,8 @@ const styles = StyleSheet.create({
   noStoreText: { fontSize: 13.5, color: "#64748B", textAlign: "center", lineHeight: 20, maxWidth: 310, marginBottom: 20 },
   noStoreBadge: { backgroundColor: "#FEF3C7", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: "#FDE68A" },
   noStoreBadgeText: { color: "#92400E", fontSize: 12.5, fontWeight: "800" },
+  noStoreLogoutBtn: { marginTop: 16, backgroundColor: PURPLE, borderRadius: 14, paddingHorizontal: 22, paddingVertical: 11 },
+  noStoreLogoutText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
 
   /* Hero Banner */
   heroStoreCard: {
@@ -660,9 +670,12 @@ const styles = StyleSheet.create({
   },
   vendorTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: "900" },
+  vendorTopActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   liveDot: { width: 7, height: 7, borderRadius: 4 },
   liveBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  logoutBtn: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  logoutBtnText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   heroTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
   heroVendorInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   storeAvatarWrap: { width: 56, height: 56, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: "rgba(255,255,255,0.22)" },
