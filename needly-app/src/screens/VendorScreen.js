@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
 import Thumb from "../components/Thumb";
@@ -12,6 +12,8 @@ const DARK_PURPLE = "#15183F";
 const EMERALD = "#10B981";
 const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
+const INK = "#11123A";
+const MUTED = "#747792";
 
 export default function VendorScreen() {
   const {
@@ -28,6 +30,8 @@ export default function VendorScreen() {
     disputes,
   } = useOrders();
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
   const myVendorId = user?.vendor?.id || user?.managedVendor?.id;
   const activeVendor = (vendors || []).find((v) => v.id === myVendorId)
     || user?.vendor
@@ -131,9 +135,16 @@ export default function VendorScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* Modern Hero Store Card */}
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.shell}>
       <View style={styles.heroStoreCard}>
+        <View style={styles.vendorTopLine}>
+          <Text style={styles.vendorEyebrow}>Vendor Dashboard</Text>
+          <View style={styles.liveBadge}>
+            <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
+            <Text style={styles.liveBadgeText}>{activeVendor.isOpen ? "Live" : "Paused"}</Text>
+          </View>
+        </View>
         <View style={styles.heroTopRow}>
           <View style={styles.heroVendorInfo}>
             <View style={styles.storeAvatarWrap}>
@@ -163,6 +174,23 @@ export default function VendorScreen() {
               trackColor={{ true: EMERALD, false: "#475569" }}
               thumbColor="#ffffff"
             />
+          </View>
+        </View>
+
+        <View style={styles.heroSummaryRow}>
+          <View style={styles.heroSummaryItem}>
+            <Text style={styles.heroSummaryValue}>{queue.length}</Text>
+            <Text style={styles.heroSummaryLabel}>Active</Text>
+          </View>
+          <View style={styles.heroSummaryDivider} />
+          <View style={styles.heroSummaryItem}>
+            <Text style={styles.heroSummaryValue}>{vendorItems.length}</Text>
+            <Text style={styles.heroSummaryLabel}>Products</Text>
+          </View>
+          <View style={styles.heroSummaryDivider} />
+          <View style={styles.heroSummaryItem}>
+            <Text style={styles.heroSummaryValue}>{openDisputes.length}</Text>
+            <Text style={styles.heroSummaryLabel}>Disputes</Text>
           </View>
         </View>
       </View>
@@ -197,6 +225,22 @@ export default function VendorScreen() {
           ))}
         </View>
       )}
+
+      <View style={styles.quickActionCard}>
+        {[
+          { label: "Orders", value: queue.length, color: PURPLE },
+          { label: "Menu", value: vendorItems.length, color: MANGO },
+          { label: "Ready", value: queue.filter((o) => (o.status || "").toLowerCase() === "ready").length, color: EMERALD },
+          { label: "Issues", value: openDisputes.length, color: CHILI },
+        ].map((item) => (
+          <View key={item.label} style={styles.quickActionItem}>
+            <View style={[styles.quickIcon, { backgroundColor: `${item.color}18` }]}>
+              <Text style={[styles.quickIconText, { color: item.color }]}>{item.value}</Text>
+            </View>
+            <Text style={styles.quickActionLabel} numberOfLines={1}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
 
       {/* Active Orders Queue */}
       <View style={styles.sectionHeaderRow}>
@@ -252,7 +296,7 @@ export default function VendorScreen() {
                 </View>
 
                 {st === "placed" && !declining && (
-                  <View style={{ flexDirection: "row", gap: 8 }}>
+                  <View style={[styles.orderActionRow, compact && styles.orderActionRowCompact]}>
                     <Pressable style={styles.declineBtn} onPress={() => setDecliningOrderId(o.id)}>
                       <Text style={styles.declineBtnText}>Decline</Text>
                     </Pressable>
@@ -486,13 +530,23 @@ export default function VendorScreen() {
           );
         }}
       />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 16, paddingBottom: 60 },
+  screen: { flex: 1, backgroundColor: "#F6F3FF" },
+  content: { paddingBottom: 72, alignItems: "center" },
+  shell: {
+    width: "100%",
+    maxWidth: 430,
+    backgroundColor: "#FFFFFF",
+    minHeight: "100%",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 36,
+  },
 
   noStoreContainer: { flex: 1, backgroundColor: "#F8FAFC", padding: 24, alignItems: "center", justifyContent: "center" },
   noStoreIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 16 },
@@ -504,70 +558,110 @@ const styles = StyleSheet.create({
 
   /* Hero Banner */
   heroStoreCard: {
-    backgroundColor: DARK_PURPLE, borderRadius: 24, padding: 20, marginBottom: 18,
-    shadowColor: DARK_PURPLE, shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+    backgroundColor: PURPLE,
+    borderRadius: 30,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
   },
+  vendorTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: "900" },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  liveDot: { width: 7, height: 7, borderRadius: 4 },
+  liveBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   heroTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
   heroVendorInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  storeAvatarWrap: { width: 54, height: 54, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  storeAvatarText: { fontSize: 32 },
-  heroStoreName: { fontSize: 21, fontWeight: "900", color: "#ffffff", marginBottom: 4 },
+  storeAvatarWrap: { width: 56, height: 56, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: "rgba(255,255,255,0.22)" },
+  storeAvatarText: { fontSize: 29 },
+  heroStoreName: { fontSize: 19, fontWeight: "900", color: "#ffffff", marginBottom: 5 },
   heroMetaRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  heroPill: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  heroPillText: { color: "rgba(255,255,255,0.9)", fontSize: 11.5, fontWeight: "700" },
+  heroPill: { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  heroPillText: { color: "rgba(255,255,255,0.92)", fontSize: 11, fontWeight: "800" },
 
-  heroStatusWrap: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" },
+  heroStatusWrap: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   statusIndicatorDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
   heroStatusText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginBottom: 4 },
+  heroSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 18, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 12 },
+  heroSummaryItem: { flex: 1, alignItems: "center" },
+  heroSummaryValue: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  heroSummaryLabel: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "800", marginTop: 1 },
+  heroSummaryDivider: { width: 1, height: 26, backgroundColor: "rgba(255,255,255,0.2)" },
 
-  alertBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 16, padding: 14, marginBottom: 16 },
+  alertBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 18, padding: 13, marginBottom: 14 },
   alertText: { color: "#991B1B", fontSize: 13 },
-  errorBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 16, padding: 14, marginBottom: 16 },
+  errorBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 18, padding: 13, marginBottom: 14 },
   errorText: { color: "#991B1B", fontSize: 13 },
 
   /* Stats Grid */
-  statGrid: { flexDirection: "row", gap: 10, marginBottom: 20 },
-  statCard: { flex: 1, backgroundColor: "#ffffff", borderRadius: 18, borderWidth: 1, borderColor: "#E2E8F0", padding: 12, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
-  statLabel: { fontSize: 10, fontWeight: "900", color: "#64748B", marginBottom: 4, letterSpacing: 0.5 },
-  statValue: { fontSize: 16, fontWeight: "900", color: DARK_PURPLE },
-  statSub: { fontSize: 11, color: "#64748B", marginTop: 2, fontWeight: "600" },
+  statGrid: { flexDirection: "row", gap: 9, marginBottom: 14 },
+  statCard: { flex: 1, backgroundColor: "#ffffff", borderRadius: 18, borderWidth: 1, borderColor: "#EEEAF8", padding: 11, shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  statLabel: { fontSize: 9.5, fontWeight: "900", color: MUTED, marginBottom: 4 },
+  statValue: { fontSize: 14.5, fontWeight: "900", color: INK },
+  statSub: { fontSize: 10.5, color: MUTED, marginTop: 2, fontWeight: "700" },
+
+  quickActionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#EEEAF8",
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginBottom: 18,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    shadowColor: PURPLE,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  quickActionItem: { flex: 1, alignItems: "center", gap: 7 },
+  quickIcon: { width: 46, height: 46, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  quickIconText: { fontSize: 16, fontWeight: "900" },
+  quickActionLabel: { color: INK, fontSize: 12, fontWeight: "900" },
 
   /* Section Headers */
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: "900", color: DARK_PURPLE },
-  sectionSubTitle: { fontSize: 12, color: "#64748B", marginTop: 2, fontWeight: "600" },
-  badgePill: { backgroundColor: "#EEF2FF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
+  sectionTitle: { fontSize: 17, fontWeight: "900", color: INK },
+  sectionSubTitle: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: "700" },
+  badgePill: { backgroundColor: "#F4EDFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   badgePillText: { color: PURPLE, fontSize: 11.5, fontWeight: "800" },
 
   /* Empty State */
-  emptyCard: { backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 24, alignItems: "center" },
+  emptyCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 24, alignItems: "center", shadowColor: PURPLE, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   emptyCardIcon: { fontSize: 36, marginBottom: 8 },
-  emptyCardTitle: { fontSize: 15, fontWeight: "800", color: DARK_PURPLE },
-  emptyCardText: { fontSize: 12.5, color: "#64748B", textAlign: "center", marginTop: 4 },
+  emptyCardTitle: { fontSize: 15, fontWeight: "900", color: INK },
+  emptyCardText: { fontSize: 12.5, color: MUTED, textAlign: "center", marginTop: 4 },
 
   /* Order Cards */
   orderCard: {
-    backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 16, gap: 12,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
+    backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, gap: 12,
+    shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 13, shadowOffset: { width: 0, height: 7 }, elevation: 3,
   },
   orderCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingBottom: 10 },
-  orderId: { fontWeight: "900", fontSize: 15, color: DARK_PURPLE },
-  orderTimeText: { fontSize: 11.5, color: "#64748B", fontWeight: "600" },
+  orderId: { fontWeight: "900", fontSize: 14.5, color: INK },
+  orderTimeText: { fontSize: 11, color: MUTED, fontWeight: "700" },
 
   itemsList: { gap: 6 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  qtyBadge: { backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  qtyBadgeText: { fontSize: 12, fontWeight: "800", color: DARK_PURPLE },
-  itemNameText: { flex: 1, fontSize: 13.5, fontWeight: "600", color: DARK_PURPLE },
-  itemPriceText: { fontSize: 13.5, fontWeight: "700", color: "#334155" },
+  qtyBadge: { backgroundColor: "#F4EDFF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  qtyBadgeText: { fontSize: 12, fontWeight: "900", color: PURPLE },
+  itemNameText: { flex: 1, fontSize: 13, fontWeight: "700", color: INK },
+  itemPriceText: { fontSize: 13, fontWeight: "800", color: "#334155" },
 
-  orderCardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
-  totalLabel: { fontSize: 9.5, fontWeight: "900", color: "#64748B", letterSpacing: 0.5 },
-  totalValue: { fontSize: 17, fontWeight: "900", color: DARK_PURPLE },
+  orderCardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", flexWrap: "wrap" },
+  totalLabel: { fontSize: 9.5, fontWeight: "900", color: MUTED },
+  totalValue: { fontSize: 16.5, fontWeight: "900", color: INK },
+  orderActionRow: { flexDirection: "row", gap: 8, flexShrink: 1 },
+  orderActionRowCompact: { width: "100%", justifyContent: "flex-end" },
 
-  declineBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, borderWidth: 1, borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" },
+  declineBtn: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 14, borderWidth: 1, borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" },
   declineBtnText: { color: CHILI, fontWeight: "800", fontSize: 12.5 },
-  acceptBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: PURPLE },
+  acceptBtn: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 14, backgroundColor: PURPLE },
   acceptBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
   markReadyBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: EMERALD },
   markReadyBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
@@ -579,11 +673,11 @@ const styles = StyleSheet.create({
   sendDeclineBtn: { backgroundColor: CHILI, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, justifyContent: "center" },
 
   /* Completed History */
-  historyRow: { backgroundColor: "#ffffff", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", padding: 12 },
+  historyRow: { backgroundColor: "#ffffff", borderRadius: 18, borderWidth: 1, borderColor: "#EEEAF8", padding: 12 },
   historyRowExpanded: { borderColor: PURPLE, backgroundColor: "#F8FAFC" },
   historyTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   historyIcon: { color: EMERALD, fontWeight: "900", fontSize: 14 },
-  historyOrderId: { fontSize: 13.5, fontWeight: "800", color: DARK_PURPLE },
+  historyOrderId: { fontSize: 13.5, fontWeight: "800", color: INK },
   historyTotal: { fontSize: 13.5, fontWeight: "700", color: "#475569" },
   historyDetail: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   historyDetailTime: { fontSize: 11, color: "#64748B", marginBottom: 4 },
@@ -591,29 +685,29 @@ const styles = StyleSheet.create({
 
   /* Product Catalog */
   productsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 14 },
-  addProductBtn: { backgroundColor: PURPLE, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16 },
-  addProductBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 13 },
+  addProductBtn: { backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 15 },
+  addProductBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 12.5 },
 
-  addFormCard: { backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 16, gap: 12, marginBottom: 16 },
-  addFormTitle: { fontSize: 15, fontWeight: "900", color: DARK_PURPLE },
-  input: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, backgroundColor: "#ffffff", color: DARK_PURPLE },
-  miniInput: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, backgroundColor: "#ffffff", color: DARK_PURPLE },
+  addFormCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 16, gap: 12, marginBottom: 16, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  addFormTitle: { fontSize: 15, fontWeight: "900", color: INK },
+  input: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, backgroundColor: "#ffffff", color: INK },
+  miniInput: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: "#ffffff", color: INK },
   saveProductBtn: { backgroundColor: DARK_PURPLE, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
   saveProductBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 13.5 },
 
-  productCard: { backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 16 },
+  productCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   productCardSoldOut: { opacity: 0.6, backgroundColor: "#F8FAFC" },
   productCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  productName: { fontSize: 15, fontWeight: "800", color: DARK_PURPLE },
+  productName: { fontSize: 14.5, fontWeight: "900", color: INK },
   productPrice: { fontSize: 13.5, fontWeight: "800", color: EMERALD, marginTop: 2 },
   saveMiniBtn: { backgroundColor: EMERALD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   saveMiniBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 11.5 },
   availabilityLabel: { fontSize: 10, fontWeight: "900", marginBottom: 2, letterSpacing: 0.5 },
 
   addonsBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
-  addonsHeaderTitle: { fontSize: 10, fontWeight: "900", color: "#64748B", letterSpacing: 0.5, marginBottom: 6 },
-  addonRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 3, backgroundColor: "#F8FAFC", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  addonText: { fontSize: 12.5, color: DARK_PURPLE, fontWeight: "600" },
+  addonsHeaderTitle: { fontSize: 10, fontWeight: "900", color: MUTED, marginBottom: 6 },
+  addonRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 3, backgroundColor: "#F7F3FF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  addonText: { fontSize: 12.5, color: INK, fontWeight: "700" },
   removeAddonBtn: { padding: 4 },
   removeAddonText: { color: CHILI, fontSize: 13, fontWeight: "800" },
   addAddonBtn: { backgroundColor: DARK_PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, justifyContent: "center" },
