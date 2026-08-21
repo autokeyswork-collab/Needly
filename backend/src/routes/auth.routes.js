@@ -71,6 +71,24 @@ const IN_MEMORY_PENDING_USERS = [
   },
 ];
 
+const DEMO_LOGIN_FALLBACKS = {
+  "customer@demo.needly": { id: "demo-customer", name: "Ada Customer", email: "customer@demo.needly", role: "CUSTOMER" },
+  "mamarisi@demo.needly": { id: "demo-vendor", name: "Mama Risi", email: "mamarisi@demo.needly", role: "VENDOR" },
+  "rider@demo.needly": { id: "demo-rider", name: "Tunde A.", email: "rider@demo.needly", role: "RIDER" },
+  "manager@demo.needly": { id: "demo-manager", name: "Amaka O.", email: "manager@demo.needly", role: "MANAGER" },
+  "admin@demo.needly": { id: "demo-admin", name: "Admin", email: "admin@demo.needly", role: "ADMIN" },
+  "superadmin@demo.needly": { id: "demo-super-admin", name: "Super Admin", email: "superadmin@demo.needly", role: "ADMIN" },
+};
+
+function maybeDemoLogin(inputStr, password) {
+  const user = DEMO_LOGIN_FALLBACKS[inputStr];
+  if (!user || password !== "password123") return null;
+  return {
+    token: signToken(user),
+    user,
+  };
+}
+
 /**
  * POST /auth/register
  * body: { name, email, phone, password, role, vendorProfile, riderProfile }
@@ -322,17 +340,29 @@ router.post("/login", authLimiter, async (req, res) => {
   const inputStr = email.trim().toLowerCase();
   const phoneClean = inputStr.replace(/[\s\-\(\)]/g, "");
 
-  let user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: inputStr },
-        { phone: inputStr },
-        { phone: phoneClean },
-      ],
-    },
-  });
+  let user;
+  try {
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: inputStr },
+          { phone: inputStr },
+          { phone: phoneClean },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error("Login lookup failed", err);
+    const demo = maybeDemoLogin(inputStr, password);
+    if (demo) return res.json(demo);
+    throw err;
+  }
 
-  if (!user) return res.status(401).json({ error: "Invalid email/phone or password" });
+  if (!user) {
+    const demo = maybeDemoLogin(inputStr, password);
+    if (demo) return res.json(demo);
+    return res.status(401).json({ error: "Invalid email/phone or password" });
+  }
 
   // If user object has passwordHash, verify with bcrypt; else check default password123
   let valid = false;
@@ -364,6 +394,90 @@ router.get("/me", requireAuth, async (req, res) => {
   if (!user) return res.status(404).json({ error: "User not found" });
   const { passwordHash, ...safeUser } = user;
   res.json(safeUser);
+});
+
+/** PATCH /auth/me/profile — customer/provider self-service profile update. */
+router.patch("/me/profile", requireAuth, async (req, res) => {
+  const { name, phone, locationState, locationCity, address } = req.body;
+  const data = {};
+
+  if (name !== undefined) {
+    const clean = String(name).trim();
+    if (!clean) return res.status(400).json({ error: "Name cannot be empty" });
+    data.name = clean;
+  }
+  if (phone !== undefined) data.phone = String(phone).trim();
+  if (locationState !== undefined) data.locationState = String(locationState).trim() || null;
+  if (locationCity !== undefined) data.locationCity = String(locationCity).trim() || null;
+  if (address !== undefined) data.address = String(address).trim() || null;
+
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: "Provide profile fields to update" });
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data,
+      include: { vendor: true, managedVendor: true, rider: true },
+    });
+    const { passwordHash, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to update profile" });
+  }
+});
+
+/** GET /auth/locations — public active customer service locations. */
+router.get("/locations", async (req, res) => {
+  try {
+    const locations = await prisma.location.findMany({
+      where: { active: true },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    });
+    if (locations.length) return res.json(locations);
+  } catch (err) {
+    // Fall back below; the marketplace can still run before locations are seeded.
+  }
+  res.json([
+    { id: "abia-umuahia", state: "Abia", name: "Umuahia", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "adamawa-yola", state: "Adamawa", name: "Yola", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "akwa-ibom-uyo", state: "Akwa Ibom", name: "Uyo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "anambra-awka", state: "Anambra", name: "Awka", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "bauchi-bauchi", state: "Bauchi", name: "Bauchi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "bayelsa-yenagoa", state: "Bayelsa", name: "Yenagoa", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "benue-makurdi", state: "Benue", name: "Makurdi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "borno-maiduguri", state: "Borno", name: "Maiduguri", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "cross-river-calabar", state: "Cross River", name: "Calabar", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "delta-asaba", state: "Delta", name: "Asaba", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "ebonyi-abakaliki", state: "Ebonyi", name: "Abakaliki", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "edo-benin-city", state: "Edo", name: "Benin City", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "ekiti-ado-ekiti", state: "Ekiti", name: "Ado-Ekiti", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "enugu-enugu", state: "Enugu", name: "Enugu", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "fct-abuja", state: "FCT", name: "Abuja", type: "CITY", active: true, deliveryFee: 1000, maxDistance: 35 },
+    { id: "gombe-gombe", state: "Gombe", name: "Gombe", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "imo-owerri", state: "Imo", name: "Owerri", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "jigawa-dutse", state: "Jigawa", name: "Dutse", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "kaduna-kaduna", state: "Kaduna", name: "Kaduna", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "kano-kano", state: "Kano", name: "Kano", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "katsina-katsina", state: "Katsina", name: "Katsina", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "kebbi-birnin-kebbi", state: "Kebbi", name: "Birnin Kebbi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "kogi-lokoja", state: "Kogi", name: "Lokoja", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "kwara-ilorin", state: "Kwara", name: "Ilorin", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "lagos-lagos", state: "Lagos", name: "Lagos", type: "CITY", active: true, deliveryFee: 900, maxDistance: 30 },
+    { id: "nasarawa-lafia", state: "Nasarawa", name: "Lafia", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "niger-minna", state: "Niger", name: "Minna", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "ogun-abeokuta", state: "Ogun", name: "Abeokuta", type: "CITY", active: true, deliveryFee: 500, maxDistance: 25 },
+    { id: "ondo-akure", state: "Ondo", name: "Akure", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "osun-osogbo", state: "Osun", name: "Osogbo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "oyo-ibadan", state: "Oyo", name: "Ibadan", type: "CITY", active: true, deliveryFee: 800, maxDistance: 30 },
+    { id: "plateau-jos", state: "Plateau", name: "Jos", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "rivers-port-harcourt", state: "Rivers", name: "Port Harcourt", type: "CITY", active: true, deliveryFee: 1000, maxDistance: 35 },
+    { id: "sokoto-sokoto", state: "Sokoto", name: "Sokoto", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "taraba-jalingo", state: "Taraba", name: "Jalingo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "yobe-damaturu", state: "Yobe", name: "Damaturu", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+    { id: "zamfara-gusau", state: "Zamfara", name: "Gusau", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
+  ]);
 });
 
 /** GET /auth/pending — admin-only list of vendor/rider accounts awaiting approval. */

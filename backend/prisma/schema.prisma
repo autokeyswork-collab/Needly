@@ -3,8 +3,45 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRoleType {
+  CUSTOMER
+  VENDOR
+  RIDER
+  MANAGER
+  ADMIN
+
+  @@map("Role")
+}
+
+enum OrderStatus {
+  PLACED
+  ACCEPTED
+  READY
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  REJECTED
 }
 
 model User {
@@ -12,8 +49,11 @@ model User {
   name              String
   email             String             @unique
   phone             String?
+  locationState     String?            @default("Ogun")
+  locationCity      String?            @default("Abeokuta")
+  address           String?
   passwordHash      String
-  role              String             @default("CUSTOMER")
+  role              UserRoleType       @default(CUSTOMER)
   approved          Boolean            @default(true)
   suspendedAt       DateTime?
   expoPushToken     String?
@@ -127,7 +167,7 @@ model Payout {
   riderId     String
   rider       Rider     @relation(fields: [riderId], references: [id])
   amount      Int
-  status      String    @default("PENDING")
+  status      PayoutStatus @default(PENDING)
   note        String?
   requestedAt DateTime  @default(now())
   processedAt DateTime?
@@ -141,7 +181,7 @@ model Order {
   vendor            Vendor             @relation(fields: [vendorId], references: [id])
   riderId           String?
   rider             Rider?             @relation(fields: [riderId], references: [id])
-  status            String             @default("PLACED")
+  status            OrderStatus        @default(PLACED)
   cancelReason      String?
   total             Int
   deliveryAddress   String
@@ -174,7 +214,7 @@ model Dispute {
   vendorId   String
   vendor     Vendor    @relation(fields: [vendorId], references: [id])
   reason     String
-  status     String    @default("OPEN")
+  status     DisputeStatus @default(OPEN)
   createdAt  DateTime  @default(now())
   resolvedAt DateTime?
 }
@@ -209,7 +249,7 @@ model Payment {
   order      Order     @relation(fields: [orderId], references: [id])
   reference  String    @unique
   amount     Int
-  status     String    @default("PENDING")
+  status     PaymentStatus @default(PENDING)
   createdAt  DateTime  @default(now())
   paidAt     DateTime?
   refundedAt DateTime?
@@ -256,7 +296,7 @@ model Notification {
   createdAt DateTime @default(now())
 }
 
-model Role {
+model AppRole {
   id              String           @id @default(cuid())
   name            String           @unique
   description     String?
@@ -264,6 +304,8 @@ model Role {
   createdAt       DateTime         @default(now())
   rolePermissions RolePermission[]
   userRoles       UserRole[]
+
+  @@map("Role")
 }
 
 model Permission {
@@ -277,7 +319,7 @@ model Permission {
 model RolePermission {
   id           String     @id @default(cuid())
   roleId       String
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role         AppRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permissionId String
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
@@ -289,7 +331,7 @@ model UserRole {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleId String
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role   AppRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
 }

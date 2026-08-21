@@ -103,6 +103,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (fields) => {
+    const updated = await AuthAPI.updateMeProfile(fields);
+    setUser(updated);
+    return updated;
+  }, []);
+
   // Registered once — fires from api/client.js whenever any request comes
   // back 403 "suspended", regardless of which screen triggered it. Logs
   // the person out and hands the login screen a real explanation instead
@@ -116,7 +122,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, booting, authError, login, socialLogin, register, logout, refreshMe: loadMe,
+      user, booting, authError, login, socialLogin, register, logout, refreshMe: loadMe, updateProfile,
       suspensionMessage, clearSuspensionMessage: () => setSuspensionMessage(null),
     }}>
       {children}

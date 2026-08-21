@@ -138,6 +138,8 @@ export default function BrowseScreen({ navigation }) {
   const [installHidden, setInstallHidden] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
+  const customerCity = user?.locationCity || "Abeokuta";
+  const customerState = user?.locationState || "Ogun";
 
   const cartCount = 0;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
@@ -175,16 +177,25 @@ export default function BrowseScreen({ navigation }) {
     return [...categoryHits, ...vendorHits, ...productHits, ...serviceHits].slice(0, 8);
   }, [query, vendors]);
 
+  const slides = useMemo(() => BASE_SLIDES.map((slide) => {
+    if (slide.key !== "open-market") return slide;
+    return {
+      ...slide,
+      title: `Fresh from ${customerCity}`,
+      badge: `Supporting Local ${customerCity}`,
+    };
+  }), [customerCity]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveSlide((current) => {
-        const next = (current + 1) % BASE_SLIDES.length;
+        const next = (current + 1) % slides.length;
         carouselRef.current?.scrollTo({ x: next * snap, animated: true });
         return next;
       });
     }, 5000);
     return () => clearInterval(timer);
-  }, [snap]);
+  }, [slides.length, snap]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -318,9 +329,13 @@ export default function BrowseScreen({ navigation }) {
             <View style={styles.topRow}>
               <View style={styles.leftCluster}>
                 <Image source={CUSTOMER_AVATAR} style={styles.avatar} />
-                <Pressable style={styles.locationPill} onPress={() => goCategory("Local Market")}>
+                <Pressable
+                  style={styles.locationPill}
+                  onPress={() => navigation.navigate("CustomerAccount")}
+                  accessibilityLabel={`Change location. Current location is ${customerCity}, ${customerState}`}
+                >
                   <Ionicons name="location" size={17} color="#fff" />
-                  <Text style={styles.locationText}>Abeokuta</Text>
+                  <Text numberOfLines={1} style={styles.locationText}>{customerCity}</Text>
                   <Ionicons name="chevron-down" size={15} color="#fff" />
                 </Pressable>
               </View>
@@ -387,13 +402,13 @@ export default function BrowseScreen({ navigation }) {
                   useNativeDriver: false,
                   listener: (event) => {
                     const index = Math.round(event.nativeEvent.contentOffset.x / snap);
-                    if (index !== activeSlide) setActiveSlide(Math.max(0, Math.min(BASE_SLIDES.length - 1, index)));
+                    if (index !== activeSlide) setActiveSlide(Math.max(0, Math.min(slides.length - 1, index)));
                   },
                 }
               )}
               scrollEventThrottle={16}
             >
-              {BASE_SLIDES.map((slide) => (
+              {slides.map((slide) => (
                 <Pressable key={slide.key} onPress={() => goCategory(slide.category)} style={[styles.heroCard, { width: cardWidth }]}>
                   <ImageBackground source={slide.image} style={styles.heroImage} imageStyle={styles.heroImageRadius}>
                     <View style={styles.heroOverlay} />
@@ -415,7 +430,7 @@ export default function BrowseScreen({ navigation }) {
               ))}
             </Animated.ScrollView>
             <View style={styles.dots}>
-              {BASE_SLIDES.map((slide, index) => (
+              {slides.map((slide, index) => (
                 <Pressable
                   key={slide.key}
                   onPress={() => {
@@ -531,7 +546,7 @@ export default function BrowseScreen({ navigation }) {
                       <Text style={styles.productRating}>★ {product.vendor.rating || "4.8"}</Text>
                     </View>
                     <View style={styles.productBottom}>
-                      <Text style={styles.distance}>{product.vendor.area || "Abeokuta"}</Text>
+                      <Text style={styles.distance}>{product.vendor.area || customerCity}</Text>
                       <Pressable style={styles.addButton} onPress={() => navigation.navigate("VendorMenu", { vendorId: product.vendor.id })}>
                         <FontAwesome name="plus" size={12} color="#fff" />
                       </Pressable>
@@ -576,7 +591,7 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   leftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
-  locationPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 112 },
+  locationPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 142 },
   locationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
   rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 0.48 },
   headerIconButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
