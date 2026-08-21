@@ -4,7 +4,9 @@ import {
   ActivityIndicator,
   Image,
   ImageBackground,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -54,6 +56,7 @@ export default function LoginScreen({ navigation }) {
   const isDesktop = width >= 900;
   const isNarrowPhone = width < 390;
   const isCompact = isNarrowPhone || height < 720;
+  const mobileBrandHeight = Math.max(108, Math.min(164, height * 0.2));
 
   const [accountType, setAccountType] = useState("CUSTOMER");
   const [email, setEmail] = useState("");
@@ -111,7 +114,11 @@ export default function LoginScreen({ navigation }) {
   const errorMessage = suspensionMessage || authError;
 
   return (
-    <View style={styles.page}>
+    <KeyboardAvoidingView
+      style={styles.page}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
       {!isDesktop && (
         <>
           <Image source={LOGIN_HERO_MARKET} style={styles.mobilePageImage} resizeMode="cover" />
@@ -123,7 +130,9 @@ export default function LoginScreen({ navigation }) {
         contentContainerStyle={[
           styles.content,
           isDesktop ? styles.contentDesktop : styles.contentMobile,
+          !isDesktop && { minHeight: height },
         ]}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -157,7 +166,7 @@ export default function LoginScreen({ navigation }) {
               </View>
             </ImageBackground>
           ) : (
-            <View style={styles.mobileBrandBlock}>
+            <View style={[styles.mobileBrandBlock, { minHeight: mobileBrandHeight }]}>
               <View style={styles.mobileLogoMark}>
                 <NeedlyLogo size="medium" theme="dark" variant="icon" showBadges={false} />
               </View>
@@ -362,7 +371,7 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -373,11 +382,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { minHeight: "100%" },
   contentDesktop: { padding: 36, justifyContent: "center" },
-  contentMobile: { padding: 10, paddingTop: 20, paddingBottom: 26 },
+  contentMobile: { padding: 10, paddingTop: 14, paddingBottom: 34 },
   layout: { width: "100%", alignSelf: "center" },
   layoutDesktop: { maxWidth: 1180, minHeight: 760, flexDirection: "row", justifyContent: "center", alignItems: "stretch" },
   layoutMobile: { maxWidth: 430, gap: 16, alignItems: "center" },
-  mobileBrandBlock: { width: "100%", minHeight: 132, justifyContent: "flex-end", paddingHorizontal: 24, paddingBottom: 8 },
+  mobileBrandBlock: { width: "100%", justifyContent: "flex-end", paddingHorizontal: 24, paddingBottom: 8 },
   mobileLogoMark: { width: 58, height: 58, alignItems: "center", justifyContent: "center" },
   mobileLocationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, marginTop: 12 },
   mobileLocationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
@@ -407,7 +416,7 @@ const styles = StyleSheet.create({
   heroDot: { width: 13, height: 13, borderRadius: 7, backgroundColor: "rgba(255,255,255,0.35)" },
   panel: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#E7E8F1", shadowColor: "#17113A", shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 } },
   panelDesktop: { minHeight: 760, borderRadius: 28, marginLeft: 0, paddingHorizontal: 48, paddingVertical: 34 },
-  panelMobile: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: "rgba(255,255,255,0.91)" },
+  panelMobile: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: "rgba(255,255,255,0.91)", marginBottom: 16 },
   panelScrollProxy: { flex: 1 },
   langRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   langPill: { marginLeft: "auto", minHeight: 36, borderRadius: 18, borderWidth: 1, borderColor: "#E6E7EF", backgroundColor: "#fff", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 6, shadowColor: "#17113A", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },

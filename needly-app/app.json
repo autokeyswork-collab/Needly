@@ -11,7 +11,8 @@
     "assetBundlePatterns": ["**/*"],
     "ios": { "supportsTablet": true },
     "android": {
-      "adaptiveIcon": { "backgroundColor": "#063B2A" }
+      "adaptiveIcon": { "backgroundColor": "#063B2A" },
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": { "bundler": "metro" }
   }
