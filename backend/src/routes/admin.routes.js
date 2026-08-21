@@ -48,7 +48,7 @@ router.get("/stats/overview", async (req, res) => {
       prisma.user.count({ where: { role: "VENDOR", approved: false } }),
       prisma.rider.count(),
       prisma.rider.count({ where: { isOnline: true } }),
-      prisma.user.count({ where: { role: "SERVICE_PROVIDER" } }),
+      prisma.user.count({ where: { role: "MANAGER" } }),
       prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.order.count({ where: { status: { in: ["PLACED", "ACCEPTED", "READY", "PICKED_UP"] } } }),
       prisma.order.count({ where: { status: "DELIVERED" } }),

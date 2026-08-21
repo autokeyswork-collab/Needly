@@ -36,6 +36,10 @@ export function subscribeToRealtimeEvents(listeners = {}) {
   if (listeners.onInventoryUpdate) socket.on("inventory:updated", listeners.onInventoryUpdate);
   if (listeners.onNotification) socket.on("notification:created", listeners.onNotification);
   if (listeners.onAdminAlert) socket.on("admin:alert", listeners.onAdminAlert);
+  if (listeners.onDashboardRefresh) socket.on("dashboard:refresh", listeners.onDashboardRefresh);
+  if (listeners.onContactNew) socket.on("contact:new", listeners.onContactNew);
+  if (listeners.onContactUpdate) socket.on("contact:updated", listeners.onContactUpdate);
+  if (listeners.onContactSettingsUpdate) socket.on("contact_settings:updated", listeners.onContactSettingsUpdate);
 
   return () => {
     if (!socket) return;
@@ -46,5 +50,9 @@ export function subscribeToRealtimeEvents(listeners = {}) {
     if (listeners.onInventoryUpdate) socket.off("inventory:updated", listeners.onInventoryUpdate);
     if (listeners.onNotification) socket.off("notification:created", listeners.onNotification);
     if (listeners.onAdminAlert) socket.off("admin:alert", listeners.onAdminAlert);
+    if (listeners.onDashboardRefresh) socket.off("dashboard:refresh", listeners.onDashboardRefresh);
+    if (listeners.onContactNew) socket.off("contact:new", listeners.onContactNew);
+    if (listeners.onContactUpdate) socket.off("contact:updated", listeners.onContactUpdate);
+    if (listeners.onContactSettingsUpdate) socket.off("contact_settings:updated", listeners.onContactSettingsUpdate);
   };
 }

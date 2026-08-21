@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, Modal, ActivityIndicator } from "react-native";
 import { SuperAdminAPI, AuthAPI, VendorAPI, RiderAPI, PayoutAPI, DisputeAPI, AuditAPI, BookingAPI, NotificationAPI } from "../api/client";
+import { connectSocket, getSocket, subscribeToRealtimeEvents } from "../api/socket";
 
 const SIDEBAR_BG = "#0B0E17", SIDEBAR_W = 230, TOPBAR_H = 58;
 const PURPLE = "#6F45E9", PURPLE_LIGHT = "#7E57C2", PURPLE_SOFT = "#F3E8FF";
@@ -56,6 +57,34 @@ const NAV = [
 
 const fmt = (n) => "₦" + Number(n || 0).toLocaleString("en-NG");
 const fmtN = (n) => Number(n || 0).toLocaleString("en-NG");
+const pct = (value, total) => Number(total || 0) > 0 ? Number(((Number(value || 0) / Number(total)) * 100).toFixed(1)) : 0;
+const formatClock = (value) => {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (_) {
+    return "—";
+  }
+};
+const statusLabel = (status) => ({
+  PLACED: "Searching Rider",
+  ACCEPTED: "Rider Assigned",
+  READY: "Preparing",
+  PICKED_UP: "In Transit",
+  DELIVERED: "Completed",
+  CANCELLED: "Cancelled",
+  PENDING: "Pending",
+  IN_PROGRESS: "In Progress",
+})[status] || status || "Pending";
+const categoryIcon = (category = "") => {
+  const c = String(category).toLowerCase();
+  if (c.includes("food") || c.includes("restaurant")) return "🍕";
+  if (c.includes("grocery") || c.includes("market")) return "🛒";
+  if (c.includes("health") || c.includes("pharm")) return "💊";
+  if (c.includes("auto")) return "🚗";
+  if (c.includes("home") || c.includes("clean")) return "🧹";
+  return "📦";
+};
 
 const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
@@ -282,6 +311,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [integrationDrafts, setIntegrationDrafts] = useState({});
   const [integrationSaving, setIntegrationSaving] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [realtimeStatus, setRealtimeStatus] = useState("connecting");
+  const [lastRealtimeAt, setLastRealtimeAt] = useState(null);
 
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -297,6 +328,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [flagged, setFlagged]               = useState({});
   const [vendorSortBy, setVendorSortBy]     = useState("totalRevenue");
   const pollIntervalRef                      = useRef(null);
+  const realtimeRefreshRef                   = useRef(null);
   const CONTACTS_POLL_MS                     = 30_000; // refresh every 30 s
 
   const [activeContactDetail, setActiveContactDetail] = useState(null);
@@ -382,6 +414,61 @@ export default function SuperAdminControlCenter({ onLogout }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const scheduleRealtimeReload = useCallback(() => {
+    setLastRealtimeAt(new Date());
+    clearTimeout(realtimeRefreshRef.current);
+    realtimeRefreshRef.current = setTimeout(() => {
+      reload();
+      if (activeTab === "customers") fetchContacts(true);
+    }, 500);
+  }, [activeTab, fetchContacts, reload]);
+
+  useEffect(() => {
+    let cleanupSocket;
+    let socketRef;
+    let stopped = false;
+    const markLive = () => setRealtimeStatus("live");
+    const markOffline = () => setRealtimeStatus("offline");
+
+    (async () => {
+      const socket = await connectSocket();
+      if (!socket || stopped) {
+        setRealtimeStatus("offline");
+        return;
+      }
+      socketRef = socket;
+      setRealtimeStatus(socket.connected ? "live" : "connecting");
+      socket.on("connect", markLive);
+      socket.on("disconnect", markOffline);
+      socket.on("connect_error", markOffline);
+      cleanupSocket = subscribeToRealtimeEvents({
+        onOrderUpdate: scheduleRealtimeReload,
+        onOrderAvailable: scheduleRealtimeReload,
+        onBookingUpdate: scheduleRealtimeReload,
+        onProviderStatus: scheduleRealtimeReload,
+        onInventoryUpdate: scheduleRealtimeReload,
+        onNotification: scheduleRealtimeReload,
+        onAdminAlert: scheduleRealtimeReload,
+        onDashboardRefresh: scheduleRealtimeReload,
+        onContactNew: scheduleRealtimeReload,
+        onContactUpdate: scheduleRealtimeReload,
+        onContactSettingsUpdate: scheduleRealtimeReload,
+      });
+    })();
+
+    return () => {
+      stopped = true;
+      clearTimeout(realtimeRefreshRef.current);
+      if (cleanupSocket) cleanupSocket();
+      const socket = socketRef || getSocket();
+      if (socket) {
+        socket.off("connect", markLive);
+        socket.off("disconnect", markOffline);
+        socket.off("connect_error", markOffline);
+      }
+    };
+  }, [scheduleRealtimeReload]);
+
   const startEdit = (type, item) => { setEditingItem({ type, id: item.id }); setEditForm({ ...item }); };
   const saveEdit = async () => {
     if (!editingItem) return;
@@ -421,20 +508,49 @@ export default function SuperAdminControlCenter({ onLogout }) {
     }
   };
 
-  const revenue = stats?.grossRevenue || 32560230;
-  const totalOrders = stats?.ordersToday || 4782;
-  const ridersOnline = stats?.ridersOnline || 312;
-  const totalCust = stats?.totalCustomers || customers.length || 18254;
-  const totalVend = stats?.totalVendors || vendors.length || 2894;
-  const pendingPay = stats?.platformCommission || 8120500;
+  const liveOrdersRaw = Array.isArray(liveOps?.liveOrders) ? liveOps.liveOrders : [];
+  const liveBookingsRaw = Array.isArray(liveOps?.activeBookings) ? liveOps.activeBookings : [];
+  const totalRiders = stats?.totalRiders ?? riders.length;
+  const ridersOnline = stats?.onlineRiders ?? liveOps?.ridersOnlineCount ?? riders.filter((r) => r.isOnline).length;
+  const ridersBusy = liveOps?.ridersOnDeliveryCount ?? 0;
+  const ridersAvailable = Math.max(Number(ridersOnline || 0) - Number(ridersBusy || 0), 0);
+  const ridersOffline = Math.max(Number(totalRiders || 0) - Number(ridersOnline || 0), 0);
+  const activeOrdersCount = stats?.activeOrders ?? liveOrdersRaw.length;
+  const totalOrders = stats?.ordersToday ?? activeOrdersCount;
+  const totalOrderHistory = Number(stats?.completedOrders || 0) + Number(stats?.activeOrders || 0) + Number(stats?.cancelledOrders || 0);
+  const revenue = stats?.grossRevenue ?? 0;
+  const totalCust = stats?.totalCustomers ?? customers.length;
+  const totalVend = stats?.totalVendors ?? vendors.length;
+  const pendingPay = payouts
+    .filter((p) => ["PENDING", "PROCESSING", "REQUESTED"].includes(String(p.status || "").toUpperCase()))
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-  const liveOrdersData = [
-    { id: "ORD-78291", type: "Food Delivery", name: "Esther Akintola", time: "12:32 PM", status: "In Transit", rider: "Azeez A. (5 mins away)", icon: "🍕" },
-    { id: "ORD-78292", type: "Grocery", name: "Michael John", time: "12:31 PM", status: "Rider Assigned", rider: "Ibrahim K. (10 mins away)", icon: "🛒" },
-    { id: "ORD-78293", type: "Pharmacy", name: "Sarah Johnson", time: "12:30 PM", status: "Preparing", rider: "Waiting for rider", icon: "💊" },
-    { id: "ORD-78294", type: "Home Service", name: "David Williams", time: "12:29 PM", status: "Confirmed", rider: "Pending assignment", icon: "🧹" },
-    { id: "ORD-78295", type: "Auto Repair", name: "Emeka Okafor", time: "12:28 PM", status: "Accepted", rider: "Tunde B. (8 mins away)", icon: "🔧" },
-  ];
+  const liveOrdersData = liveOrdersRaw.map((order) => {
+    const type = order.vendor?.category || order.type || "Order";
+    const riderName = order.rider?.user?.name || order.rider?.name || "Waiting for rider";
+    return {
+      id: order.orderNumber || order.reference || order.id,
+      type,
+      name: order.customer?.name || order.customerName || "Customer",
+      customer: order.customer?.name || order.customerName || "Customer",
+      phone: order.customer?.phone || order.deliveryPhone || "—",
+      address: order.deliveryAddress || order.address || "Address pending",
+      store: order.vendor?.name || order.vendorName || "Vendor",
+      area: order.vendor?.area || order.area || "—",
+      items: Array.isArray(order.items) ? `${order.items.length} item(s)` : order.items || "Order items",
+      total: Number(order.total || order.totalAmount || 0),
+      time: formatClock(order.createdAt),
+      status: statusLabel(order.status),
+      rider: riderName,
+      riderPhone: order.rider?.user?.phone || order.rider?.phone || "—",
+      vehicle: order.rider?.vehicleType || order.rider?.vehicle || "—",
+      eta: order.eta || "Live",
+      elapsed: order.createdAt ? formatClock(order.createdAt) : "recently",
+      progress: ({ PLACED: 0.15, ACCEPTED: 0.4, READY: 0.58, PICKED_UP: 0.78, DELIVERED: 1 }[order.status] || 0.25),
+      icon: categoryIcon(type),
+      category: type,
+    };
+  });
 
   const statusBadge = {
     "In Transit": { color: PURPLE, bg: PURPLE_SOFT },
@@ -442,38 +558,78 @@ export default function SuperAdminControlCenter({ onLogout }) {
     "Preparing": { color: AMBER, bg: AMBER_BG },
     "Confirmed": { color: GREEN, bg: GREEN_BG },
     "Accepted": { color: GREEN, bg: GREEN_BG },
+    "Searching Rider": { color: RED, bg: RED_BG },
+    "Completed": { color: GREEN, bg: GREEN_BG },
+    "Cancelled": { color: RED, bg: RED_BG },
+    "Pending": { color: AMBER, bg: AMBER_BG },
+    "In Progress": { color: AMBER, bg: AMBER_BG },
   };
 
   const orderSegments = [
-    { label: "Completed", pct: 61.6, n: "2,945", color: GREEN },
-    { label: "In Progress", pct: 26.0, n: "1,245", color: BLUE },
-    { label: "Cancelled", pct: 7.4, n: "352", color: AMBER },
-    { label: "Refunded", pct: 3.3, n: "159", color: PINK },
-    { label: "Pending", pct: 1.7, n: "81", color: "#9CA3AF" },
+    { label: "Completed", pct: pct(stats?.completedOrders, totalOrderHistory), n: fmtN(stats?.completedOrders), color: GREEN },
+    { label: "In Progress", pct: pct(stats?.activeOrders, totalOrderHistory), n: fmtN(stats?.activeOrders), color: BLUE },
+    { label: "Cancelled", pct: pct(stats?.cancelledOrders, totalOrderHistory), n: fmtN(stats?.cancelledOrders), color: AMBER },
+    { label: "Refunded", pct: pct(stats?.pendingRefundsCount, totalOrderHistory), n: fmtN(stats?.pendingRefundsCount), color: PINK },
+    { label: "Bookings", pct: pct(stats?.activeBookings, Math.max(totalOrderHistory, Number(stats?.activeBookings || 0))), n: fmtN(stats?.activeBookings), color: "#9CA3AF" },
   ];
 
   const riderSegments = [
-    { label: "Available", pct: 38.5, n: "120", color: GREEN },
-    { label: "Busy", pct: 48.7, n: "152", color: AMBER },
-    { label: "Offline", pct: 8.0, n: "25", color: RED },
-    { label: "Inactive", pct: 4.8, n: "15", color: "#9CA3AF" },
+    { label: "Available", pct: pct(ridersAvailable, totalRiders), n: fmtN(ridersAvailable), color: GREEN },
+    { label: "Busy", pct: pct(ridersBusy, totalRiders), n: fmtN(ridersBusy), color: AMBER },
+    { label: "Offline", pct: pct(ridersOffline, totalRiders), n: fmtN(ridersOffline), color: RED },
   ];
 
-  const topCategories = [
-    { name: "Food & Drinks", orders: "2,520 orders", amount: "₦12,450,000", icon: "🍷", bg: "#FCE7F3" },
-    { name: "Groceries", orders: "1,320 orders", amount: "₦7,820,000", icon: "🛒", bg: "#DCFCE7" },
-    { name: "Home Services", orders: "680 orders", amount: "₦5,260,000", icon: "🎧", bg: "#DBEAFE" },
-    { name: "Auto Services", orders: "420 orders", amount: "₦3,120,000", icon: "🚗", bg: "#E0E7FF" },
-    { name: "Health & Pharma", orders: "310 orders", amount: "₦2,450,000", icon: "💊", bg: "#CCFBF1" },
-  ];
+  const categoryTotals = vendors.reduce((acc, vendor) => {
+    const name = vendor.category || "Marketplace";
+    acc[name] = acc[name] || { name, vendorCount: 0, productCount: 0, amount: 0 };
+    acc[name].vendorCount += 1;
+    acc[name].productCount += Number(vendor.productsCount || vendor.productCount || vendor.products?.length || 0);
+    acc[name].amount += Number(vendor.totalRevenue || vendor.revenue || 0);
+    return acc;
+  }, {});
+  const topCategories = Object.values(categoryTotals)
+    .sort((a, b) => (b.amount || b.productCount || b.vendorCount) - (a.amount || a.productCount || a.vendorCount))
+    .slice(0, 5)
+    .map((c, i) => ({
+      name: c.name,
+      orders: `${fmtN(c.productCount || c.vendorCount)} ${c.productCount ? "products" : "vendors"}`,
+      amount: fmt(c.amount),
+      icon: categoryIcon(c.name),
+      bg: ["#FCE7F3", "#DCFCE7", "#DBEAFE", "#E0E7FF", "#CCFBF1"][i] || PURPLE_SOFT,
+    }));
 
   const recentTx = [
-    { id: "TXN-883291", type: "Order Payment", name: "Esther Akintola", amount: "₦12,500", time: "12:32 PM", status: "Success" },
-    { id: "TXN-883290", type: "Vendor Payout", name: "Fresh Bites Restaurant", amount: "₦85,000", time: "12:15 PM", status: "Processing" },
-    { id: "TXN-883289", type: "Order Payment", name: "Michael John", amount: "₦23,750", time: "12:14 PM", status: "Success" },
-    { id: "TXN-883288", type: "Rider Payout", name: "Azeez A.", amount: "₦6,500", time: "12:05 PM", status: "Success" },
-    { id: "TXN-883287", type: "Refund", name: "Sarah Johnson", amount: "₦8,900", time: "11:58 AM", status: "Refunded" },
+    ...payouts.map((p) => ({
+      id: p.reference || p.id,
+      type: "Payout",
+      name: p.rider?.user?.name || p.vendor?.name || p.user?.name || "Recipient",
+      amount: fmt(p.amount),
+      time: formatClock(p.createdAt || p.updatedAt),
+      status: statusLabel(p.status),
+    })),
+    ...refunds.map((r) => ({
+      id: r.reference || r.id,
+      type: "Refund",
+      name: r.customer?.name || r.user?.name || "Customer",
+      amount: fmt(r.amount),
+      time: formatClock(r.createdAt || r.updatedAt),
+      status: statusLabel(r.status),
+    })),
+  ].sort((a, b) => String(b.time).localeCompare(String(a.time))).slice(0, 5);
+
+  const pendingApprovals = [
+    { label: "New Vendors", val: fmtN(stats?.pendingVendors), color: RED },
+    { label: "Pending Dispatch", val: `${fmtN(liveOps?.unassignedOrdersCount)} orders`, color: RED },
+    { label: "Vendor Payouts", val: `${fmtN(payouts.filter((p) => ["PENDING", "PROCESSING", "REQUESTED"].includes(String(p.status || "").toUpperCase())).length)} (${fmt(pendingPay)})`, color: GREEN },
+    { label: "Refund Requests", val: fmtN(stats?.pendingRefundsCount), color: AMBER },
+    { label: "Support Tickets", val: fmtN(stats?.openTicketsCount), color: PURPLE },
   ];
+
+  const platformActivity = [
+    ...notifications.map((n) => ({ title: n.title || "Notification", desc: n.message || n.body || "Platform notification", time: formatClock(n.createdAt) })),
+    ...auditLogs.map((a) => ({ title: a.action || "Audit activity", desc: a.entityType || a.description || a.actorEmail || "System activity", time: formatClock(a.createdAt) })),
+    ...liveOrdersData.map((o) => ({ title: "Live order updated", desc: `${o.id} • ${o.store}`, time: o.time })),
+  ].slice(0, 5);
 
   const quickActions = [
     { label: "Add Admin", icon: "👤" },
@@ -618,6 +774,13 @@ export default function SuperAdminControlCenter({ onLogout }) {
         </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: WHITE, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: BORDER, gap: 6 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: realtimeStatus === "live" ? GREEN : realtimeStatus === "connecting" ? AMBER : RED }} />
+          <Text style={{ fontSize: 11, fontWeight: "800", color: realtimeStatus === "live" ? GREEN : realtimeStatus === "connecting" ? AMBER : RED }}>
+            {realtimeStatus === "live" ? "Live" : realtimeStatus === "connecting" ? "Connecting" : "Offline"}
+          </Text>
+          {lastRealtimeAt && <Text style={{ fontSize: 10, color: TEXT_SUB }}>{formatClock(lastRealtimeAt)}</Text>}
+        </View>
         <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: WHITE, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: BORDER, gap: 4 }}>
           <Text style={{ fontSize: 11 }}>📍</Text>
           <Text style={{ fontSize: 12, fontWeight: "700", color: TEXT_MAIN }}>Abeokuta</Text>
@@ -626,7 +789,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
         <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: WHITE, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: BORDER, position: "relative" }}>
           <Text style={{ fontSize: 15 }}>🔔</Text>
           <View style={{ position: "absolute", top: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: PURPLE, justifyContent: "center", alignItems: "center" }}>
-            <Text style={{ color: WHITE, fontSize: 8, fontWeight: "900" }}>12</Text>
+            <Text style={{ color: WHITE, fontSize: 8, fontWeight: "900" }}>{Math.min(notifications.length, 99)}</Text>
           </View>
         </View>
         <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: WHITE, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: BORDER }}>
@@ -666,6 +829,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
           {/* Live Orders Panel */}
           <View style={[s.panel, { flex: 1.3 }]}>
             <PH title="Live Orders" onViewAll={() => setActiveTab("orders")} />
+            {liveOrdersData.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No active live orders right now.</Text>}
             {liveOrdersData.map((o) => {
               const sc = statusBadge[o.status] || { color: TEXT_SUB, bg: BORDER };
               return (
@@ -696,10 +860,12 @@ export default function SuperAdminControlCenter({ onLogout }) {
           {/* System Alerts Panel */}
           <View style={[s.panel, { flex: 1.1 }]}>
             <PH title="System Alerts" onViewAll={() => {}} />
-            <AlertRow icon="🚨" title="High number of failed payments" desc="23 failed payments in the last 30 mins" time="12m ago" color={RED} />
-            <AlertRow icon="🏪" title="5 vendors awaiting verification" desc="New vendor registrations pending review" time="25m ago" color={AMBER} />
-            <AlertRow icon="🛵" title="Rider location not updating" desc="Rider ID: RID-703 is offline" time="45m ago" color={AMBER} />
-            <AlertRow icon="💳" title="Payout batch pending" desc="₦2,450,000 pending approval" time="1h ago" color={BLUE} />
+            {pendingApprovals.filter((item) => Number(String(item.val).replace(/[^\d]/g, "")) > 0).slice(0, 4).map((item) => (
+              <AlertRow key={item.label} icon="⚠️" title={item.label} desc={`${item.val} requires attention`} time="Live" color={item.color} />
+            ))}
+            {pendingApprovals.every((item) => Number(String(item.val).replace(/[^\d]/g, "")) === 0) && (
+              <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No active system alerts.</Text>
+            )}
           </View>
         </View>
 
@@ -713,8 +879,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
                 <Text style={{ fontSize: 10, color: TEXT_SUB, fontWeight: "600" }}>This Month ▾</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 22, fontWeight: "900", color: TEXT_MAIN }}>₦32,560,230</Text>
-            <Text style={{ fontSize: 11, color: GREEN, fontWeight: "700", marginBottom: 10 }}>↑ 12.5% vs last month</Text>
+            <Text style={{ fontSize: 22, fontWeight: "900", color: TEXT_MAIN }}>{fmt(revenue)}</Text>
+            <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: "700", marginBottom: 10 }}>Live gross revenue from orders</Text>
             <RevenueChart width={280} height={110} />
           </View>
 
@@ -727,7 +893,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <DonutChart segments={orderSegments} centerNumber="4,782" centerLabel="Total Orders" size={105} />
+              <DonutChart segments={orderSegments} centerNumber={fmtN(totalOrderHistory)} centerLabel="Total Orders" size={105} />
               <View style={{ gap: 6, flex: 1 }}>
                 {orderSegments.map((d) => (
                   <View key={d.label} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -750,6 +916,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
                 <Text style={{ fontSize: 10, color: TEXT_SUB, fontWeight: "600" }}>This Month ▾</Text>
               </View>
             </View>
+            {topCategories.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No vendor category data yet.</Text>}
             {topCategories.map((c) => (
               <View key={c.name} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: c.bg, justifyContent: "center", alignItems: "center", marginRight: 8 }}>
@@ -769,7 +936,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
           <View style={[s.panel, { flex: 1 }]}>
             <PH title="Rider Status" onViewAll={() => {}} />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <DonutChart segments={riderSegments} centerNumber="312" centerLabel="Total Riders" size={95} />
+              <DonutChart segments={riderSegments} centerNumber={fmtN(totalRiders)} centerLabel="Total Riders" size={95} />
               <View style={{ gap: 5, flex: 1 }}>
                 {riderSegments.map((r) => (
                   <View key={r.label} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -790,6 +957,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
           {/* Recent Transactions Table */}
           <View style={[s.panel, { flex: 1.5 }]}>
             <PH title="Recent Transactions" onViewAll={() => setActiveTab("transactions")} />
+            {recentTx.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No payout or refund transactions yet.</Text>}
             {recentTx.map((tx) => {
               const badgeCfg = { Success: { color: GREEN, bg: GREEN_BG }, Processing: { color: AMBER, bg: AMBER_BG }, Refunded: { color: RED, bg: RED_BG } }[tx.status] || { color: TEXT_SUB, bg: BORDER };
               return (
@@ -812,13 +980,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
           {/* Pending Approvals */}
           <View style={[s.panel, { flex: 0.9 }]}>
             <PH title="Pending Approvals" onViewAll={() => {}} />
-            {[
-              { label: "New Vendors", val: "5", color: RED },
-              { label: "New Riders", val: "8", color: RED },
-              { label: "Vendor Payouts", val: "12 (₦2,450,000)", color: GREEN },
-              { label: "Refund Requests", val: "7 (₦185,600)", color: AMBER },
-              { label: "Support Tickets", val: "14", color: PURPLE },
-            ].map((p) => (
+            {pendingApprovals.map((p) => (
               <View key={p.label} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <Text style={{ fontSize: 11.5, color: TEXT_MAIN }}>{p.label}</Text>
                 <Text style={{ fontSize: 11.5, fontWeight: "800", color: p.color }}>{p.val}</Text>
@@ -829,13 +991,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
           {/* Platform Activity */}
           <View style={[s.panel, { flex: 1.1 }]}>
             <PH title="Platform Activity" onViewAll={() => {}} />
-            {[
-              { title: "New vendor registered", desc: "GreenMart Store", time: "12:32 PM" },
-              { title: "Rider Azeez A. completed a delivery", desc: "Order ORD-78290", time: "12:28 PM" },
-              { title: "Vendor payout approved", desc: "Fresh Bites Restaurant", time: "12:15 PM" },
-              { title: "New order received", desc: "Order ORD-78295", time: "12:10 PM" },
-              { title: "Refund request received", desc: "Order ORD-78289", time: "12:05 PM" },
-            ].map((a, i) => (
+            {platformActivity.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No recent platform activity.</Text>}
+            {platformActivity.map((a, i) => (
               <View key={i} style={{ flexDirection: "row", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: PURPLE_SOFT, justifyContent: "center", alignItems: "center" }}>
                   <Text style={{ fontSize: 10 }}>⚡</Text>
@@ -870,14 +1027,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
 
     // Realtime Operations Command Center (liveOps, orders, bookings, riderOps, dispatch, riderFleet)
     if (activeTab === "liveOps" || activeTab === "orders" || activeTab === "bookings" || activeTab === "riderOps" || activeTab === "dispatch" || activeTab === "riderFleet") {
-      const activeOpsList = [
-        { id: "ORD-78291", category: "Food Delivery", icon: "🍕", customer: "Esther Akintola", phone: "0803 123 4567", store: "Mama Risi Kitchen", area: "Oke-Ilewo", address: "14 Ibara Housing Estate, Abeokuta", rider: "Azeez A.", vehicle: "Honda CB 125", riderPhone: "0812 987 6543", status: "In Transit", eta: "6 mins", elapsed: "14 mins ago", items: "2x Jollof Rice, 1x Fried Fish", total: 12500, progress: 0.75 },
-        { id: "ORD-78292", category: "Grocery", icon: "🛒", customer: "Michael John", phone: "0802 987 1234", store: "GreenMart Supermarket", area: "Panseke", address: "8 Panseke Market Road, Abeokuta", rider: "Ibrahim K.", vehicle: "Yamaha DT 175", riderPhone: "0805 654 3210", status: "Rider Assigned", eta: "12 mins", elapsed: "8 mins ago", items: "1x Milk Cartons, 2x Bread Loaves", total: 8750, progress: 0.40 },
-        { id: "ORD-78293", category: "Pharmacy", icon: "💊", customer: "Sarah Johnson", phone: "0813 456 7890", store: "HealthPlus Pharmacy", area: "Ita Eko", address: "22 Ita Eko Roundabout, Abeokuta", rider: "Searching Rider...", vehicle: "Unassigned", riderPhone: "N/A", status: "Searching Rider", eta: "18 mins", elapsed: "3 mins ago", items: "1x Paracetamol Pack, 1x Vitamin C", total: 4200, progress: 0.15 },
-        { id: "ORD-78294", category: "Home Service", icon: "🧹", customer: "David Williams", phone: "0814 321 0987", store: "Sparkle Cleaners", area: "Ibara", address: "55 Ibara GRA, Abeokuta", rider: "Tunde B.", vehicle: "TVS Star", riderPhone: "0809 111 2233", status: "In Progress", eta: "35 mins", elapsed: "22 mins ago", items: "Full House Deep Cleaning Service", total: 25000, progress: 0.60 },
-        { id: "ORD-78295", category: "Auto Repair", icon: "🔧", customer: "Emeka Okafor", phone: "0808 765 4321", store: "FastFix Auto Workshop", area: "Kuto", address: "12 Kuto Motor Park, Abeokuta", rider: "Samuel O.", vehicle: "Bajaj Boxer", riderPhone: "0807 444 5566", status: "Confirmed", eta: "45 mins", elapsed: "5 mins ago", items: "Car Battery Change & Check", total: 18500, progress: 0.25 },
-        { id: "ORD-78296", category: "Food Delivery", icon: "🍱", customer: "Bisi Adebayo", phone: "0803 999 8877", store: "Chicken Republic", area: "Lafenwa", address: "3 Lafenwa Station, Abeokuta", rider: "Chidi N.", vehicle: "Honda Ace", riderPhone: "0816 777 8899", status: "In Transit", eta: "4 mins", elapsed: "16 mins ago", items: "1x Express Meal Box", total: 6800, progress: 0.85 },
-      ];
+      const activeOpsList = liveOrdersData;
 
       return (
         <ScrollView style={{ flex: 1, padding: 20 }} showsVerticalScrollIndicator={false}>
@@ -893,7 +1043,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               <Pressable onPress={reload} style={{ backgroundColor: WHITE, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: BORDER }}>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: TEXT_MAIN }}>🔄 Refresh Feed</Text>
               </Pressable>
-              <Pressable onPress={() => alert("Auto-Dispatch Engine running live for 42 active orders!")} style={{ backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 }}>
+              <Pressable onPress={() => alert(`Auto-Dispatch Engine is watching ${activeOpsList.length} active order(s).`)} style={{ backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 }}>
                 <Text style={{ fontSize: 12, fontWeight: "800", color: WHITE }}>⚡ Smart Auto-Dispatch</Text>
               </Pressable>
             </View>
@@ -907,7 +1057,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: "700" }}>Active Live Orders</Text>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>42</Text>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>{fmtN(activeOrdersCount)}</Text>
               </View>
             </View>
             <View style={[s.panel, { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }]}>
@@ -916,7 +1066,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: "700" }}>On-Duty Riders</Text>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>312 <Text style={{ fontSize: 11, color: GREEN, fontWeight: "600" }}>(120 Available)</Text></Text>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>{fmtN(ridersOnline)} <Text style={{ fontSize: 11, color: GREEN, fontWeight: "600" }}>({fmtN(ridersAvailable)} Available)</Text></Text>
               </View>
             </View>
             <View style={[s.panel, { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }]}>
@@ -925,7 +1075,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: "700" }}>Avg Delivery Time</Text>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>24 mins</Text>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: TEXT_MAIN }}>{liveBookingsRaw.length ? `${fmtN(liveBookingsRaw.length)} bookings` : "Live"}</Text>
               </View>
             </View>
             <View style={[s.panel, { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }]}>
@@ -934,7 +1084,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: "700" }}>Pending Dispatch</Text>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: RED }}>3 Orders</Text>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: RED }}>{fmtN(liveOps?.unassignedOrdersCount)} Orders</Text>
               </View>
             </View>
           </View>
@@ -944,8 +1094,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <Text style={{ fontSize: 14, fontWeight: "800", color: TEXT_MAIN }}>Live GPS Radar & Dispatch Map (Abeokuta Territory)</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                <Badge label="120 Riders Active" color={GREEN} bg={GREEN_BG} />
-                <Badge label="42 Delivery Routes" color={PURPLE} bg={PURPLE_SOFT} />
+                <Badge label={`${fmtN(ridersOnline)} Riders Active`} color={GREEN} bg={GREEN_BG} />
+                <Badge label={`${fmtN(activeOpsList.length)} Delivery Routes`} color={PURPLE} bg={PURPLE_SOFT} />
               </View>
             </View>
             <LiveMapGraphic />
@@ -964,6 +1114,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               </View>
             </View>
 
+            {activeOpsList.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No active operations to show.</Text>}
             {activeOpsList.map((op) => {
               const sc = {
                 "In Transit": { color: PURPLE, bg: PURPLE_SOFT },

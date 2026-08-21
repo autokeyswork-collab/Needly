@@ -63,7 +63,7 @@ export function OrdersProvider({ children }) {
   }, [user]);
 
   const refreshDisputes = useCallback(async () => {
-    if (!user || !["VENDOR", "MANAGER", "ADMIN"].includes(user.role)) return;
+    if (!user || !["VENDOR", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(user.role)) return;
     try {
       setDisputes(await DisputeAPI.list());
     } catch (err) {
