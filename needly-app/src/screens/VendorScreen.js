@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Alert, FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
@@ -7,6 +8,7 @@ import Thumb from "../components/Thumb";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { VendorAPI } from "../api/client";
+import { CUSTOMER_AVATAR } from "../data/customerAssets";
 
 const PURPLE = "#6F45E9";
 const DARK_PURPLE = "#15183F";
@@ -78,15 +80,79 @@ export default function VendorScreen() {
   const { user, logout } = useAuth();
   const { width } = useWindowDimensions();
   const compact = width < 380;
+  const statsCompact = width < 430;
   const myVendorId = user?.vendor?.id || user?.managedVendor?.id;
   const activeVendor = (vendors || []).find((v) => v.id === myVendorId)
     || user?.vendor
     || user?.managedVendor
     || (vendors && vendors.length > 0 ? vendors[0] : null);
   const [stats, setStats] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installHidden, setInstallHidden] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [batteryLevel, setBatteryLevel] = useState(null);
 
   useEffect(() => {
     VendorAPI.stats().then(setStats).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
+    const updateOnline = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    updateOnline();
+    return () => {
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.getBattery) return undefined;
+    let battery;
+    let mounted = true;
+    const updateBattery = () => {
+      if (!battery || !mounted) return;
+      setBatteryLevel(Math.round(battery.level * 100));
+    };
+    navigator.getBattery().then((value) => {
+      if (!mounted) return;
+      battery = value;
+      updateBattery();
+      battery.addEventListener("levelchange", updateBattery);
+      battery.addEventListener("chargingchange", updateBattery);
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+      battery?.removeEventListener("levelchange", updateBattery);
+      battery?.removeEventListener("chargingchange", updateBattery);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
+    const handlePrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+      setInstallHidden(false);
+    };
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setInstallHidden(true);
+    };
+    window.addEventListener("beforeinstallprompt", handlePrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   const [editingItemId, setEditingItemId] = useState(null);
@@ -152,6 +218,23 @@ export default function VendorScreen() {
   const declined = myOrders.filter((o) => (o.status || "").toLowerCase() === "cancelled");
   const myDisputes = (disputes || []).filter((d) => d.vendorId === myVendorId);
   const openDisputes = myDisputes.filter((d) => (d.status || "").toLowerCase() === "open");
+  const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const vendorAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
+
+  const installApp = async () => {
+    if (Platform.OS !== "web") return;
+    if (installPrompt) {
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") setInstallHidden(true);
+      setInstallPrompt(null);
+      return;
+    }
+    Alert.alert(
+      "Install Needly",
+      "On iPhone, tap Share, then Add to Home Screen. On Android, open the browser menu and tap Install app or Add to Home screen."
+    );
+  };
 
   const startEdit = (item) => {
     setEditingItemId(item.id);
@@ -209,48 +292,86 @@ export default function VendorScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.shell}>
       <View style={styles.heroStoreCard}>
-        <View style={styles.vendorTopLine}>
-          <Text style={styles.vendorEyebrow}>Vendor Dashboard</Text>
-          <View style={styles.vendorTopActions}>
-            <View style={styles.liveBadge}>
-              <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
-              <Text style={styles.liveBadgeText}>{activeVendor.isOpen ? "Live" : "Paused"}</Text>
+        <View style={styles.vendorStatusRow}>
+          <Text style={styles.vendorStatusTime}>{displayTime}</Text>
+          <View style={styles.vendorStatusIcons}>
+            {Platform.OS === "web" && !installHidden && (
+              <Pressable style={styles.vendorInstallPill} onPress={installApp}>
+                <Ionicons name="download-outline" size={14} color="#fff" />
+                <Text style={styles.vendorStatusPillText}>Install</Text>
+              </Pressable>
+            )}
+            <View style={[styles.vendorMiniPill, !isOnline && styles.vendorMiniPillOffline]}>
+              <Ionicons name={isOnline ? "wifi" : "cloud-offline-outline"} size={14} color="#fff" />
+              <Text style={styles.vendorStatusPillText}>{isOnline ? "Online" : "Offline"}</Text>
             </View>
-            <Pressable style={styles.logoutBtn} onPress={logout}>
-              <Text style={styles.logoutBtnText}>Log out</Text>
-            </Pressable>
+            {batteryLevel !== null && (
+              <View style={styles.vendorMiniPill}>
+                <Ionicons name={batteryLevel > 20 ? "battery-full" : "battery-dead-outline"} size={16} color="#fff" />
+                <Text style={styles.vendorStatusPillText}>{batteryLevel}%</Text>
+              </View>
+            )}
           </View>
         </View>
-        <View style={styles.heroTopRow}>
-          <View style={styles.heroVendorInfo}>
-            <View style={styles.storeAvatarWrap}>
-              <Text style={styles.storeAvatarText}>{activeVendor.emoji || "🍛"}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroStoreName} numberOfLines={1}>{activeVendor.name}</Text>
-              <View style={styles.heroMetaRow}>
-                <View style={styles.heroPill}>
-                  <Text style={styles.heroPillText}>📍 {activeVendor.area || "Abeokuta"}</Text>
-                </View>
-                <View style={styles.heroPill}>
-                  <Text style={styles.heroPillText}>{activeVendor.category}</Text>
-                </View>
-              </View>
+
+        <View style={styles.vendorAppTopRow}>
+          <View style={styles.vendorLeftCluster}>
+            <Image source={vendorAvatarSource} style={styles.vendorAvatar} />
+            <View style={styles.vendorIdentity}>
+              <Pressable style={styles.vendorLocationPill}>
+                <Ionicons name="location" size={16} color="#fff" />
+                <Text numberOfLines={1} style={styles.vendorLocationText}>{activeVendor.area || "Abeokuta"}</Text>
+                <Ionicons name="chevron-down" size={14} color="#fff" />
+              </Pressable>
+              <Text style={styles.vendorEyebrow}>Vendor Dashboard</Text>
             </View>
           </View>
 
-          <View style={styles.heroStatusWrap}>
-            <View style={[styles.statusIndicatorDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
-            <Text style={[styles.heroStatusText, { color: activeVendor.isOpen ? "#A7F3D0" : "#FCA5A5" }]}>
-              {activeVendor.isOpen ? "OPEN" : "CLOSED"}
-            </Text>
-            <Switch
-              value={!!activeVendor.isOpen}
-              onValueChange={() => toggleVendorOpen(myVendorId)}
-              trackColor={{ true: EMERALD, false: "#475569" }}
-              thumbColor="#ffffff"
-            />
+          <View style={styles.vendorRightCluster}>
+            <View style={styles.vendorHeaderIconButton}>
+              <FontAwesome name="shopping-bag" size={20} color={PURPLE} />
+              {!!queue.length && (
+                <View style={styles.vendorBadge}>
+                  <Text style={styles.vendorBadgeText}>{queue.length > 99 ? "99+" : queue.length}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.vendorHeaderIconButton}>
+              <Ionicons name="notifications-outline" size={22} color={PURPLE} />
+              {!!openDisputes.length && (
+                <View style={styles.vendorBadge}>
+                  <Text style={styles.vendorBadgeText}>{openDisputes.length > 99 ? "99+" : openDisputes.length}</Text>
+                </View>
+              )}
+            </View>
+            <Pressable style={styles.vendorHeaderIconButton} onPress={logout}>
+              <Ionicons name="log-out-outline" size={22} color={PURPLE} />
+            </Pressable>
           </View>
+        </View>
+
+        <View style={styles.vendorStorePanel}>
+          <View style={styles.storeAvatarWrap}>
+            <Text style={styles.storeAvatarText}>{activeVendor.emoji || "🍛"}</Text>
+          </View>
+          <View style={styles.vendorStoreCopy}>
+            <Text style={styles.heroStoreName} numberOfLines={1}>{activeVendor.name}</Text>
+            <View style={styles.heroMetaRow}>
+              <View style={styles.heroPill}>
+                <Text style={styles.heroPillText}>{activeVendor.category}</Text>
+              </View>
+              <View style={styles.liveBadge}>
+                <View style={[styles.liveDot, { backgroundColor: activeVendor.isOpen ? EMERALD : CHILI }]} />
+                <Text style={styles.liveBadgeText}>{activeVendor.isOpen ? "Live" : "Paused"}</Text>
+              </View>
+            </View>
+          </View>
+          <Switch
+            value={!!activeVendor.isOpen}
+            onValueChange={() => toggleVendorOpen(myVendorId)}
+            trackColor={{ true: EMERALD, false: "#475569" }}
+            thumbColor="#ffffff"
+          />
         </View>
 
         <View style={styles.heroSummaryRow}>
@@ -302,14 +423,14 @@ export default function VendorScreen() {
         </View>
       )}
 
-      <View style={[styles.quickActionCard, compact && styles.quickActionCardCompact]}>
+      <View style={[styles.quickActionCard, statsCompact && styles.quickActionCardCompact]}>
         {[
           { label: "Orders", value: queue.length, color: PURPLE },
           { label: "Menu", value: vendorItems.length, color: MANGO },
           { label: "Ready", value: queue.filter((o) => (o.status || "").toLowerCase() === "ready").length, color: EMERALD },
           { label: "Issues", value: openDisputes.length, color: CHILI },
         ].map((item) => (
-          <View key={item.label} style={[styles.quickActionItem, compact && styles.quickActionItemCompact]}>
+          <View key={item.label} style={[styles.quickActionItem, statsCompact && styles.quickActionItemCompact]}>
             <View style={[styles.quickIcon, { backgroundColor: `${item.color}18` }]}>
               <Text style={[styles.quickIconText, { color: item.color }]}>{item.value}</Text>
             </View>
@@ -668,19 +789,37 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 7,
   },
-  vendorTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: "900" },
+  vendorStatusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 13 },
+  vendorStatusTime: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  vendorStatusIcons: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, justifyContent: "flex-end" },
+  vendorInstallPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.16)", paddingHorizontal: 8, height: 28, borderRadius: 14 },
+  vendorMiniPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 28, borderRadius: 14 },
+  vendorMiniPillOffline: { backgroundColor: "rgba(239,68,68,0.28)" },
+  vendorStatusPillText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
+  vendorAppTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 15 },
+  vendorLeftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
+  vendorAvatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
+  vendorIdentity: { flex: 1, minWidth: 0, gap: 5 },
+  vendorLocationPill: { alignSelf: "flex-start", maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 34, borderRadius: 17 },
+  vendorLocationText: { color: "#fff", fontSize: 13, fontWeight: "900", maxWidth: 116 },
+  vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, fontWeight: "900" },
   vendorTopActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   liveDot: { width: 7, height: 7, borderRadius: 4 },
   liveBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  vendorRightCluster: { flexDirection: "row", alignItems: "center", gap: 7 },
+  vendorHeaderIconButton: { width: 40, height: 40, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.94)", alignItems: "center", justifyContent: "center" },
+  vendorBadge: { position: "absolute", top: -5, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  vendorBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   logoutBtn: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   logoutBtnText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   heroTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
   heroVendorInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   storeAvatarWrap: { width: 56, height: 56, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: "rgba(255,255,255,0.22)" },
   storeAvatarText: { fontSize: 29 },
-  heroStoreName: { fontSize: 19, fontWeight: "900", color: "#ffffff", marginBottom: 5 },
+  vendorStorePanel: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 10 },
+  vendorStoreCopy: { flex: 1, minWidth: 0 },
+  heroStoreName: { fontSize: 18, fontWeight: "900", color: "#ffffff", marginBottom: 5 },
   heroMetaRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   heroPill: { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   heroPillText: { color: "rgba(255,255,255,0.92)", fontSize: 11, fontWeight: "800" },
