@@ -1,0 +1,19 @@
+{
+  "name": "Needly",
+  "short_name": "Needly",
+  "description": "Needly everyday marketplace for local shopping, booking, reservations, delivery, and payments.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#35109B",
+  "theme_color": "#642BE4",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/needly-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

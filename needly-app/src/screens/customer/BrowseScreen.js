@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   Animated,
+  Alert,
   Image,
   ImageBackground,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -132,6 +134,8 @@ export default function BrowseScreen({ navigation }) {
   const [query, setQuery] = useState("");
   const [dealEnd] = useState(() => Date.now() + 2 * 60 * 60 * 1000 + 18 * 60 * 1000 + 45 * 1000);
   const [now, setNow] = useState(Date.now());
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installHidden, setInstallHidden] = useState(false);
 
   const cartCount = 0;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
@@ -185,6 +189,25 @@ export default function BrowseScreen({ navigation }) {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
+    const handlePrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+      setInstallHidden(false);
+    };
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setInstallHidden(true);
+    };
+    window.addEventListener("beforeinstallprompt", handlePrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
   const remaining = Math.max(0, dealEnd - now);
   const hrs = String(Math.floor(remaining / 3600000)).padStart(2, "0");
   const mins = String(Math.floor((remaining % 3600000) / 60000)).padStart(2, "0");
@@ -193,6 +216,23 @@ export default function BrowseScreen({ navigation }) {
   const goCategory = (category) => {
     if (category === "All") return navigation.navigate("CategoryResults", { category: "Local Market" });
     navigation.navigate("CategoryResults", { category });
+  };
+
+  const installApp = async () => {
+    if (Platform.OS !== "web") return;
+    if (installPrompt) {
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") {
+        setInstallHidden(true);
+      }
+      setInstallPrompt(null);
+      return;
+    }
+    Alert.alert(
+      "Install Needly",
+      "On iPhone, tap Share, then Add to Home Screen. On Android, open the browser menu and tap Install app or Add to Home screen."
+    );
   };
 
   const openResult = (result) => {
@@ -219,6 +259,12 @@ export default function BrowseScreen({ navigation }) {
             <View style={styles.statusRow}>
               <Text style={styles.statusTime}>9:41</Text>
               <View style={styles.statusIcons}>
+                {Platform.OS === "web" && !installHidden && (
+                  <Pressable style={styles.installPill} onPress={installApp}>
+                    <Ionicons name="download-outline" size={15} color="#fff" />
+                    <Text style={styles.installText}>Install</Text>
+                  </Pressable>
+                )}
                 <Ionicons name="cellular" size={19} color="#fff" />
                 <Ionicons name="wifi" size={19} color="#fff" />
                 <Ionicons name="battery-full" size={24} color="#fff" />
@@ -229,9 +275,9 @@ export default function BrowseScreen({ navigation }) {
               <View style={styles.leftCluster}>
                 <Image source={CUSTOMER_AVATAR} style={styles.avatar} />
                 <Pressable style={styles.locationPill} onPress={() => goCategory("Local Market")}>
-                  <Ionicons name="location" size={20} color="#fff" />
+                  <Ionicons name="location" size={17} color="#fff" />
                   <Text style={styles.locationText}>Abeokuta</Text>
-                  <Ionicons name="chevron-down" size={18} color="#fff" />
+                  <Ionicons name="chevron-down" size={15} color="#fff" />
                 </Pressable>
               </View>
 
@@ -473,66 +519,68 @@ const styles = StyleSheet.create({
   shell: { flex: 1, width: "100%", backgroundColor: "#FFFFFF", overflow: "hidden" },
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   header: {
-    paddingTop: 18,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     backgroundColor: PURPLE_DARK,
   },
-  statusRow: { height: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-  statusTime: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  statusRow: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  statusTime: { color: "#fff", fontSize: 15, fontWeight: "900" },
   statusIcons: { flexDirection: "row", gap: 7, alignItems: "center" },
+  installPill: { height: 28, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.14)", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, marginRight: 2 },
+  installText: { color: "#fff", fontSize: 11, fontWeight: "900" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  leftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1.15, minWidth: 0 },
-  avatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: "rgba(255,255,255,0.9)" },
-  locationPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 10, height: 44, borderRadius: 23 },
-  locationText: { color: "#fff", fontSize: 17, fontWeight: "900" },
-  brandBlock: { alignItems: "center", flex: 1.1 },
-  brand: { color: "#fff", fontSize: 42, lineHeight: 45, fontWeight: "900", letterSpacing: 0 },
-  tagline: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "600", marginTop: 4 },
-  rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 0.85 },
-  headerIconButton: { width: 58, height: 58, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
-  badge: { position: "absolute", top: -6, right: -4, minWidth: 24, height: 24, borderRadius: 12, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  searchWrap: { marginTop: 24, minHeight: 72, borderRadius: 36, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", paddingHorizontal: 18, gap: 12 },
-  searchInput: { flex: 1, color: INK, fontSize: 16, fontWeight: "600" },
+  leftCluster: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1.05, minWidth: 0 },
+  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
+  locationPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 112 },
+  locationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
+  brandBlock: { alignItems: "center", flex: 0.95, minWidth: 86 },
+  brand: { color: "#fff", fontSize: 29, lineHeight: 33, fontWeight: "900", letterSpacing: 0 },
+  tagline: { color: "#FFFFFF", fontSize: 9.5, lineHeight: 12, fontWeight: "600", marginTop: 1, textAlign: "center" },
+  rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 6, flex: 0.75 },
+  headerIconButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", top: -5, right: -4, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  badgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
+  searchWrap: { marginTop: 18, minHeight: 58, borderRadius: 29, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 10 },
+  searchInput: { flex: 1, color: INK, fontSize: 13.5, fontWeight: "600" },
   searchResults: { marginTop: -8, marginBottom: 14, backgroundColor: "#fff", borderRadius: 22, borderWidth: 1, borderColor: "#ECE8F8", padding: 10, shadowColor: "#1E164C", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
   resultRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F3F0FA" },
   resultIcon: { width: 30, fontSize: 21, textAlign: "center" },
   resultTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
   resultMeta: { color: MUTED, fontSize: 11.5, marginTop: 2, fontWeight: "700" },
   emptyText: { color: MUTED, fontSize: 13, padding: 12 },
-  carouselOuter: { marginTop: 24 },
-  heroCard: { height: 204, borderRadius: 27, overflow: "hidden", backgroundColor: "#241147", shadowColor: "#12062B", shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 10 } },
+  carouselOuter: { marginTop: 18 },
+  heroCard: { height: 184, borderRadius: 24, overflow: "hidden", backgroundColor: "#241147", shadowColor: "#12062B", shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 10 } },
   heroImage: { flex: 1 },
-  heroImageRadius: { borderRadius: 27 },
+  heroImageRadius: { borderRadius: 24 },
   heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-  heroBadge: { position: "absolute", top: 18, right: 18, maxWidth: 165, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 8 },
-  heroBadgeText: { color: INK, fontSize: 12.5, lineHeight: 17, fontWeight: "900" },
-  heroCopy: { position: "absolute", left: 24, bottom: 24, width: "62%" },
-  heroKicker: { color: "#fff", fontSize: 34, lineHeight: 36, fontWeight: "900" },
-  heroTitle: { color: "#fff", fontSize: 18, lineHeight: 23, fontWeight: "900", marginTop: 10 },
-  heroBody: { color: "#fff", fontSize: 13.5, lineHeight: 18, fontWeight: "700", marginTop: 2 },
-  heroCta: { marginTop: 12, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: PURPLE, paddingHorizontal: 17, paddingVertical: 12, borderRadius: 22 },
-  heroCtaText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  heroBadge: { position: "absolute", top: 14, right: 14, maxWidth: 145, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 },
+  heroBadgeText: { color: INK, fontSize: 10.5, lineHeight: 15, fontWeight: "900" },
+  heroCopy: { position: "absolute", left: 20, bottom: 20, width: "62%" },
+  heroKicker: { color: "#fff", fontSize: 26, lineHeight: 29, fontWeight: "900" },
+  heroTitle: { color: "#fff", fontSize: 15.5, lineHeight: 20, fontWeight: "900", marginTop: 8 },
+  heroBody: { color: "#fff", fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
+  heroCta: { marginTop: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
+  heroCtaText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 7, marginTop: -20, marginBottom: 20 },
   dot: { width: 18, height: 8, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.86)" },
   dotActive: { width: 30, backgroundColor: PURPLE },
-  actionCard: { marginTop: 2, minHeight: 126, borderRadius: 22, backgroundColor: "#fff", borderWidth: 1, borderColor: "#F0ECFA", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, shadowColor: "#1E164C", shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
-  actionItem: { alignItems: "center", gap: 10, minWidth: 54 },
-  actionIcon: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  actionText: { color: INK, fontSize: 14, fontWeight: "900" },
-  payPanel: { marginTop: 18, minHeight: 134, borderRadius: 18, borderWidth: 1, borderColor: "#F0ECFA", backgroundColor: "#fff", flexDirection: "row", overflow: "hidden", shadowColor: "#1E164C", shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
-  payLeft: { width: "38%", padding: 18, justifyContent: "center" },
-  payTitle: { color: PURPLE, fontSize: 23, fontWeight: "900" },
-  paySubtitle: { color: INK, fontSize: 13.5, fontWeight: "700", marginTop: 6 },
+  actionCard: { marginTop: 2, minHeight: 104, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: "#F0ECFA", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, shadowColor: "#1E164C", shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+  actionItem: { alignItems: "center", gap: 8, minWidth: 48 },
+  actionIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  actionText: { color: INK, fontSize: 12.5, fontWeight: "900" },
+  payPanel: { marginTop: 16, minHeight: 118, borderRadius: 18, borderWidth: 1, borderColor: "#F0ECFA", backgroundColor: "#fff", flexDirection: "row", overflow: "hidden", shadowColor: "#1E164C", shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
+  payLeft: { width: "38%", padding: 14, justifyContent: "center" },
+  payTitle: { color: PURPLE, fontSize: 19, fontWeight: "900" },
+  paySubtitle: { color: INK, fontSize: 11.5, fontWeight: "700", marginTop: 5 },
   payButton: { marginTop: 14, height: 42, borderRadius: 21, backgroundColor: PURPLE, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   payButtonText: { color: "#fff", fontSize: 14.5, fontWeight: "900" },
   payActions: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
   payMini: { flex: 1, alignItems: "center", gap: 10 },
   payDivider: { borderLeftWidth: 1, borderLeftColor: "#EEEAF8" },
-  payMiniIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: "#F2EEFF", alignItems: "center", justifyContent: "center" },
-  payMiniText: { color: INK, fontSize: 12.5, textAlign: "center", fontWeight: "900" },
+  payMiniIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: "#F2EEFF", alignItems: "center", justifyContent: "center" },
+  payMiniText: { color: INK, fontSize: 10.5, textAlign: "center", fontWeight: "900" },
   categoryPanel: { marginTop: 18, borderRadius: 20, borderWidth: 1, borderColor: "#F0ECFA", backgroundColor: "#fff", paddingVertical: 18, flexDirection: "row", flexWrap: "wrap", shadowColor: "#1E164C", shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
   categoryItem: { width: "20%", alignItems: "center", marginBottom: 18 },
   categoryIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#F2F6F9", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
@@ -553,7 +601,7 @@ const styles = StyleSheet.create({
   flashButtonText: { color: INK, fontSize: 12.5, fontWeight: "900" },
   popularPanel: { marginTop: 18, borderRadius: 20, borderWidth: 1, borderColor: "#F0ECFA", backgroundColor: "#fff", padding: 16, minHeight: 220 },
   popularHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  popularTitle: { color: INK, fontSize: 18, fontWeight: "900" },
+  popularTitle: { color: INK, fontSize: 16, fontWeight: "900" },
   seeAll: { color: PURPLE, fontSize: 14, fontWeight: "900" },
   productRow: { gap: 12, paddingRight: 8 },
   productCard: { width: 132, borderRadius: 16, backgroundColor: "#fff" },

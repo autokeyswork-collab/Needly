@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -42,6 +42,17 @@ function Gate() {
 }
 
 export default function App() {
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const manifest = document.querySelector('link[rel="manifest"]') || document.createElement("link");
+    manifest.setAttribute("rel", "manifest");
+    manifest.setAttribute("href", "/manifest.webmanifest");
+    if (!manifest.parentNode) document.head.appendChild(manifest);
+
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
