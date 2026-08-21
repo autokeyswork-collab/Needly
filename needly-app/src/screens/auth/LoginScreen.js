@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Image,
   ImageBackground,
   Modal,
   Pressable,
@@ -51,7 +52,8 @@ export default function LoginScreen({ navigation }) {
   const { login, socialLogin, authError, suspensionMessage, clearSuspensionMessage } = useAuth();
   const { width, height } = useWindowDimensions();
   const isDesktop = width >= 900;
-  const isCompact = width < 390 || height < 720;
+  const isNarrowPhone = width < 390;
+  const isCompact = isNarrowPhone || height < 720;
 
   const [accountType, setAccountType] = useState("CUSTOMER");
   const [email, setEmail] = useState("");
@@ -122,23 +124,24 @@ export default function LoginScreen({ navigation }) {
         <View style={[styles.layout, isDesktop ? styles.layoutDesktop : styles.layoutMobile]}>
           <ImageBackground
             source={LOGIN_HERO_MARKET}
-            style={[styles.hero, isDesktop ? styles.heroDesktop : styles.heroMobile]}
+            style={[styles.hero, isDesktop ? styles.heroDesktop : styles.heroMobile, isCompact && !isDesktop && styles.heroMobileCompact]}
             imageStyle={[styles.heroImage, isDesktop ? styles.heroImageDesktop : styles.heroImageMobile]}
             resizeMode="cover"
           >
+            <Image source={LOGIN_HERO_MARKET} style={styles.heroPhoto} resizeMode="cover" />
             <View style={styles.heroTopFade} />
             <View style={styles.heroBottomFade} />
-            <View style={[styles.heroBrand, !isDesktop && styles.heroBrandMobile]}>
+            <View style={[styles.heroBrand, !isDesktop && styles.heroBrandMobile, isCompact && !isDesktop && styles.heroBrandMobileCompact]}>
               <NeedlyLogo size={isDesktop ? "hero" : "large"} theme="dark" variant="compact" showBadges={false} />
-              <Text style={styles.heroTagline}>Everything you need,{"\n"}in one place.</Text>
+              {(!isCompact || isDesktop) && <Text style={styles.heroTagline}>Everything you need,{"\n"}in one place.</Text>}
             </View>
-            <View style={styles.heroStory}>
+            <View style={[styles.heroStory, isCompact && !isDesktop && styles.heroStoryCompact]}>
               <View style={styles.locationChip}>
                 <Ionicons name="location" size={20} color="#fff" />
                 <Text style={styles.locationChipText}>Abeokuta, Nigeria</Text>
               </View>
               <Text style={styles.storyTitle}>Support Local, Grow Local</Text>
-              <Text style={styles.storyText}>Shop quality products and services from trusted local sellers in Abeokuta.</Text>
+              {!isCompact && <Text style={styles.storyText}>Shop quality products and services from trusted local sellers in Abeokuta.</Text>}
               <View style={styles.heroDots}>
                 <View style={styles.heroDotActive} />
                 <View style={styles.heroDot} />
@@ -150,7 +153,7 @@ export default function LoginScreen({ navigation }) {
           <View style={[styles.panel, { width: panelWidth }, isDesktop ? styles.panelDesktop : styles.panelMobile]}>
             <View style={styles.panelScrollProxy}>
               <View style={styles.langRow}>
-                {!isDesktop && <NeedlyLogo size="medium" theme="dark" variant="compact" showBadges={false} />}
+                {!isDesktop && <View />}
                 <Pressable style={styles.langPill}>
                   <Ionicons name="globe-outline" size={20} color={INK} />
                   <Text style={styles.langText}>English</Text>
@@ -166,17 +169,19 @@ export default function LoginScreen({ navigation }) {
                 </Text>
               </View>
 
-              <View style={styles.roleSelector}>
+              <View style={[styles.roleSelector, isCompact && styles.roleSelectorCompact]}>
                 {ACCOUNT_TYPES.map((item) => {
                   const active = accountType === item.key;
                   return (
                     <Pressable
                       key={item.key}
                       onPress={() => setAccountType(item.key)}
-                      style={[styles.roleTab, active && styles.roleTabActive]}
+                      style={[styles.roleTab, isCompact && styles.roleTabCompact, active && styles.roleTabActive]}
                     >
-                      <RoleIcon item={item} color={active ? "#fff" : INK} />
-                      <Text style={[styles.roleText, active && styles.roleTextActive]}>{item.label}</Text>
+                      <RoleIcon item={item} color={active ? "#fff" : INK} size={isCompact ? 20 : 25} />
+                      <Text style={[styles.roleText, isCompact && styles.roleTextCompact, active && styles.roleTextActive]} numberOfLines={1}>
+                        {item.label}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -190,7 +195,7 @@ export default function LoginScreen({ navigation }) {
 
               <View style={styles.formBlock}>
                 <Text style={styles.label}>Email or Phone Number</Text>
-                <View style={[styles.inputWrap, emailFocused && styles.inputWrapFocused]}>
+                <View style={[styles.inputWrap, isCompact && styles.inputWrapCompact, emailFocused && styles.inputWrapFocused]}>
                   <FieldIcon name="user" />
                   <TextInput
                     value={email}
@@ -206,7 +211,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
 
                 <Text style={styles.label}>Password</Text>
-                <View style={[styles.inputWrap, passwordFocused && styles.inputWrapFocused]}>
+                <View style={[styles.inputWrap, isCompact && styles.inputWrapCompact, passwordFocused && styles.inputWrapFocused]}>
                   <FieldIcon name="lock" />
                   <TextInput
                     value={password}
@@ -238,7 +243,7 @@ export default function LoginScreen({ navigation }) {
                 <Pressable
                   disabled={!email.trim() || !password || submitting}
                   onPress={submit}
-                  style={[styles.signInButton, (!email.trim() || !password || submitting) && styles.signInButtonDisabled]}
+                  style={[styles.signInButton, isCompact && styles.signInButtonCompact, (!email.trim() || !password || submitting) && styles.signInButtonDisabled]}
                 >
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
@@ -251,7 +256,7 @@ export default function LoginScreen({ navigation }) {
                 </Pressable>
               </View>
 
-              <View style={styles.dividerRow}>
+              <View style={[styles.dividerRow, isCompact && styles.dividerRowCompact]}>
                 <View style={styles.divider} />
                 <Text style={styles.dividerText}>or continue with</Text>
                 <View style={styles.divider} />
@@ -267,7 +272,7 @@ export default function LoginScreen({ navigation }) {
                     key={item.key}
                     disabled={!!socialLoading}
                     onPress={() => handleSocial(item.key)}
-                    style={styles.socialButton}
+                    style={[styles.socialButton, isCompact && styles.socialButtonCompact]}
                   >
                     {socialLoading === item.key ? (
                       <ActivityIndicator color={PURPLE} />
@@ -281,7 +286,7 @@ export default function LoginScreen({ navigation }) {
                 ))}
               </View>
 
-              <View style={styles.securityCard}>
+              <View style={[styles.securityCard, isCompact && styles.securityCardCompact]}>
                 <View style={styles.securityIcon}>
                   <Ionicons name="shield-checkmark-outline" size={34} color={PURPLE} />
                 </View>
@@ -291,7 +296,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.signupRow}>
+              <View style={[styles.signupRow, isCompact && styles.signupRowCompact]}>
                 <Text style={styles.signupText}>Don’t have an account?</Text>
                 <Pressable onPress={() => navigation.navigate("Register", { role: accountType === "PROVIDER" ? "VENDOR" : accountType })}>
                   <Text style={styles.signupLink}>Sign up</Text>
@@ -348,53 +353,61 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { minHeight: "100%" },
   contentDesktop: { padding: 36, justifyContent: "center" },
-  contentMobile: { padding: 16, paddingBottom: 28 },
+  contentMobile: { padding: 12, paddingBottom: 24 },
   layout: { width: "100%", alignSelf: "center" },
   layoutDesktop: { maxWidth: 1180, minHeight: 760, flexDirection: "row", justifyContent: "center", alignItems: "stretch" },
-  layoutMobile: { maxWidth: 430, gap: 16 },
+  layoutMobile: { maxWidth: 430, gap: 12 },
   hero: { overflow: "hidden", backgroundColor: PURPLE_DARK },
   heroDesktop: { width: "42%", minHeight: 760, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 },
-  heroMobile: { height: 360, borderRadius: 28 },
+  heroMobile: { height: 300, borderRadius: 24 },
+  heroMobileCompact: { height: 210, borderRadius: 22 },
   heroImage: { width: "100%", height: "100%" },
+  heroPhoto: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   heroImageDesktop: { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 },
-  heroImageMobile: { borderRadius: 28 },
+  heroImageMobile: { borderRadius: 24 },
   heroTopFade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.02)" },
   heroBottomFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "45%", backgroundColor: "rgba(36,16,95,0.72)" },
   heroBrand: { position: "absolute", top: 76, left: 54, gap: 12 },
-  heroBrandMobile: { top: 22, left: 20, transform: [{ scale: 0.72 }], transformOrigin: "top left" },
+  heroBrandMobile: { top: 18, left: 18, transform: [{ scale: 0.68 }] },
+  heroBrandMobileCompact: { top: 14, left: 14, transform: [{ scale: 0.56 }] },
   heroTagline: { marginLeft: 136, marginTop: -54, color: ORANGE, fontSize: 20, lineHeight: 28, fontWeight: "800" },
   heroStory: { position: "absolute", left: 52, right: 42, bottom: 42 },
-  locationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 13, marginBottom: 26 },
+  heroStoryCompact: { left: 20, right: 20, bottom: 18 },
+  locationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 13, marginBottom: 20 },
   locationChipText: { color: "#fff", fontSize: 17, fontWeight: "900" },
-  storyTitle: { color: "#fff", fontSize: 24, fontWeight: "900", marginBottom: 14 },
+  storyTitle: { color: "#fff", fontSize: 22, fontWeight: "900", marginBottom: 10 },
   storyText: { color: "#fff", fontSize: 18, lineHeight: 28, fontWeight: "600", maxWidth: 360 },
-  heroDots: { flexDirection: "row", gap: 12, marginTop: 30 },
+  heroDots: { flexDirection: "row", gap: 12, marginTop: 18 },
   heroDotActive: { width: 13, height: 13, borderRadius: 7, backgroundColor: "#fff" },
   heroDot: { width: 13, height: 13, borderRadius: 7, backgroundColor: "rgba(255,255,255,0.35)" },
   panel: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#E7E8F1", shadowColor: "#17113A", shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 } },
   panelDesktop: { minHeight: 760, borderRadius: 28, marginLeft: 0, paddingHorizontal: 48, paddingVertical: 34 },
-  panelMobile: { borderRadius: 28, paddingHorizontal: 20, paddingVertical: 22 },
+  panelMobile: { borderRadius: 24, paddingHorizontal: 16, paddingVertical: 18 },
   panelScrollProxy: { flex: 1 },
   langRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   langPill: { marginLeft: "auto", minHeight: 48, borderRadius: 24, borderWidth: 1, borderColor: "#E6E7EF", backgroundColor: "#fff", paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 8, shadowColor: "#17113A", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   langText: { color: INK, fontSize: 16, fontWeight: "900" },
   welcomeBlock: { marginTop: 48, marginBottom: 28 },
-  welcomeBlockCompact: { marginTop: 32, marginBottom: 22 },
+  welcomeBlockCompact: { marginTop: 22, marginBottom: 18 },
   welcomeTitle: { color: INK, fontSize: 40, lineHeight: 48, fontWeight: "900" },
-  welcomeTitleCompact: { fontSize: 32, lineHeight: 38 },
+  welcomeTitleCompact: { fontSize: 29, lineHeight: 35 },
   welcomeText: { marginTop: 18, color: MUTED, fontSize: 24, lineHeight: 34, fontWeight: "500" },
-  welcomeTextCompact: { fontSize: 18, lineHeight: 27, marginTop: 12 },
+  welcomeTextCompact: { fontSize: 16, lineHeight: 24, marginTop: 10 },
   purpleText: { color: PURPLE, fontWeight: "900" },
   roleSelector: { minHeight: 104, borderRadius: 16, borderWidth: 1.3, borderColor: "#DADBE8", flexDirection: "row", overflow: "hidden", marginBottom: 30 },
+  roleSelectorCompact: { minHeight: 76, marginBottom: 22, borderRadius: 14 },
   roleTab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, borderRightWidth: 1, borderRightColor: "#E6E7EF", backgroundColor: "#fff" },
+  roleTabCompact: { gap: 5, paddingHorizontal: 2 },
   roleTabActive: { backgroundColor: PURPLE },
   roleText: { color: INK, fontSize: 15, fontWeight: "900" },
+  roleTextCompact: { fontSize: 11.5 },
   roleTextActive: { color: "#fff" },
   errorBox: { backgroundColor: "#FFF1F2", borderWidth: 1, borderColor: "#FFCDD5", borderRadius: 16, padding: 12, marginBottom: 18 },
   errorText: { color: "#B4233C", fontSize: 13.5, fontWeight: "800", lineHeight: 19 },
   formBlock: { gap: 13 },
   label: { color: INK, fontSize: 16, fontWeight: "900", marginTop: 4 },
   inputWrap: { minHeight: 66, borderRadius: 14, borderWidth: 1.3, borderColor: "#DADBE8", flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, backgroundColor: "#fff" },
+  inputWrapCompact: { minHeight: 56, gap: 12, paddingHorizontal: 16 },
   inputWrapFocused: { borderColor: PURPLE, shadowColor: PURPLE, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   input: { flex: 1, color: INK, fontSize: 17, fontWeight: "600", minHeight: 48 },
   eyeButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
@@ -405,19 +418,24 @@ const styles = StyleSheet.create({
   rememberText: { color: INK, fontSize: 15.5, fontWeight: "700" },
   forgotText: { color: PURPLE, fontSize: 15.5, fontWeight: "900" },
   signInButton: { height: 70, borderRadius: 15, backgroundColor: PURPLE, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 110, shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 16, shadowOffset: { width: 0, height: 10 } },
+  signInButtonCompact: { height: 58, gap: 72 },
   signInButtonDisabled: { opacity: 0.55 },
   signInText: { color: "#fff", fontSize: 20, fontWeight: "900" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 18, marginTop: 32, marginBottom: 20 },
+  dividerRowCompact: { gap: 12, marginTop: 22, marginBottom: 14 },
   divider: { flex: 1, height: 1, backgroundColor: "#DCDDEA" },
   dividerText: { color: "#8587A2", fontSize: 15, fontWeight: "700" },
   socialStack: { gap: 14 },
   socialButton: { minHeight: 58, borderRadius: 14, borderWidth: 1.3, borderColor: "#E1E2EC", backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 13 },
+  socialButtonCompact: { minHeight: 50 },
   socialText: { color: "#071350", fontSize: 16, fontWeight: "900" },
   securityCard: { marginTop: 32, borderRadius: 16, backgroundColor: "#F3EDFF", padding: 20, flexDirection: "row", alignItems: "center", gap: 16 },
+  securityCardCompact: { marginTop: 22, padding: 14, gap: 10 },
   securityIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   securityTitle: { color: "#5B5C7D", fontSize: 15.5, fontWeight: "800", marginBottom: 5 },
   securityText: { color: "#787A99", fontSize: 14.5, fontWeight: "600" },
   signupRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 36 },
+  signupRowCompact: { marginTop: 24, flexWrap: "wrap" },
   signupText: { color: "#747696", fontSize: 16, fontWeight: "700" },
   signupLink: { color: PURPLE, fontSize: 17, fontWeight: "900" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15,12,38,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
