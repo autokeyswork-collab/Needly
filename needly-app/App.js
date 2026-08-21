@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Easing, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -26,16 +26,64 @@ Notifications.setNotificationHandler({
 
 import NeedlyLogo from "./src/components/NeedlyLogo";
 
+function PreloadScreen() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const float = useRef(new Animated.Value(0)).current;
+  const ring = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1150, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1150, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    const floatLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    const ringLoop = Animated.loop(
+      Animated.timing(ring, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true })
+    );
+
+    pulseLoop.start();
+    floatLoop.start();
+    ringLoop.start();
+    return () => {
+      pulseLoop.stop();
+      floatLoop.stop();
+      ringLoop.stop();
+    };
+  }, [float, pulse, ring]);
+
+  const logoScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] });
+  const logoY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.2] });
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.48] });
+  const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1.55] });
+  const ringOpacity = ring.interpolate({ inputRange: [0, 0.72, 1], outputRange: [0.42, 0.14, 0] });
+  const secondRingScale = ring.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.2] });
+  const secondRingOpacity = ring.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.26, 0.18, 0] });
+
+  return (
+    <View style={styles.preload}>
+      <Animated.View style={[styles.preloadGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+      <Animated.View style={[styles.preloadRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
+      <Animated.View style={[styles.preloadRingSmall, { opacity: secondRingOpacity, transform: [{ scale: secondRingScale }] }]} />
+      <Animated.View style={[styles.preloadLogo, { transform: [{ translateY: logoY }, { scale: logoScale }] }]}>
+        <NeedlyLogo size="hero" theme="dark" variant="icon" showBadges={false} />
+      </Animated.View>
+    </View>
+  );
+}
+
 function Gate() {
   const { user, booting } = useAuth();
 
   if (booting) {
-    return (
-      <View style={{ flex: 1, backgroundColor: COLORS.indigo, alignItems: "center", justifyContent: "center", gap: 20 }}>
-        <NeedlyLogo size="large" theme="dark" showBadges />
-        <ActivityIndicator color={COLORS.mango} size="large" />
-      </View>
-    );
+    return <PreloadScreen />;
   }
 
   return user ? <RootNavigator /> : <AuthStack />;
@@ -68,3 +116,52 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  preload: {
+    flex: 1,
+    backgroundColor: COLORS.indigo,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  preloadGlow: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: "#8B5CF6",
+    shadowColor: "#8B5CF6",
+    shadowOpacity: 0.5,
+    shadowRadius: 34,
+  },
+  preloadRing: {
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.42)",
+  },
+  preloadRingSmall: {
+    position: "absolute",
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    borderWidth: 2,
+    borderColor: "rgba(255,158,27,0.42)",
+  },
+  preloadLogo: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+});
