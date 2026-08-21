@@ -42,6 +42,8 @@ services:
         value: Needly <hello@needly.market>
       - key: ALLOWED_AREAS
         value: Abeokuta,Adigbe,Panseke,Oke-Ilewo,Lafenwa,Kuto,Omida
+      - key: AUTO_SEED_DEMO
+        value: "true"
       - key: RIDER_PAYOUT_PER_DELIVERY
         value: "600"
       - key: ALLOWED_ORIGINS

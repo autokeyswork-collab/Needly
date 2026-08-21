@@ -28,10 +28,11 @@ router.get("/", async (req, res) => {
   try {
     const { category } = req.query;
     const allowedAreas = (process.env.ALLOWED_AREAS || "").split(",").map((area) => area.trim()).filter(Boolean);
+    const cityWideArea = allowedAreas.some((area) => area.toLowerCase() === "abeokuta");
     const vendors = await prisma.vendor.findMany({
       where: {
         ...(category ? { category } : {}),
-        ...(allowedAreas.length ? { area: { in: allowedAreas } } : {}),
+        ...(allowedAreas.length && !cityWideArea ? { area: { in: allowedAreas } } : {}),
         OR: [
           { ownerId: { not: null }, owner: { approved: true } },
           { managerId: { not: null }, manager: { approved: true } },
@@ -59,7 +60,7 @@ router.get("/", async (req, res) => {
  * which deliberately doesn't expose owner PII to anyone browsing.
  * Registered before GET /:id so "admin" isn't swallowed as a vendor id.
  */
-router.get("/admin/all", requireAuth, requireRole("ADMIN"), async (req, res) => {
+router.get("/admin/all", requireAuth, requireRole("SUPER_ADMIN", "ADMIN"), async (req, res) => {
   try {
     const vendors = await prisma.vendor.findMany({
       include: {

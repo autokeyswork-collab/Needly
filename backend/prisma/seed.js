@@ -8,19 +8,13 @@ async function makeUser({ name, email, role }) {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   return prisma.user.upsert({
     where: { email },
-    update: {},
+    update: { name, role, approved: true },
     create: { name, email, role, passwordHash, approved: true },
   });
 }
 
 async function main() {
   console.log("Seeding demo accounts + Needly vendors...");
-
-  await prisma.vendor.deleteMany({
-    where: {
-      orders: { none: {} },
-    },
-  });
 
   const superAdmin = await makeUser({ name: "Super Admin", email: "superadmin@demo.needly", role: "SUPER_ADMIN" });
   const customer = await makeUser({ name: "Ada Customer", email: "customer@demo.needly", role: "CUSTOMER" });
