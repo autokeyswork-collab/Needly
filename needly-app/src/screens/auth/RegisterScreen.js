@@ -1,23 +1,57 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { FontAwesome } from "@expo/vector-icons";
-import { COLORS } from "../../theme/colors";
+import {
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import NeedlyLogo from "../../components/NeedlyLogo";
 import LocationAutocomplete from "../../components/LocationAutocomplete";
+import { LOGIN_HERO_MARKET } from "../../data/customerAssets";
 
 const ROLES = [
-  { value: "CUSTOMER", label: "Customer", emoji: "👤", sub: "Shop & order" },
-  { value: "VENDOR", label: "Vendor", emoji: "🏪", sub: "Sell items" },
-  { value: "RIDER", label: "Rider", emoji: "🛵", sub: "Deliver & earn" },
+  { value: "CUSTOMER", label: "Customer", sub: "Shop & order", icon: "person", family: "Ionicons" },
+  { value: "VENDOR", label: "Vendor", sub: "Sell items", icon: "storefront", family: "MaterialCommunityIcons" },
+  { value: "RIDER", label: "Rider", sub: "Deliver & earn", icon: "motorbike", family: "MaterialCommunityIcons" },
 ];
 
 const VENDOR_CATEGORIES = ["Restaurant", "Supermarket", "Grills", "Local Market", "Pharmacy", "Stay & Dine"];
 const ABEOKUTA_AREAS = ["Oke-Ilewo", "Ibara", "Panseke", "Adigbe", "Kuto", "Ita Eko", "Lafenwa", "Hilltop"];
 const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
+const PURPLE = "#6F45E9";
+const PURPLE_DARK = "#24105F";
+const ORANGE = "#F47C00";
+const INK = "#10113D";
+const MUTED = "#7E80A0";
+const LINE = "#DDDDEA";
+
+function RoleIcon({ item, color, size = 20 }) {
+  if (item.family === "Ionicons") return <Ionicons name={item.icon} size={size} color={color} />;
+  if (item.family === "MaterialCommunityIcons") return <MaterialCommunityIcons name={item.icon} size={size} color={color} />;
+  return <FontAwesome name={item.icon} size={size - 2} color={color} />;
+}
+
+function FieldIcon({ name }) {
+  return <FontAwesome name={name} size={16} color={PURPLE} />;
+}
 
 export default function RegisterScreen({ navigation, route }) {
   const { register, socialLogin, authError } = useAuth();
+  const { width, height } = useWindowDimensions();
+  const isDesktop = width >= 900;
+  const isCompact = width < 390 || height < 720;
+  const panelWidth = isDesktop ? Math.min(600, Math.max(540, width * 0.46)) : Math.min(width - 34, 370);
+  const mobileBrandHeight = Math.max(82, Math.min(128, height * 0.15));
   const [socialLoading, setSocialLoading] = useState(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -184,16 +218,72 @@ export default function RegisterScreen({ navigation, route }) {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.brandHeader}>
-        <NeedlyLogo size="medium" theme="dark" />
-        <Text style={styles.brandTitle}>Create Account</Text>
-        <Text style={styles.brandSubtitle}>Join Needly Everyday Marketplace in Abeokuta</Text>
-      </View>
+    <KeyboardAvoidingView
+      style={styles.page}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      {!isDesktop && (
+        <>
+          <Image source={LOGIN_HERO_MARKET} style={styles.mobilePageImage} resizeMode="cover" />
+          <View style={styles.mobilePageOverlay} />
+        </>
+      )}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          isDesktop ? styles.contentDesktop : styles.contentMobile,
+          !isDesktop && { minHeight: height },
+        ]}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.layout, isDesktop ? styles.layoutDesktop : styles.layoutMobile]}>
+          {isDesktop ? (
+            <ImageBackground
+              source={LOGIN_HERO_MARKET}
+              style={styles.hero}
+              imageStyle={styles.heroImage}
+              resizeMode="cover"
+            >
+              <Image source={LOGIN_HERO_MARKET} style={styles.heroPhoto} resizeMode="cover" />
+              <View style={styles.heroTopFade} />
+              <View style={styles.heroBottomFade} />
+              <View style={styles.heroBrand}>
+                <NeedlyLogo size="hero" theme="dark" variant="compact" showBadges={false} />
+                <Text style={styles.heroTagline}>Everything you need,{"\n"}in one place.</Text>
+              </View>
+              <View style={styles.heroStory}>
+                <View style={styles.locationChip}>
+                  <Ionicons name="location" size={20} color="#fff" />
+                  <Text style={styles.locationChipText}>Abeokuta, Nigeria</Text>
+                </View>
+                <Text style={styles.storyTitle}>Support Local, Grow Local</Text>
+                <Text style={styles.storyText}>Create your Needly account to shop, sell, or deliver across Abeokuta.</Text>
+              </View>
+            </ImageBackground>
+          ) : (
+            <View style={[styles.mobileBrandBlock, { minHeight: mobileBrandHeight }]}>
+              <NeedlyLogo size="medium" theme="dark" variant="icon" showBadges={false} />
+              <View style={styles.mobileLocationChip}>
+                <Ionicons name="location" size={15} color="#fff" />
+                <Text style={styles.mobileLocationText}>Abeokuta, Nigeria</Text>
+              </View>
+            </View>
+          )}
+
+          <View style={[styles.panel, { width: panelWidth }, isDesktop ? styles.panelDesktop : styles.panelMobile]}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.cardTitle, isCompact && styles.cardTitleCompact]}>Create account</Text>
+              <Text style={[styles.cardSubtitle, isCompact && styles.cardSubtitleCompact]}>
+                Join Needly and continue <Text style={styles.purpleText}>shopping, selling</Text> and earning.
+              </Text>
+            </View>
 
       {/* Role Selection Tabs */}
       <View style={styles.roleContainer}>
-        <Text style={styles.fieldLabel}>SELECT YOUR ROLE</Text>
         <View style={styles.roleGrid}>
           {ROLES.map((r) => {
             const active = role === r.value;
@@ -203,9 +293,9 @@ export default function RegisterScreen({ navigation, route }) {
                 onPress={() => { setRole(r.value); setValidationError(null); }}
                 style={[styles.roleCard, active && styles.roleCardActive]}
               >
-                <Text style={styles.roleEmoji}>{r.emoji}</Text>
+                <RoleIcon item={r} color={active ? "#FFFFFF" : INK} size={isCompact ? 17 : 20} />
                 <Text style={[styles.roleLabel, active && styles.roleLabelActive]}>{r.label}</Text>
-                <Text style={[styles.roleSub, active && styles.roleSubActive]}>{r.sub}</Text>
+                {isDesktop && <Text style={[styles.roleSub, active && styles.roleSubActive]}>{r.sub}</Text>}
               </Pressable>
             );
           })}
@@ -214,25 +304,24 @@ export default function RegisterScreen({ navigation, route }) {
 
       {/* Form Fields */}
       <View style={styles.formContainer}>
-        <Text style={styles.fieldLabel}>PERSONAL DETAILS</Text>
-
+        <Text style={styles.fieldLabel}>Personal details</Text>
         <View style={styles.inputWrap}>
-          <Text style={styles.inputIcon}>👤</Text>
+          <FieldIcon name="user" />
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Full Name (e.g. Amina Lawal)"
+            placeholder="Full name"
             placeholderTextColor="#94A3B8"
             style={styles.input}
           />
         </View>
 
         <View style={styles.inputWrap}>
-          <Text style={styles.inputIcon}>✉️</Text>
+          <FieldIcon name="envelope" />
           <TextInput
             value={email}
             onChangeText={setEmail}
-            placeholder="Email Address"
+            placeholder="Email address"
             placeholderTextColor="#94A3B8"
             autoCapitalize="none"
             keyboardType="email-address"
@@ -241,11 +330,11 @@ export default function RegisterScreen({ navigation, route }) {
         </View>
 
         <View style={styles.inputWrap}>
-          <Text style={styles.inputIcon}>📱</Text>
+          <FieldIcon name="phone" />
           <TextInput
             value={phone}
             onChangeText={setPhone}
-            placeholder="Phone Number (e.g. 0803 220 1141)"
+            placeholder="Phone number"
             placeholderTextColor="#94A3B8"
             keyboardType="phone-pad"
             style={styles.input}
@@ -253,7 +342,7 @@ export default function RegisterScreen({ navigation, route }) {
         </View>
 
         <View style={styles.inputWrap}>
-          <Text style={styles.inputIcon}>🔒</Text>
+          <FieldIcon name="lock" />
           <TextInput
             value={password}
             onChangeText={setPassword}
@@ -263,12 +352,12 @@ export default function RegisterScreen({ navigation, route }) {
             style={styles.input}
           />
           <Pressable onPress={() => setShowPassword((s) => !s)} style={styles.eyeBtn}>
-            <Text style={styles.eyeText}>{showPassword ? "🙈" : "👁️"}</Text>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={19} color={MUTED} />
           </Pressable>
         </View>
 
         <View style={styles.inputWrap}>
-          <Text style={styles.inputIcon}>🔑</Text>
+          <FieldIcon name="key" />
           <TextInput
             value={confirmPassword}
             onChangeText={setConfirmPassword}
@@ -291,10 +380,10 @@ export default function RegisterScreen({ navigation, route }) {
         {/* Vendor Specific Details */}
         {role === "VENDOR" && (
           <View style={styles.specBox}>
-            <Text style={styles.specBoxTitle}>🏪 VENDOR STORE DETAILS</Text>
+            <Text style={styles.specBoxTitle}>Vendor store details</Text>
 
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>🏪</Text>
+              <MaterialCommunityIcons name="storefront" size={18} color={PURPLE} />
               <TextInput
                 value={businessName}
                 onChangeText={setBusinessName}
@@ -304,7 +393,7 @@ export default function RegisterScreen({ navigation, route }) {
               />
             </View>
 
-            <Text style={styles.subLabel}>Store Category:</Text>
+            <Text style={styles.subLabel}>Store category</Text>
             <View style={styles.chipRow}>
               {VENDOR_CATEGORIES.map((cat) => (
                 <Pressable
@@ -317,7 +406,7 @@ export default function RegisterScreen({ navigation, route }) {
               ))}
             </View>
 
-            <Text style={styles.subLabel}>Abeokuta Area Location:</Text>
+            <Text style={styles.subLabel}>Abeokuta area location</Text>
             <View style={styles.chipRow}>
               {ABEOKUTA_AREAS.map((area) => (
                 <Pressable
@@ -345,7 +434,7 @@ export default function RegisterScreen({ navigation, route }) {
         {/* Rider Specific Details */}
         {role === "RIDER" && (
           <View style={styles.specBox}>
-            <Text style={styles.specBoxTitle}>🛵 RIDER OPERATING ZONE</Text>
+            <Text style={styles.specBoxTitle}>Rider operating zone</Text>
             <View style={styles.chipRow}>
               {RIDER_ZONES.map((zone) => (
                 <Pressable
@@ -362,7 +451,7 @@ export default function RegisterScreen({ navigation, route }) {
 
         {(validationError || authError) && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>❌ {validationError || authError}</Text>
+            <Text style={styles.errorText}>{validationError || authError}</Text>
           </View>
         )}
 
@@ -400,7 +489,7 @@ export default function RegisterScreen({ navigation, route }) {
               ) : (
                 <>
                   <FontAwesome name={icon} size={16} color={color} />
-                  <Text style={styles.socialBtnText}>{label}</Text>
+                  {isDesktop && <Text style={styles.socialBtnText}>{label}</Text>}
                 </>
               )}
             </Pressable>
@@ -411,75 +500,120 @@ export default function RegisterScreen({ navigation, route }) {
           <Text style={styles.loginLink}>Already have an account? <Text style={styles.loginLinkHighlight}>Log in</Text></Text>
         </Pressable>
       </View>
+          </View>
+        </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#15183F" },
-  content: { padding: 20, paddingBottom: 60, justifyContent: "center" },
-
-  brandHeader: { alignItems: "center", marginBottom: 20 },
-  brandTitle: { color: "#ffffff", fontWeight: "900", fontSize: 24, marginTop: 12 },
-  brandSubtitle: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4, textAlign: "center" },
-
-  fieldLabel: { color: "#F59E0B", fontSize: 10.5, fontWeight: "900", letterSpacing: 0.5, marginBottom: 8 },
-
-  roleContainer: { marginBottom: 16 },
-  roleGrid: { flexDirection: "row", gap: 8 },
-  roleCard: {
-    flex: 1, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 10,
-    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)", alignItems: "center",
+  page: { flex: 1, backgroundColor: PURPLE_DARK },
+  mobilePageImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  mobilePageOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(23,10,63,0.42)" },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1 },
+  contentDesktop: { padding: 34, justifyContent: "center", alignItems: "center" },
+  contentMobile: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 28, justifyContent: "flex-start", alignItems: "center" },
+  layout: { width: "100%", maxWidth: 1120 },
+  layoutDesktop: { minHeight: 720, flexDirection: "row", justifyContent: "center", alignItems: "stretch", gap: 0 },
+  layoutMobile: { alignItems: "center" },
+  hero: { width: 420, borderTopLeftRadius: 34, borderBottomLeftRadius: 34, overflow: "hidden", backgroundColor: PURPLE_DARK },
+  heroImage: { borderTopLeftRadius: 34, borderBottomLeftRadius: 34 },
+  heroPhoto: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  heroTopFade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.08)" },
+  heroBottomFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "45%", backgroundColor: "rgba(37,12,89,0.78)" },
+  heroBrand: { position: "absolute", top: 54, left: 36, right: 32, flexDirection: "row", alignItems: "center", gap: 16 },
+  heroTagline: { color: ORANGE, fontSize: 17, fontWeight: "800", lineHeight: 23 },
+  heroStory: { position: "absolute", left: 36, right: 36, bottom: 42 },
+  locationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(255,255,255,0.20)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 22 },
+  locationChipText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  storyTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "900", marginBottom: 10 },
+  storyText: { color: "#FFFFFF", fontSize: 16, lineHeight: 24, fontWeight: "600" },
+  mobileBrandBlock: { width: "100%", maxWidth: 370, justifyContent: "space-between", alignItems: "flex-start", paddingHorizontal: 8, paddingTop: 4, paddingBottom: 10 },
+  mobileLocationChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.20)", borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
+  mobileLocationText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
+  panel: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(221,221,234,0.85)",
+    shadowColor: "#160B3E",
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
-  roleCardActive: { backgroundColor: "#6F45E9", borderColor: "#ffffff" },
-  roleEmoji: { fontSize: 24, marginBottom: 4 },
-  roleLabel: { color: "rgba(255,255,255,0.8)", fontWeight: "800", fontSize: 12.5 },
+  panelDesktop: { borderTopRightRadius: 34, borderBottomRightRadius: 34, padding: 34, justifyContent: "center" },
+  panelMobile: { borderRadius: 28, paddingHorizontal: 16, paddingVertical: 18 },
+  cardHeader: { marginBottom: 14 },
+  cardTitle: { color: INK, fontSize: 30, fontWeight: "900", lineHeight: 35 },
+  cardTitleCompact: { fontSize: 24, lineHeight: 29 },
+  cardSubtitle: { color: MUTED, fontSize: 16, lineHeight: 23, fontWeight: "600", marginTop: 7 },
+  cardSubtitleCompact: { fontSize: 13.5, lineHeight: 19 },
+  purpleText: { color: PURPLE, fontWeight: "900" },
+
+  fieldLabel: { color: INK, fontSize: 13, fontWeight: "900", marginBottom: 7 },
+
+  roleContainer: { marginBottom: 14 },
+  roleGrid: { flexDirection: "row", borderRadius: 16, borderWidth: 1, borderColor: LINE, overflow: "hidden", backgroundColor: "#FFFFFF" },
+  roleCard: {
+    flex: 1,
+    minHeight: 66,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 9,
+    borderRightWidth: 1,
+    borderRightColor: LINE,
+  },
+  roleCardActive: { backgroundColor: PURPLE, borderRightColor: PURPLE },
+  roleLabel: { color: INK, fontWeight: "900", fontSize: 12.5 },
   roleLabelActive: { color: "#ffffff" },
-  roleSub: { color: "rgba(255,255,255,0.5)", fontSize: 10, marginTop: 2 },
+  roleSub: { color: MUTED, fontSize: 10.5, marginTop: 1, fontWeight: "700" },
   roleSubActive: { color: "rgba(255,255,255,0.85)" },
 
-  formContainer: { gap: 10 },
+  formContainer: { gap: 9 },
   inputWrap: {
     flexDirection: "row", alignItems: "center", backgroundColor: "#ffffff",
-    borderRadius: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: "#E2E8F0",
+    borderRadius: 14, paddingHorizontal: 13, borderWidth: 1, borderColor: LINE,
+    minHeight: 50, gap: 10,
   },
-  inputIcon: { fontSize: 16, marginRight: 8 },
-  input: { flex: 1, color: "#15183F", paddingVertical: 12, fontSize: 14 },
+  input: { flex: 1, color: INK, paddingVertical: 12, fontSize: 14, fontWeight: "600" },
   eyeBtn: { padding: 6 },
-  eyeText: { fontSize: 16 },
 
   termsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 4 },
-  termsCheckbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
-  termsCheckboxChecked: { backgroundColor: "#F59E0B", borderColor: "#F59E0B" },
-  termsCheckmark: { color: "#15183F", fontWeight: "900", fontSize: 12 },
-  termsText: { flex: 1, color: "rgba(255,255,255,0.8)", fontSize: 12 },
+  termsCheckbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: LINE, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  termsCheckboxChecked: { backgroundColor: PURPLE, borderColor: PURPLE },
+  termsCheckmark: { color: "#FFFFFF", fontWeight: "900", fontSize: 12 },
+  termsText: { flex: 1, color: MUTED, fontSize: 11.5, fontWeight: "700", lineHeight: 16 },
 
-  specBox: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", padding: 14, gap: 10 },
-  specBoxTitle: { color: "#F59E0B", fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
-  subLabel: { color: "rgba(255,255,255,0.8)", fontSize: 11.5, fontWeight: "700", marginTop: 4 },
+  specBox: { backgroundColor: "#F8F5FF", borderRadius: 18, borderWidth: 1, borderColor: "#E8E0FF", padding: 12, gap: 9 },
+  specBoxTitle: { color: INK, fontSize: 12.5, fontWeight: "900" },
+  subLabel: { color: INK, fontSize: 11.5, fontWeight: "800", marginTop: 2 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: { backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" },
-  chipActive: { backgroundColor: "#F59E0B", borderColor: "#F59E0B" },
-  chipText: { color: "rgba(255,255,255,0.8)", fontSize: 11.5, fontWeight: "700" },
-  chipTextActive: { color: "#15183F", fontWeight: "900" },
+  chip: { backgroundColor: "#FFFFFF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "#E8E0FF" },
+  chipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
+  chipText: { color: INK, fontSize: 11.5, fontWeight: "800" },
+  chipTextActive: { color: "#FFFFFF", fontWeight: "900" },
 
   errorBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 14, padding: 12 },
   errorText: { color: "#991B1B", fontSize: 13, fontWeight: "600" },
 
-  submitBtn: { backgroundColor: "#F59E0B", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 10 },
+  submitBtn: { backgroundColor: PURPLE, borderRadius: 15, paddingVertical: 14, alignItems: "center", marginTop: 6, shadowColor: PURPLE, shadowOpacity: 0.28, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   submitBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 15 },
-  loginLink: { color: "rgba(255,255,255,0.8)", textAlign: "center", fontSize: 13 },
-  loginLinkHighlight: { color: "#F59E0B", fontWeight: "800" },
+  loginLink: { color: MUTED, textAlign: "center", fontSize: 13, fontWeight: "700" },
+  loginLinkHighlight: { color: PURPLE, fontWeight: "900" },
 
   socialDividerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 6 },
-  socialDivider: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.15)" },
-  socialDividerText: { color: "rgba(255,255,255,0.6)", fontSize: 11.5, fontWeight: "600" },
+  socialDivider: { flex: 1, height: 1, backgroundColor: LINE },
+  socialDividerText: { color: MUTED, fontSize: 11.5, fontWeight: "700" },
   socialRow: { flexDirection: "row", gap: 8 },
   socialBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.06)",
+    flex: 1, minHeight: 42, paddingVertical: 10, borderRadius: 13, borderWidth: 1, borderColor: LINE,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "#FFFFFF",
   },
-  socialBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 12 },
+  socialBtnText: { color: INK, fontWeight: "900", fontSize: 12 },
 
   /* Pending Screen */
   pendingScreen: { flex: 1, backgroundColor: "#15183F", padding: 24, justifyContent: "center", alignItems: "center" },
