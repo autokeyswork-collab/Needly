@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
 import Thumb from "../components/Thumb";
@@ -14,6 +15,50 @@ const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
 const INK = "#11123A";
 const MUTED = "#747792";
+const MAX_PRODUCT_IMAGE_BYTES = 900000;
+
+function canvasResizeDataUrl(dataUrl, maxSize = 520, quality = 0.72) {
+  if (Platform.OS !== "web" || typeof document === "undefined") return Promise.resolve(dataUrl);
+  return new Promise((resolve) => {
+    const img = document.createElement("img");
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function pickResizedProductImage() {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error("Please allow photo access to choose a product image.");
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.55,
+    base64: true,
+  });
+
+  if (result.canceled || !result.assets?.length) return null;
+  const asset = result.assets[0];
+  if (!asset.base64 && asset.uri) return asset.uri;
+  const dataUrl = `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
+  const resized = await canvasResizeDataUrl(dataUrl);
+  if (resized.length > MAX_PRODUCT_IMAGE_BYTES) {
+    throw new Error("That image is still too large. Choose a clearer but smaller photo.");
+  }
+  return resized;
+}
 
 export default function VendorScreen() {
   const {
@@ -23,6 +68,7 @@ export default function VendorScreen() {
     cancelOrder,
     updatePrice,
     addProduct,
+    updateProductDetails,
     addAddOn,
     removeAddOn,
     toggleProductAvailable,
@@ -49,6 +95,7 @@ export default function VendorScreen() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newEmoji, setNewEmoji] = useState("🍽️");
+  const [newImageUrl, setNewImageUrl] = useState("");
   const [addOnDrafts, setAddOnDrafts] = useState({});
   const [actionError, setActionError] = useState(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -113,13 +160,34 @@ export default function VendorScreen() {
     setEditingItemId(null);
   };
 
+  const chooseNewProductImage = async () => {
+    setActionError(null);
+    try {
+      const imageUrl = await pickResizedProductImage();
+      if (imageUrl) setNewImageUrl(imageUrl);
+    } catch (err) {
+      setActionError(err.message || "Could not choose product image.");
+    }
+  };
+
+  const chooseExistingProductImage = async (productId) => {
+    setActionError(null);
+    try {
+      const imageUrl = await pickResizedProductImage();
+      if (imageUrl) await updateProductDetails(myVendorId, productId, { imageUrl });
+    } catch (err) {
+      setActionError(err.message || "Could not update product image.");
+    }
+  };
+
   const submitNewProduct = () => {
     const price = parseInt(newPrice, 10);
     if (!newName.trim() || isNaN(price) || price <= 0) return;
-    addProduct(myVendorId, { name: newName.trim(), price, emoji: newEmoji || "🍽️" });
+    addProduct(myVendorId, { name: newName.trim(), price, emoji: newEmoji || "🍽️", imageUrl: newImageUrl || null });
     setNewName("");
     setNewPrice("");
     setNewEmoji("🍽️");
+    setNewImageUrl("");
     setShowAddForm(false);
   };
 
@@ -411,6 +479,19 @@ export default function VendorScreen() {
       {showAddForm && (
         <View style={styles.addFormCard}>
           <Text style={styles.addFormTitle}>Add New Menu Item</Text>
+          <Pressable onPress={chooseNewProductImage} style={styles.productImagePicker}>
+            {newImageUrl ? (
+              <Image source={{ uri: newImageUrl }} style={styles.productImagePreview} resizeMode="cover" />
+            ) : (
+              <View style={styles.productImageEmpty}>
+                <Text style={styles.productImageEmptyIcon}>📷</Text>
+                <Text style={styles.productImageEmptyText}>Add product photo</Text>
+              </View>
+            )}
+            <View style={styles.productImageBadge}>
+              <Text style={styles.productImageBadgeText}>{newImageUrl ? "Change" : "Upload"}</Text>
+            </View>
+          </Pressable>
           <TextInput
             value={newName}
             onChangeText={setNewName}
@@ -455,7 +536,16 @@ export default function VendorScreen() {
             <View style={[styles.productCard, !isAvailable && styles.productCardSoldOut]}>
               <View style={styles.productCardTop}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                  <Thumb emoji={item.emoji} category={activeVendor.category} size={44} />
+                  <Pressable onPress={() => chooseExistingProductImage(item.id)} style={styles.productThumbButton}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.productThumbImage} resizeMode="cover" />
+                    ) : (
+                      <Thumb emoji={item.emoji} category={activeVendor.category} size={44} />
+                    )}
+                    <View style={styles.productThumbEdit}>
+                      <Text style={styles.productThumbEditText}>+</Text>
+                    </View>
+                  </Pressable>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.productName}>{item.name}</Text>
 
@@ -690,6 +780,13 @@ const styles = StyleSheet.create({
 
   addFormCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 16, gap: 12, marginBottom: 16, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   addFormTitle: { fontSize: 15, fontWeight: "900", color: INK },
+  productImagePicker: { height: 132, borderRadius: 20, overflow: "hidden", backgroundColor: "#F7F3FF", borderWidth: 1, borderColor: "#DDD6FE" },
+  productImagePreview: { width: "100%", height: "100%" },
+  productImageEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6 },
+  productImageEmptyIcon: { fontSize: 28 },
+  productImageEmptyText: { color: MUTED, fontSize: 12.5, fontWeight: "800" },
+  productImageBadge: { position: "absolute", right: 10, bottom: 10, backgroundColor: PURPLE, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  productImageBadgeText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "900" },
   input: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, backgroundColor: "#ffffff", color: INK },
   miniInput: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: "#ffffff", color: INK },
   saveProductBtn: { backgroundColor: DARK_PURPLE, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
@@ -698,6 +795,10 @@ const styles = StyleSheet.create({
   productCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   productCardSoldOut: { opacity: 0.6, backgroundColor: "#F8FAFC" },
   productCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  productThumbButton: { width: 48, height: 48, borderRadius: 16 },
+  productThumbImage: { width: 48, height: 48, borderRadius: 16, backgroundColor: "#F4EDFF" },
+  productThumbEdit: { position: "absolute", right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  productThumbEditText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900", lineHeight: 12 },
   productName: { fontSize: 14.5, fontWeight: "900", color: INK },
   productPrice: { fontSize: 13.5, fontWeight: "800", color: EMERALD, marginTop: 2 },
   saveMiniBtn: { backgroundColor: EMERALD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },

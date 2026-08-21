@@ -535,7 +535,7 @@ export default function BrowseScreen({ navigation }) {
                     onPress={() => navigation.navigate("VendorMenu", { vendorId: product.vendor.id })}
                   >
                     <View style={styles.productImageWrap}>
-                      <Image source={CATEGORY_IMAGES[product.vendor.category] || CATEGORY_IMAGES.Restaurant} style={styles.productImage} />
+                      <Image source={product.imageUrl ? { uri: product.imageUrl } : CATEGORY_IMAGES[product.vendor.category] || CATEGORY_IMAGES.Restaurant} style={styles.productImage} />
                       <Pressable style={styles.heartButton}>
                         <FontAwesome name="heart-o" size={17} color="#F23C56" />
                       </Pressable>

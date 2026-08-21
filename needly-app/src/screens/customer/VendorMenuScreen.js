@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, SectionList, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, SectionList, StyleSheet, Text, View } from "react-native";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { Pill } from "../../components/Pill";
 import Thumb from "../../components/Thumb";
@@ -98,9 +98,13 @@ export default function VendorMenuScreen({ route, navigation }) {
           ) : null
         }
         renderItem={({ item }) => (
-          <View style={[styles.row, item.isAvailable === false && { opacity: 0.5 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-              <Thumb emoji={item.emoji} category={vendor.category} />
+            <View style={[styles.row, item.isAvailable === false && { opacity: 0.5 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+              {item.imageUrl ? (
+                <Image source={{ uri: item.imageUrl }} style={styles.productImage} resizeMode="cover" />
+              ) : (
+                <Thumb emoji={item.emoji} category={vendor.category} />
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemPrice}>{fmtNaira(item.price)}</Text>
@@ -165,6 +169,7 @@ const styles = StyleSheet.create({
   },
   itemName: { fontWeight: "600", fontSize: 14.5, color: COLORS.ink },
   itemPrice: { fontSize: 13, color: COLORS.mute, marginTop: 2 },
+  productImage: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.line },
   qtyBtn: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: COLORS.line, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
   qtyBtnText: { fontWeight: "700", fontSize: 15 },
   addBtn: { backgroundColor: COLORS.mango, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },

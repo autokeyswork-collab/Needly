@@ -98,6 +98,7 @@ export function normalizeVendor(v) {
       name: p.name,
       price: p.price,
       emoji: p.emoji,
+      imageUrl: p.imageUrl || null,
       subcategory: p.subcategory || undefined,
       isAvailable: p.isAvailable,
       addOns: (p.addOns || []).map((a) => ({ id: a.id, name: a.name, price: a.price })),
@@ -257,8 +258,8 @@ export const VendorAPI = {
   setVerification: (vendorId, fields) => request(`/vendors/${vendorId}/verification`, { method: "PATCH", body: fields }),
   stats: () => request("/vendors/me/stats").catch(() => null),
   toggleOpen: (vendorId) => request(`/vendors/${vendorId}/open`, { method: "PATCH" }).catch(() => ({ isOpen: true })),
-  addProduct: (vendorId, { name, price, emoji, subcategory }) =>
-    request(`/vendors/${vendorId}/products`, { method: "POST", body: { name, price, emoji, subcategory } }),
+  addProduct: (vendorId, { name, price, emoji, subcategory, imageUrl }) =>
+    request(`/vendors/${vendorId}/products`, { method: "POST", body: { name, price, emoji, subcategory, imageUrl } }),
   updateProduct: (vendorId, productId, patch) =>
     request(`/vendors/${vendorId}/products/${productId}`, { method: "PATCH", body: patch }),
   toggleAvailable: (vendorId, productId) =>

@@ -236,11 +236,14 @@ router.patch("/:id/open", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN")
 
 /** POST /vendors/:id/products — add a new product. */
 router.post("/:id/products", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
-  const { name, price, emoji, subcategory } = req.body;
+  const { name, price, emoji, subcategory, imageUrl } = req.body;
   if (!name || !price) return res.status(400).json({ error: "name and price are required" });
+  if (imageUrl && String(imageUrl).length > 1800000) {
+    return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
+  }
 
   const product = await prisma.product.create({
-    data: { vendorId: req.params.id, name, price, emoji: emoji || "🍽️", subcategory },
+    data: { vendorId: req.params.id, name, price, emoji: emoji || "🍽️", subcategory, imageUrl: imageUrl || null },
   });
   broadcastInventoryUpdate({ vendorId: req.params.id, product, action: "create" });
   res.status(201).json(product);
@@ -248,13 +251,17 @@ router.post("/:id/products", requireAuth, requireRole("VENDOR", "ADMIN"), assert
 
 /** PATCH /vendors/:vendorId/products/:productId — update price (or name/emoji). */
 router.patch("/:vendorId/products/:productId", requireAuth, requireRole("VENDOR", "ADMIN"), assertOwnsVendor, async (req, res) => {
-  const { price, name, emoji } = req.body;
+  const { price, name, emoji, imageUrl } = req.body;
+  if (imageUrl && String(imageUrl).length > 1800000) {
+    return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
+  }
   const product = await prisma.product.update({
     where: { id: req.params.productId },
     data: {
       ...(price !== undefined ? { price } : {}),
       ...(name !== undefined ? { name } : {}),
       ...(emoji !== undefined ? { emoji } : {}),
+      ...(imageUrl !== undefined ? { imageUrl: imageUrl || null } : {}),
     },
   });
   broadcastInventoryUpdate({ vendorId: req.params.vendorId, product, action: "update" });

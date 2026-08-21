@@ -187,6 +187,11 @@ export function OrdersProvider({ children }) {
     await refreshVendors();
   }, [refreshVendors]);
 
+  const updateProductDetails = useCallback(async (vendorId, productId, patch) => {
+    await VendorAPI.updateProduct(vendorId, productId, patch);
+    await refreshVendors();
+  }, [refreshVendors]);
+
   const addProduct = useCallback(async (vendorId, product) => {
     await VendorAPI.addProduct(vendorId, product);
     await refreshVendors();
@@ -238,7 +243,7 @@ export function OrdersProvider({ children }) {
       disputes, refreshDisputes,
       placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider,
       raiseDispute, resolveDispute,
-      updatePrice, addProduct, addAddOn, removeAddOn, toggleProductAvailable, toggleVendorOpen,
+      updatePrice, updateProductDetails, addProduct, addAddOn, removeAddOn, toggleProductAvailable, toggleVendorOpen,
       refresh,
     }}>
       {children}

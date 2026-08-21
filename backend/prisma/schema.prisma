@@ -126,6 +126,7 @@ model Product {
   name        String
   price       Int
   emoji       String         @default("🍽️")
+  imageUrl    String?
   subcategory String?
   stock       Int            @default(50)
   isAvailable Boolean        @default(true)
