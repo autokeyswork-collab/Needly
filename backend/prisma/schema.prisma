@@ -13,6 +13,7 @@ enum UserRoleType {
   RIDER
   MANAGER
   ADMIN
+  SUPER_ADMIN
 
   @@map("Role")
 }

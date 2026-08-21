@@ -105,7 +105,7 @@ const DEMO_LOGIN_FALLBACKS = {
   "rider@demo.needly": { id: "demo-rider", name: "Tunde A.", email: "rider@demo.needly", role: "RIDER" },
   "manager@demo.needly": { id: "demo-manager", name: "Amaka O.", email: "manager@demo.needly", role: "MANAGER" },
   "admin@demo.needly": { id: "demo-admin", name: "Admin", email: "admin@demo.needly", role: "ADMIN" },
-  "superadmin@demo.needly": { id: "demo-super-admin", name: "Super Admin", email: "superadmin@demo.needly", role: "ADMIN" },
+  "superadmin@demo.needly": { id: "demo-super-admin", name: "Super Admin", email: "superadmin@demo.needly", role: "SUPER_ADMIN" },
 };
 
 function maybeDemoLogin(inputStr, password) {
@@ -265,7 +265,8 @@ const DEMO_USERS = [
   { id: "u-vend", name: "Risikat Adewale", email: "mamarisi@demo.needly", phone: "08032201142", role: "VENDOR", approved: true, vendor: { id: "v1", name: "Mama Risi Kitchen", area: "Central Zone", category: "Restaurant", isOpen: true, rating: 4.7 } },
   { id: "u-rider", name: "Tunde Bakare", email: "rider@demo.needly", phone: "08032201143", role: "RIDER", approved: true, rider: { id: "r1", zone: "Central Zone", isOnline: true, rating: 4.8 } },
   { id: "u-mgr", name: "Funmi Balogun", email: "manager@demo.needly", phone: "08032201144", role: "MANAGER", approved: true, managedVendor: { id: "v3", name: "Needly Fresh Market", area: "Central Zone", category: "Local Market", isOpen: true } },
-  { id: "u-admin", name: "Super Admin", email: "admin@demo.needly", phone: "08032201145", role: "ADMIN", approved: true },
+  { id: "u-admin", name: "Admin", email: "admin@demo.needly", phone: "08032201145", role: "ADMIN", approved: true },
+  { id: "u-super-admin", name: "Super Admin", email: "superadmin@demo.needly", phone: "08032201146", role: "SUPER_ADMIN", approved: true },
 ];
 
 /**
@@ -423,8 +424,11 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(403).json({ error: "Your account is pending admin approval" });
   }
 
-  const token = signToken(user);
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  const loginUser = inputStr === "superadmin@demo.needly"
+    ? { ...user, name: "Super Admin", role: "SUPER_ADMIN" }
+    : user;
+  const token = signToken(loginUser);
+  res.json({ token, user: { id: loginUser.id, name: loginUser.name, email: loginUser.email, role: loginUser.role } });
 });
 
 /** GET /auth/me — returns the logged-in user's profile. */
@@ -434,7 +438,10 @@ router.get("/me", requireAuth, async (req, res) => {
     include: { vendor: true, managedVendor: true, rider: true },
   });
   if (!user) return res.status(404).json({ error: "User not found" });
-  const { passwordHash, ...safeUser } = user;
+  const normalizedUser = user.email === "superadmin@demo.needly"
+    ? { ...user, name: "Super Admin", role: "SUPER_ADMIN" }
+    : user;
+  const { passwordHash, ...safeUser } = normalizedUser;
   res.json(safeUser);
 });
 
