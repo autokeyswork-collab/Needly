@@ -440,3 +440,16 @@ model ContactConfig {
   operatingHours String   @default("24/7 Everyday")
   updatedAt      DateTime @updatedAt
 }
+
+model IntegrationSetting {
+  id        String   @id @default(cuid())
+  provider  String
+  key       String
+  value     String
+  isSecret  Boolean  @default(true)
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, key])
+}

@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
-const { initializeTransaction } = require("../lib/paystack");
+const { getPaystackSecretKey, initializeTransaction } = require("../lib/paystack");
 const { sendPushNotification } = require("../lib/pushNotifications");
 
 const router = express.Router();
@@ -60,8 +60,10 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
  */
 router.post("/webhook", async (req, res) => {
   const signature = req.headers["x-paystack-signature"];
+  const paystackSecretKey = await getPaystackSecretKey();
+  if (!paystackSecretKey) return res.status(500).json({ error: "Paystack secret key is not configured" });
   const expectedSignature = crypto
-    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .createHmac("sha512", paystackSecretKey)
     .update(req.body) // raw Buffer
     .digest("hex");
 

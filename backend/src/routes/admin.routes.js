@@ -5,6 +5,7 @@ const prisma = require("../lib/prisma");
 const { requireAuth, requireRole, requirePermission } = require("../middleware/auth");
 const { logAction } = require("../lib/auditLog");
 const { broadcastContactUpdate, broadcastContactSettings } = require("../sockets/orderSocket");
+const { INTEGRATION_CATALOG, listIntegrationSettings, upsertIntegrationSetting } = require("../lib/integrationSettings");
 
 const router = express.Router();
 
@@ -172,6 +173,49 @@ router.get("/health", async (req, res) => {
     realtimeSockets: "Operational",
     lastCheckedAt: new Date().toISOString(),
   });
+});
+
+/**
+ * GET/PATCH /admin/integrations
+ * Super Admin controlled API key vault. Values are masked when read.
+ */
+router.get("/integrations", async (req, res) => {
+  try {
+    res.json(await listIntegrationSettings());
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load integration settings" });
+  }
+});
+
+router.patch("/integrations", async (req, res) => {
+  try {
+    const { provider, key, value } = req.body;
+    if (!provider || !key) return res.status(400).json({ error: "Provider and key are required" });
+    const group = INTEGRATION_CATALOG.find((item) => item.provider === provider);
+    const setting = group?.settings.find((item) => item.key === key);
+    if (!setting) return res.status(400).json({ error: "Unknown integration setting" });
+    if (!value || String(value).includes("••••")) {
+      return res.status(400).json({ error: "Paste a new value before saving" });
+    }
+
+    const updated = await upsertIntegrationSetting({
+      provider,
+      key,
+      value,
+      isSecret: !!setting.secret,
+      updatedBy: req.user.email || req.user.id,
+    });
+
+    await logAction(req, {
+      action: "Updated integration API setting",
+      targetType: "IntegrationSetting",
+      targetId: updated.id,
+      targetLabel: `${provider}.${key}`,
+    });
+    res.json(await listIntegrationSettings());
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to update integration setting" });
+  }
 });
 
 /**

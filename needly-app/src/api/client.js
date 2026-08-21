@@ -357,6 +357,8 @@ export const SuperAdminAPI = {
   liveOps: () => request("/admin/live-operations").catch(() => null),
   liveOperations: () => request("/admin/live-operations").catch(() => null),
   health: () => request("/admin/health").catch(() => null),
+  integrations: () => request("/admin/integrations").catch(() => []),
+  updateIntegration: ({ provider, key, value }) => request("/admin/integrations", { method: "PATCH", body: { provider, key, value } }),
   roles: () => request("/admin/roles").catch(() => []),
   createRole: (data) => request("/admin/roles", { method: "POST", body: data }),
   permissions: () => request("/admin/permissions").catch(() => []),

@@ -1,12 +1,20 @@
 const axios = require("axios");
+const { getIntegrationValue } = require("./integrationSettings");
 
-const paystack = axios.create({
-  baseURL: "https://api.paystack.co",
-  headers: {
-    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-    "Content-Type": "application/json",
-  },
-});
+async function paystackRequest(method, path, body) {
+  const secretKey = await getIntegrationValue("paystack", "PAYSTACK_SECRET_KEY");
+  if (!secretKey) throw new Error("Paystack secret key is not configured");
+  const { data } = await axios({
+    method,
+    url: `https://api.paystack.co${path}`,
+    data: body,
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+  return data;
+}
 
 /**
  * Starts a Paystack transaction. `amountNaira` is a whole-Naira integer
@@ -14,7 +22,7 @@ const paystack = axios.create({
  * multiply by 100 here — nowhere else in the codebase needs to think in kobo.
  */
 async function initializeTransaction({ email, amountNaira, reference, callbackUrl, metadata }) {
-  const { data } = await paystack.post("/transaction/initialize", {
+  const data = await paystackRequest("post", "/transaction/initialize", {
     email,
     amount: amountNaira * 100,
     reference,
@@ -25,7 +33,7 @@ async function initializeTransaction({ email, amountNaira, reference, callbackUr
 }
 
 async function verifyTransaction(reference) {
-  const { data } = await paystack.get(`/transaction/verify/${reference}`);
+  const data = await paystackRequest("get", `/transaction/verify/${reference}`);
   return data.data; // { status: 'success' | 'failed', amount, reference, ... }
 }
 
@@ -34,11 +42,15 @@ async function verifyTransaction(reference) {
  * amountNaira is optional — omit it to refund the full amount.
  */
 async function refundTransaction({ reference, amountNaira }) {
-  const { data } = await paystack.post("/refund", {
+  const data = await paystackRequest("post", "/refund", {
     transaction: reference,
     ...(amountNaira ? { amount: amountNaira * 100 } : {}),
   });
   return data.data;
 }
 
-module.exports = { initializeTransaction, verifyTransaction, refundTransaction };
+async function getPaystackSecretKey() {
+  return getIntegrationValue("paystack", "PAYSTACK_SECRET_KEY");
+}
+
+module.exports = { getPaystackSecretKey, initializeTransaction, verifyTransaction, refundTransaction };

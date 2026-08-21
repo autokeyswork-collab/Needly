@@ -278,6 +278,9 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [auditLogs, setAuditLogs] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [healthData, setHealthData] = useState(null);
+  const [integrations, setIntegrations] = useState([]);
+  const [integrationDrafts, setIntegrationDrafts] = useState({});
+  const [integrationSaving, setIntegrationSaving] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [editingItem, setEditingItem] = useState(null);
@@ -351,10 +354,10 @@ export default function SuperAdminControlCenter({ onLogout }) {
         SuperAdminAPI.commissions(), SuperAdminAPI.promotions(),
         SuperAdminAPI.tickets(), SuperAdminAPI.roles(), SuperAdminAPI.refunds(),
         PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), NotificationAPI.list(),
-        SuperAdminAPI.health(),
+        SuperAdminAPI.health(), SuperAdminAPI.integrations(),
       ]);
 
-      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl] = rs;
+      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig] = rs;
       if (st.status === "fulfilled" && st.value) setStats(st.value);
       if (lo.status === "fulfilled" && lo.value) setLiveOps(lo.value);
       if (cu.status === "fulfilled") setCustomers(Array.isArray(cu.value) ? cu.value : cu.value?.customers || []);
@@ -372,6 +375,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
       if (ad.status === "fulfilled") setAuditLogs(Array.isArray(ad.value) ? ad.value : []);
       if (nt.status === "fulfilled") setNotifications(Array.isArray(nt.value) ? nt.value : []);
       if (hl.status === "fulfilled" && hl.value) setHealthData(hl.value);
+      if (ig.status === "fulfilled") setIntegrations(Array.isArray(ig.value) ? ig.value : []);
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -392,6 +396,29 @@ export default function SuperAdminControlCenter({ onLogout }) {
       else if (type === "refund") await SuperAdminAPI.updateRefund(id, editForm);
       setEditingItem(null); setEditForm({}); reload(); fetchContacts(true);
     } catch (e) { alert("Save failed: " + e.message); }
+  };
+
+  const updateIntegrationDraft = (provider, key, value) => {
+    setIntegrationDrafts((current) => ({ ...current, [`${provider}.${key}`]: value }));
+  };
+
+  const saveIntegrationSetting = async (provider, key) => {
+    const draftKey = `${provider}.${key}`;
+    const value = integrationDrafts[draftKey];
+    if (!value || !String(value).trim()) {
+      alert("Paste the API value first.");
+      return;
+    }
+    try {
+      setIntegrationSaving(draftKey);
+      const updated = await SuperAdminAPI.updateIntegration({ provider, key, value });
+      setIntegrations(Array.isArray(updated) ? updated : []);
+      setIntegrationDrafts((current) => ({ ...current, [draftKey]: "" }));
+    } catch (err) {
+      alert("Save failed: " + (err.message || err));
+    } finally {
+      setIntegrationSaving(null);
+    }
   };
 
   const revenue = stats?.grossRevenue || 32560230;
@@ -487,6 +514,66 @@ export default function SuperAdminControlCenter({ onLogout }) {
       </View>
     );
   };
+
+  const IntegrationSettings = () => (
+    <ScrollView style={{ flex: 1, padding: 20 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <View>
+          <Text style={s.pageH}>Integrations & API Keys</Text>
+          <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Update Brevo, Paystack, Flutterwave and required platform API settings.</Text>
+        </View>
+        <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+      </View>
+
+      <View style={{ gap: 14 }}>
+        {(integrations.length ? integrations : []).map((group) => (
+          <View key={group.provider} style={s.integrationCard}>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={s.integrationTitle}>{group.label}</Text>
+              <Text style={s.integrationSub}>{group.description}</Text>
+            </View>
+
+            {group.settings.map((setting) => {
+              const draftKey = `${group.provider}.${setting.key}`;
+              const value = integrationDrafts[draftKey] ?? "";
+              const saving = integrationSaving === draftKey;
+              return (
+                <View key={setting.key} style={s.integrationRow}>
+                  <View style={{ flex: 1.15, minWidth: 170 }}>
+                    <Text style={s.integrationLabel}>{setting.label}</Text>
+                    <Text style={s.integrationMeta}>
+                      {setting.hasValue ? `Saved from ${setting.source} ${setting.maskedValue ? `(${setting.maskedValue})` : ""}` : "Missing"}
+                    </Text>
+                  </View>
+                  <TextInput
+                    value={value}
+                    onChangeText={(text) => updateIntegrationDraft(group.provider, setting.key, text)}
+                    placeholder={setting.placeholder || "Paste value"}
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!!setting.secret}
+                    style={s.integrationInput}
+                  />
+                  <Pressable
+                    onPress={() => saveIntegrationSetting(group.provider, setting.key)}
+                    disabled={saving}
+                    style={[s.integrationSave, saving && { opacity: 0.65 }]}
+                  >
+                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.integrationSaveText}>Save</Text>}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        ))}
+
+        {!integrations.length && (
+          <View style={s.panel}>
+            <Text style={{ color: TEXT_SUB, fontSize: 13 }}>No integration settings loaded yet. Tap Refresh or check the backend connection.</Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
 
   const Sidebar = () => (
     <View style={s.sidebar}>
@@ -1612,7 +1699,9 @@ export default function SuperAdminControlCenter({ onLogout }) {
       </ScrollView>
     );
 
-    if (activeTab === "admins" || activeTab === "roles" || activeTab === "integrations") return (
+    if (activeTab === "integrations") return <IntegrationSettings />;
+
+    if (activeTab === "admins" || activeTab === "roles") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <Text style={s.pageH}>Admins, Roles & API Integrations</Text>
@@ -1947,6 +2036,17 @@ const s = StyleSheet.create({
   editBtnTxt: { fontSize: 11, fontWeight: "700", color: PURPLE },
   btn: { backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
   btnTxt: { color: WHITE, fontWeight: "700", fontSize: 13 },
+  btnGhost: { borderWidth: 1, borderColor: BORDER, backgroundColor: WHITE, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  btnGhostTxt: { color: TEXT_MAIN, fontSize: 12, fontWeight: "800" },
+  integrationCard: { backgroundColor: WHITE, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: BORDER, shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  integrationTitle: { color: TEXT_MAIN, fontSize: 15, fontWeight: "900" },
+  integrationSub: { color: TEXT_SUB, fontSize: 11.5, lineHeight: 16, marginTop: 3 },
+  integrationRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#F3F4F6" },
+  integrationLabel: { color: TEXT_MAIN, fontSize: 12.5, fontWeight: "800" },
+  integrationMeta: { color: TEXT_SUB, fontSize: 10.5, marginTop: 3 },
+  integrationInput: { flex: 1.4, minWidth: 240, height: 38, borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 12, color: TEXT_MAIN, fontSize: 12, backgroundColor: "#FAFAFC", outlineStyle: "none" },
+  integrationSave: { width: 72, height: 38, borderRadius: 10, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center" },
+  integrationSaveText: { color: WHITE, fontSize: 12, fontWeight: "900" },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 },
   modalCard: { backgroundColor: WHITE, borderRadius: 20, padding: 24, width: "100%", maxWidth: 440 },
   modalTitle: { fontSize: 16, fontWeight: "900", color: TEXT_MAIN, marginBottom: 16 },

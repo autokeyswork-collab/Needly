@@ -1,25 +1,14 @@
 const nodemailer = require("nodemailer");
+const { getIntegrationValue } = require("./integrationSettings");
 
-let transporter;
-
-function configured() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-}
-
-function getTransporter() {
-  if (!configured()) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-  }
-  return transporter;
+async function getMailConfig() {
+  const host = await getIntegrationValue("brevo", "SMTP_HOST");
+  const port = await getIntegrationValue("brevo", "SMTP_PORT");
+  const secure = await getIntegrationValue("brevo", "SMTP_SECURE");
+  const user = await getIntegrationValue("brevo", "SMTP_USER");
+  const pass = await getIntegrationValue("brevo", "SMTP_PASS");
+  const from = await getIntegrationValue("brevo", "MAIL_FROM");
+  return { host, port, secure, user, pass, from };
 }
 
 function escapeHtml(value = "") {
@@ -36,12 +25,21 @@ function textToHtml(text = "") {
 }
 
 async function sendMail({ to, subject, text, html }) {
-  const tx = getTransporter();
-  if (!tx) {
+  const config = await getMailConfig();
+  if (!(config.host && config.user && config.pass)) {
     return { sent: false, reason: "SMTP is not configured" };
   }
 
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER;
+  const tx = nodemailer.createTransport({
+    host: config.host,
+    port: Number(config.port || 587),
+    secure: String(config.secure || "").toLowerCase() === "true",
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  });
+  const from = config.from || config.user;
   const info = await tx.sendMail({
     from,
     to,
