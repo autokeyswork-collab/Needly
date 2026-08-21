@@ -25,7 +25,30 @@ const ROLES = [
   { value: "RIDER", label: "Rider", sub: "Deliver & earn", icon: "motorbike", family: "MaterialCommunityIcons" },
 ];
 
-const VENDOR_CATEGORIES = ["Restaurant", "Supermarket", "Grills", "Local Market", "Pharmacy", "Stay & Dine"];
+const VENDOR_CATEGORIES = [
+  "Local Market",
+  "Restaurant",
+  "Supermarket",
+  "Pharmacy",
+  "Gas & Water",
+  "Home Services",
+  "Auto",
+  "Laundry",
+  "Beauty & Wellness",
+  "Electronics",
+  "Fashion",
+  "Bakery",
+  "Grills",
+  "Frozen Foods",
+  "Baby & Kids",
+  "Pet Supplies",
+  "Stationery",
+  "Tutors",
+  "Transport",
+  "Stay & Dine",
+  "Events & Rentals",
+  "Repairs",
+];
 const ABEOKUTA_AREAS = ["Oke-Ilewo", "Ibara", "Panseke", "Adigbe", "Kuto", "Ita Eko", "Lafenwa", "Hilltop"];
 const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
 const PURPLE = "#6F45E9";
@@ -64,7 +87,8 @@ export default function RegisterScreen({ navigation, route }) {
 
   // Vendor Fields
   const [businessName, setBusinessName] = useState("");
-  const [vendorCategory, setVendorCategory] = useState("Restaurant");
+  const [vendorCategory, setVendorCategory] = useState("Local Market");
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [vendorArea, setVendorArea] = useState("Oke-Ilewo");
   const [vendorAddress, setVendorAddress] = useState("");
 
@@ -394,16 +418,37 @@ export default function RegisterScreen({ navigation, route }) {
             </View>
 
             <Text style={styles.subLabel}>Store category</Text>
-            <View style={styles.chipRow}>
-              {VENDOR_CATEGORIES.map((cat) => (
-                <Pressable
-                  key={cat}
-                  onPress={() => setVendorCategory(cat)}
-                  style={[styles.chip, vendorCategory === cat && styles.chipActive]}
-                >
-                  <Text style={[styles.chipText, vendorCategory === cat && styles.chipTextActive]}>{cat}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.dropdownWrap}>
+              <Pressable
+                style={[styles.dropdownButton, categoryOpen && styles.dropdownButtonOpen]}
+                onPress={() => setCategoryOpen((open) => !open)}
+              >
+                <View style={styles.dropdownValueRow}>
+                  <MaterialCommunityIcons name="shape-outline" size={18} color={PURPLE} />
+                  <Text numberOfLines={1} style={styles.dropdownValue}>{vendorCategory}</Text>
+                </View>
+                <Ionicons name={categoryOpen ? "chevron-up" : "chevron-down"} size={18} color={MUTED} />
+              </Pressable>
+
+              {categoryOpen && (
+                <View style={styles.dropdownMenu}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                    {VENDOR_CATEGORIES.map((cat) => (
+                      <Pressable
+                        key={cat}
+                        onPress={() => {
+                          setVendorCategory(cat);
+                          setCategoryOpen(false);
+                        }}
+                        style={[styles.dropdownOption, vendorCategory === cat && styles.dropdownOptionActive]}
+                      >
+                        <Text style={[styles.dropdownOptionText, vendorCategory === cat && styles.dropdownOptionTextActive]}>{cat}</Text>
+                        {vendorCategory === cat && <Ionicons name="checkmark" size={16} color={PURPLE} />}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             <Text style={styles.subLabel}>Abeokuta area location</Text>
@@ -591,6 +636,44 @@ const styles = StyleSheet.create({
   specBox: { backgroundColor: "#F8F5FF", borderRadius: 18, borderWidth: 1, borderColor: "#E8E0FF", padding: 12, gap: 9 },
   specBoxTitle: { color: INK, fontSize: 12.5, fontWeight: "900" },
   subLabel: { color: INK, fontSize: 11.5, fontWeight: "800", marginTop: 2 },
+  dropdownWrap: { gap: 0 },
+  dropdownButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E8E0FF",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  dropdownButtonOpen: { borderColor: PURPLE, borderBottomLeftRadius: 10, borderBottomRightRadius: 10 },
+  dropdownValueRow: { flexDirection: "row", alignItems: "center", gap: 9, flex: 1, minWidth: 0 },
+  dropdownValue: { color: INK, fontSize: 13.5, fontWeight: "900", flex: 1 },
+  dropdownMenu: {
+    maxHeight: 240,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: "#E8E0FF",
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    overflow: "hidden",
+  },
+  dropdownOption: {
+    minHeight: 38,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#F1EDFF",
+  },
+  dropdownOptionActive: { backgroundColor: "#F8F5FF" },
+  dropdownOptionText: { color: INK, fontSize: 12.5, fontWeight: "800" },
+  dropdownOptionTextActive: { color: PURPLE, fontWeight: "900" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { backgroundColor: "#FFFFFF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "#E8E0FF" },
   chipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
