@@ -224,6 +224,17 @@ function signToken(user) {
   );
 }
 
+function normalizeSessionUserRole(user) {
+  if (!user) return user;
+  if (user.email === "superadmin@demo.needly") {
+    return { ...user, name: "Super Admin", role: "SUPER_ADMIN" };
+  }
+  if (user.role === "CUSTOMER" && user.vendor) return { ...user, role: "VENDOR" };
+  if (user.role === "CUSTOMER" && user.managedVendor) return { ...user, role: "MANAGER" };
+  if (user.role === "CUSTOMER" && user.rider) return { ...user, role: "RIDER" };
+  return user;
+}
+
 const IN_MEMORY_PENDING_USERS = [
   {
     id: "u-pending-v1",
@@ -528,6 +539,7 @@ router.post("/login", authLimiter, async (req, res) => {
           { phone: phoneClean },
         ],
       },
+      include: { vendor: true, managedVendor: true, rider: true },
     });
   } catch (err) {
     console.error("Login lookup failed", err);
@@ -573,9 +585,7 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(403).json({ error: "Your account is pending admin approval" });
   }
 
-  const loginUser = inputStr === "superadmin@demo.needly"
-    ? { ...user, name: "Super Admin", role: "SUPER_ADMIN" }
-    : user;
+  const loginUser = normalizeSessionUserRole(user);
   const token = signToken(loginUser);
   res.json({ token, user: { id: loginUser.id, name: loginUser.name, email: loginUser.email, role: loginUser.role } });
 });
@@ -587,9 +597,7 @@ router.get("/me", requireAuth, async (req, res) => {
     include: { vendor: true, managedVendor: true, rider: true },
   });
   if (!user) return res.status(404).json({ error: "User not found" });
-  const normalizedUser = user.email === "superadmin@demo.needly"
-    ? { ...user, name: "Super Admin", role: "SUPER_ADMIN" }
-    : user;
+  const normalizedUser = normalizeSessionUserRole(user);
   const { passwordHash, ...safeUser } = normalizedUser;
   res.json(safeUser);
 });

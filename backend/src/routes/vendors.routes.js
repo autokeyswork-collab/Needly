@@ -65,8 +65,8 @@ router.get("/admin/all", requireAuth, requireRole("SUPER_ADMIN", "ADMIN"), async
   try {
     const vendors = await prisma.vendor.findMany({
       include: {
-        owner:    { select: { id: true, name: true, email: true, phone: true, approved: true, suspendedAt: true } },
-        manager:  { select: { id: true, name: true, email: true, phone: true, approved: true, suspendedAt: true } },
+        owner:    { select: { id: true, name: true, email: true, phone: true, role: true, approved: true, suspendedAt: true } },
+        manager:  { select: { id: true, name: true, email: true, phone: true, role: true, approved: true, suspendedAt: true } },
         products: { select: { id: true, name: true, price: true, isAvailable: true } },
         reviews:  { select: { vendorRating: true } },
         _count:   { select: { orders: true, reviews: true, products: true } },
