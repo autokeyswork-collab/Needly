@@ -1,15 +1,42 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { COLORS, fmtNaira } from "../../theme/colors";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 import { useAuth } from "../../context/AuthContext";
 import { PaymentAPI } from "../../api/client";
 import LocationAutocomplete from "../../components/LocationAutocomplete";
+import Thumb from "../../components/Thumb";
+
+const PURPLE = "#642BE4";
+const PURPLE_DARK = "#24105F";
+const INK = "#11123A";
+const MUTED = "#747792";
+const LINE = "#EEEAF8";
+const SOFT = "#F8F5FF";
+const GREEN = "#059669";
+const RED = "#DC2626";
+
+async function reverseGeocode(latitude, longitude) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+      { headers: { "User-Agent": "NeedlyMarketplaceApp/1.0" } },
+    );
+    const data = await res.json();
+    return data?.display_name || "";
+  } catch (err) {
+    return "";
+  }
+}
 
 export default function CartScreen({ route, navigation }) {
-  const { vendorId, cart } = route.params;
+  const { vendorId, cart = {} } = route.params || {};
   const { vendors, placeOrder } = useOrders();
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
+  const shellWidth = Math.min(width, 430);
+  const sidePad = shellWidth < 370 ? 14 : 18;
   const vendor = vendors.find((v) => v.id === vendorId);
 
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -20,34 +47,44 @@ export default function CartScreen({ route, navigation }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  if (!vendor) return null;
+  const items = useMemo(() => {
+    if (!vendor) return [];
+    return (vendor.items || [])
+      .filter((item) => cart[item.id] > 0)
+      .map((item) => ({ ...item, qty: cart[item.id] }));
+  }, [cart, vendor]);
 
-  const items = vendor.items.filter((i) => cart[i.id] > 0).map((i) => ({ ...i, qty: cart[i.id] }));
-  const total = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && !submitting;
+  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
+  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && itemCount > 0 && !submitting;
 
   const useCurrentLocation = () => {
     setGeoLoading(true);
     setGeoError(null);
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGeoError("Location is not available in this browser/device.");
+      setGeoError("GPS is not available on this device or browser.");
       setGeoLoading(false);
       return;
     }
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setDeliveryLocation({
+      async (position) => {
+        const nextLocation = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
-        });
+        };
+        setDeliveryLocation(nextLocation);
+
+        const address = await reverseGeocode(nextLocation.latitude, nextLocation.longitude);
+        if (address) setDeliveryAddress(address);
         setGeoLoading(false);
       },
       (err) => {
-        setGeoError(err.message || "Could not get your location.");
+        setGeoError(err.message || "Could not get your GPS location.");
         setGeoLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
     );
   };
 
@@ -58,15 +95,11 @@ export default function CartScreen({ route, navigation }) {
     try {
       const id = await placeOrder(
         vendor.id,
-        items.map((i) => ({ productId: i.id, qty: i.qty, addOns: [] })),
+        items.map((item) => ({ productId: item.id, qty: item.qty, addOns: [] })),
         deliveryAddress.trim(),
         deliveryPhone.trim(),
         deliveryLocation,
       );
-      // The order existing isn't enough — nothing marks it paid until the
-      // customer actually completes checkout with Paystack. Without this
-      // call, the order sits created forever, invisible to the vendor,
-      // with no way for anyone to ever pay for it.
       const { authorizationUrl } = await PaymentAPI.initialize(id);
       await Linking.openURL(authorizationUrl);
       navigation.replace("Tracking", { orderId: id });
@@ -76,90 +109,208 @@ export default function CartScreen({ route, navigation }) {
     }
   };
 
+  if (!vendor) {
+    return (
+      <View style={styles.page}>
+        <View style={[styles.shell, styles.emptyShell]}>
+          <Text style={styles.emptyIcon}>🛒</Text>
+          <Text style={styles.emptyTitle}>Order not found</Text>
+          <Text style={styles.emptyText}>This basket is no longer available. Please choose a vendor again.</Text>
+          <Pressable style={styles.primarySmall} onPress={() => navigation.goBack()}>
+            <Text style={styles.primarySmallText}>Back to Browse</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.paper }} contentContainerStyle={{ padding: 16 }}>
-      <Text style={styles.title}>Your Order</Text>
-      {items.map((i) => (
-        <View key={i.id} style={styles.itemRow}>
-          <Text style={{ fontSize: 14 }}>{i.qty} {"\u00D7"} {i.name}</Text>
-          <Text style={{ fontSize: 14 }}>{fmtNaira(i.price * i.qty)}</Text>
-        </View>
-      ))}
-      <View style={styles.totalRow}>
-        <Text style={{ fontWeight: "700" }}>Total</Text>
-        <Text style={{ fontWeight: "700" }}>{fmtNaira(total)}</Text>
-      </View>
+    <View style={styles.page}>
+      <View style={styles.shell}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 128 }}>
+          <View style={[styles.header, { paddingHorizontal: sidePad }]}>
+            <Pressable style={styles.backCircle} onPress={() => navigation.goBack()}>
+              <Text style={styles.backIcon}>‹</Text>
+            </Pressable>
+            <View style={styles.headerTitleWrap}>
+              <Text style={styles.kicker}>CHECKOUT</Text>
+              <Text style={styles.title}>Your Order</Text>
+            </View>
+            <View style={styles.orderBadge}>
+              <FontAwesome name="shopping-bag" size={15} color={PURPLE} />
+              <Text style={styles.orderBadgeText}>{itemCount}</Text>
+            </View>
+          </View>
 
-      <Text style={styles.label}>DELIVERY ADDRESS</Text>
-      <LocationAutocomplete
-        value={deliveryAddress}
-        onChangeText={setDeliveryAddress}
-        onSelectLocation={(loc) => {
-          setDeliveryAddress(loc.address);
-          if (loc.latitude && loc.longitude) {
-            setDeliveryLocation({ latitude: loc.latitude, longitude: loc.longitude, accuracy: 10 });
-          }
-        }}
-        placeholder="Street, house/flat number, landmark"
-        containerStyle={{ marginBottom: 14 }}
-      />
-      <View style={styles.geoBox}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.geoTitle}>Geo location</Text>
-          <Text style={styles.geoText}>
-            {deliveryLocation
-              ? `${deliveryLocation.latitude.toFixed(5)}, ${deliveryLocation.longitude.toFixed(5)}${deliveryLocation.accuracy ? ` · ±${Math.round(deliveryLocation.accuracy)}m` : ""}`
-              : "Use GPS to help the rider find you faster."}
-          </Text>
-          {geoError && <Text style={styles.geoError}>{geoError}</Text>}
-        </View>
-        <Pressable onPress={useCurrentLocation} disabled={geoLoading} style={styles.geoBtn}>
-          <Text style={styles.geoBtnText}>{geoLoading ? "Locating..." : "Use GPS"}</Text>
-        </Pressable>
-      </View>
-      <Text style={styles.label}>PHONE NUMBER</Text>
-      <TextInput
-        value={deliveryPhone} onChangeText={setDeliveryPhone}
-        placeholder="For the rider to reach you"
-        keyboardType="phone-pad" style={styles.input}
-      />
-      {!deliveryAddress.trim() || !deliveryPhone.trim() ? (
-        <Text style={styles.hint}>Add a delivery address and phone number to place your order.</Text>
-      ) : null}
-      {error && <Text style={styles.error}>{error}</Text>}
+          <View style={[styles.vendorCard, { marginHorizontal: sidePad }]}>
+            <Thumb emoji={vendor.emoji} category={vendor.category} size={50} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={styles.vendorName}>{vendor.name}</Text>
+              <Text numberOfLines={1} style={styles.vendorMeta}>★ {vendor.rating || 4.5} · {vendor.area || "Abeokuta"} · {vendor.eta || "20-35 min"}</Text>
+            </View>
+          </View>
 
-      <Pressable style={[styles.checkoutBtn, !canCheckout && { opacity: 0.5 }]} onPress={checkout} disabled={!canCheckout}>
-        {submitting ? <ActivityIndicator color="#fff" /> : (
-          <Text style={styles.checkoutBtnText}>Continue to payment {"\u00B7"} {fmtNaira(total)}</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+          <View style={[styles.sectionCard, { marginHorizontal: sidePad }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Basket</Text>
+              <Text style={styles.sectionHint}>{itemCount} item{itemCount === 1 ? "" : "s"}</Text>
+            </View>
+
+            {items.length > 0 ? (
+              items.map((item) => (
+                <View key={item.id} style={styles.itemRow}>
+                  <View style={styles.qtyPill}>
+                    <Text style={styles.qtyPillText}>{item.qty}x</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={2} style={styles.itemName}>{item.name}</Text>
+                    <Text style={styles.itemUnit}>{fmtNaira(item.price)} each</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>{fmtNaira(item.price * item.qty)}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyBasket}>No products in this order yet.</Text>
+            )}
+
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>{fmtNaira(total)}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.sectionCard, { marginHorizontal: sidePad }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Delivery Details</Text>
+              <Text style={styles.sectionHint}>Use GPS for faster delivery</Text>
+            </View>
+
+            <Pressable onPress={useCurrentLocation} disabled={geoLoading} style={[styles.gpsCard, deliveryLocation && styles.gpsCardActive]}>
+              <View style={[styles.gpsIcon, deliveryLocation && styles.gpsIconActive]}>
+                {geoLoading ? <ActivityIndicator size="small" color={PURPLE} /> : <Ionicons name="navigate" size={21} color={deliveryLocation ? "#fff" : PURPLE} />}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.gpsTitle}>{deliveryLocation ? "GPS location attached" : "Use my current GPS location"}</Text>
+                <Text numberOfLines={2} style={styles.gpsText}>
+                  {deliveryLocation
+                    ? `${deliveryLocation.latitude.toFixed(5)}, ${deliveryLocation.longitude.toFixed(5)}${deliveryLocation.accuracy ? ` · ±${Math.round(deliveryLocation.accuracy)}m` : ""}`
+                    : "Allow Needly to attach your exact drop-off point for the rider."}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={PURPLE} />
+            </Pressable>
+            {geoError && <Text style={styles.inlineError}>{geoError}</Text>}
+
+            <Text style={styles.label}>Delivery address</Text>
+            <LocationAutocomplete
+              value={deliveryAddress}
+              onChangeText={setDeliveryAddress}
+              onSelectLocation={(loc) => {
+                setDeliveryAddress(loc.address);
+                if (loc.latitude && loc.longitude) {
+                  setDeliveryLocation({ latitude: loc.latitude, longitude: loc.longitude, accuracy: 10 });
+                }
+              }}
+              placeholder="Street, house/flat number, landmark"
+              containerStyle={{ marginBottom: 14 }}
+              inputStyle={styles.locationInput}
+            />
+
+            <Text style={styles.label}>Phone number</Text>
+            <View style={styles.phoneWrap}>
+              <Ionicons name="call" size={17} color={PURPLE} />
+              <TextInput
+                value={deliveryPhone}
+                onChangeText={setDeliveryPhone}
+                placeholder="For the rider to reach you"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+                style={styles.phoneInput}
+              />
+            </View>
+          </View>
+
+          {(!deliveryAddress.trim() || !deliveryPhone.trim()) && (
+            <Text style={[styles.hint, { marginHorizontal: sidePad }]}>Add a delivery address and phone number to place your order.</Text>
+          )}
+          {error && <Text style={[styles.error, { marginHorizontal: sidePad }]}>{error}</Text>}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Pressable style={[styles.checkoutBtn, !canCheckout && styles.checkoutDisabled]} onPress={checkout} disabled={!canCheckout}>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <View>
+                  <Text style={styles.checkoutText}>Continue to payment</Text>
+                  <Text style={styles.checkoutSub}>{itemCount} item{itemCount === 1 ? "" : "s"} · GPS {deliveryLocation ? "attached" : "optional"}</Text>
+                </View>
+                <View style={styles.checkoutPrice}>
+                  <Text style={styles.checkoutPriceText}>{fmtNaira(total)}</Text>
+                  <FontAwesome name="arrow-right" size={13} color="#fff" />
+                </View>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontWeight: "800", fontSize: 19, color: COLORS.ink, marginBottom: 14 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  totalRow: {
-    flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1,
-    borderTopColor: COLORS.line, borderStyle: "dashed", paddingTop: 10, marginTop: 6, marginBottom: 20,
-  },
-  label: { fontSize: 11, color: COLORS.mute, letterSpacing: 0.3, marginBottom: 6 },
-  input: {
-    borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 12,
-    paddingVertical: 10, fontSize: 14, color: COLORS.ink, backgroundColor: COLORS.panel, marginBottom: 14,
-  },
-  geoBox: {
-    backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12,
-    padding: 12, marginTop: -4, marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 10,
-  },
-  geoTitle: { color: COLORS.ink, fontWeight: "700", fontSize: 13.5 },
-  geoText: { color: COLORS.mute, fontSize: 12.5, lineHeight: 17, marginTop: 2 },
-  geoError: { color: COLORS.chili, fontSize: 12, marginTop: 4 },
-  geoBtn: { backgroundColor: COLORS.mango, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 8 },
-  geoBtnText: { color: "#fff", fontWeight: "700", fontSize: 12.5 },
-  hint: { fontSize: 12, color: COLORS.chili, marginBottom: 10 },
-  error: { fontSize: 12.5, color: COLORS.chili, marginBottom: 10 },
-  checkoutBtn: { backgroundColor: COLORS.ink, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 6 },
-  checkoutBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  page: { flex: 1, backgroundColor: "#ECE8F7", alignItems: "center" },
+  shell: { flex: 1, width: "100%", maxWidth: 430, backgroundColor: "#FFFFFF", overflow: "hidden" },
+  emptyShell: { alignItems: "center", justifyContent: "center", padding: 24 },
+  header: { backgroundColor: PURPLE_DARK, paddingTop: 18, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, flexDirection: "row", alignItems: "center", gap: 12 },
+  backCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.94)", alignItems: "center", justifyContent: "center" },
+  backIcon: { color: PURPLE, fontSize: 31, lineHeight: 32, fontWeight: "900" },
+  headerTitleWrap: { flex: 1, minWidth: 0 },
+  kicker: { color: "rgba(255,255,255,0.72)", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  title: { color: "#FFFFFF", fontSize: 25, fontWeight: "900", marginTop: 2 },
+  orderBadge: { minWidth: 50, height: 40, borderRadius: 20, backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 12 },
+  orderBadgeText: { color: INK, fontSize: 13, fontWeight: "900" },
+  vendorCard: { marginTop: -14, backgroundColor: "#FFFFFF", borderRadius: 22, borderWidth: 1, borderColor: LINE, padding: 12, flexDirection: "row", alignItems: "center", gap: 11, shadowColor: PURPLE, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+  vendorName: { color: INK, fontSize: 16, fontWeight: "900" },
+  vendorMeta: { color: MUTED, fontSize: 12, fontWeight: "800", marginTop: 3 },
+  sectionCard: { marginTop: 16, backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: LINE, padding: 14, shadowColor: PURPLE, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
+  sectionTitle: { color: INK, fontSize: 17, fontWeight: "900" },
+  sectionHint: { color: MUTED, fontSize: 11.5, fontWeight: "800", flexShrink: 1, textAlign: "right" },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1ECFB" },
+  qtyPill: { width: 36, height: 30, borderRadius: 15, backgroundColor: SOFT, alignItems: "center", justifyContent: "center" },
+  qtyPillText: { color: PURPLE, fontSize: 12, fontWeight: "900" },
+  itemName: { color: INK, fontSize: 14, lineHeight: 18, fontWeight: "900" },
+  itemUnit: { color: MUTED, fontSize: 11.5, fontWeight: "700", marginTop: 3 },
+  itemPrice: { color: INK, fontSize: 13.5, fontWeight: "900" },
+  emptyBasket: { color: MUTED, fontSize: 13, fontWeight: "800", paddingVertical: 12 },
+  totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 14 },
+  totalLabel: { color: INK, fontSize: 15, fontWeight: "900" },
+  totalValue: { color: GREEN, fontSize: 19, fontWeight: "900" },
+  gpsCard: { backgroundColor: SOFT, borderRadius: 20, borderWidth: 1, borderColor: "#E6DDFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  gpsCardActive: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" },
+  gpsIcon: { width: 42, height: 42, borderRadius: 16, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  gpsIconActive: { backgroundColor: GREEN },
+  gpsTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
+  gpsText: { color: MUTED, fontSize: 11.8, lineHeight: 16, fontWeight: "700", marginTop: 2 },
+  inlineError: { color: RED, fontSize: 12, fontWeight: "800", marginBottom: 10 },
+  label: { color: INK, fontSize: 12.5, fontWeight: "900", marginBottom: 7, marginTop: 2 },
+  locationInput: { fontSize: 13.5, fontWeight: "700" },
+  phoneWrap: { height: 50, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  phoneInput: { flex: 1, color: INK, fontSize: 14, fontWeight: "700", outlineStyle: "none" },
+  hint: { color: RED, fontSize: 12, fontWeight: "800", marginTop: 12 },
+  error: { color: RED, fontSize: 12.5, fontWeight: "800", marginTop: 8 },
+  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "#F1ECFB" },
+  checkoutBtn: { minHeight: 64, borderRadius: 24, backgroundColor: PURPLE, paddingHorizontal: 17, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", shadowColor: PURPLE, shadowOpacity: 0.32, shadowRadius: 16, shadowOffset: { width: 0, height: 9 }, elevation: 5 },
+  checkoutDisabled: { opacity: 0.45 },
+  checkoutText: { color: "#FFFFFF", fontSize: 14.5, fontWeight: "900" },
+  checkoutSub: { color: "rgba(255,255,255,0.76)", fontSize: 11.5, fontWeight: "800", marginTop: 2 },
+  checkoutPrice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
+  checkoutPriceText: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "900" },
+  emptyIcon: { fontSize: 38, marginBottom: 8 },
+  emptyTitle: { color: INK, fontSize: 17, fontWeight: "900", textAlign: "center" },
+  emptyText: { color: MUTED, fontSize: 13, lineHeight: 18, textAlign: "center", marginTop: 5, marginBottom: 14 },
+  primarySmall: { backgroundColor: PURPLE, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 11 },
+  primarySmallText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
 });
