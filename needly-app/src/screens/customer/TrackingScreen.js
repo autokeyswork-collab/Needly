@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { STATUS_FLOW, STATUS_LABEL } from "../../data/mockData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
@@ -11,7 +11,7 @@ const DISPUTE_REASONS = ["Missing item", "Wrong item", "Item damaged", "Arrived 
 const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
 
 function hasCoords(point) {
-  return Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude);
+  return Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude));
 }
 
 function lerp(start, end, ratio) {
@@ -72,6 +72,9 @@ function TrackingMap({ order }) {
     minLng: Math.min(...lngs, ABEOKUTA_CENTER.longitude) - 0.012,
     maxLng: Math.max(...lngs, ABEOKUTA_CENTER.longitude) + 0.012,
   };
+  const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+  const center = points.customer || points.vendor || ABEOKUTA_CENTER;
+  const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${center.latitude},${center.longitude}`;
   const riderDistance = points.rider && points.customer ? distanceKm(points.rider, points.customer) : null;
   const destination = points.customer || points.vendor;
 
@@ -94,7 +97,20 @@ function TrackingMap({ order }) {
         </Pressable>
       </View>
       <View style={styles.mapCanvas}>
-        <View style={[styles.routeLine, { transform: [{ rotate: "-18deg" }] }]} />
+        {Platform.OS === "web" ? (
+          React.createElement("iframe", {
+            title: "Needly order tracking map",
+            src: osmUrl,
+            loading: "lazy",
+            referrerPolicy: "no-referrer-when-downgrade",
+            style: { border: 0, width: "100%", height: "100%" },
+          })
+        ) : (
+          <Pressable onPress={openDirections} style={styles.nativeMapFallback}>
+            <Text style={styles.nativeMapTitle}>Open real map</Text>
+            <Text style={styles.nativeMapSub}>View this delivery route in your map app.</Text>
+          </Pressable>
+        )}
         <View style={[styles.marker, styles.vendorMarker, markerPosition(points.vendor, bounds)]}><Text style={styles.markerText}>V</Text></View>
         {points.customer && (
           <View style={[styles.marker, styles.customerMarker, markerPosition(points.customer, bounds)]}><Text style={styles.markerText}>C</Text></View>
@@ -102,6 +118,7 @@ function TrackingMap({ order }) {
         {points.rider && (
           <View style={[styles.marker, styles.riderMarker, markerPosition(points.rider, bounds)]}><Text style={styles.markerText}>R</Text></View>
         )}
+        <View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap</Text></View>
       </View>
       <View style={styles.geoRows}>
         <Text style={styles.geoLine}>Vendor: {order.vendor.address || order.vendor.area} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
@@ -345,6 +362,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.line, position: "relative",
   },
   routeLine: { position: "absolute", left: "16%", right: "14%", top: "50%", height: 3, backgroundColor: COLORS.mango, opacity: 0.75 },
+  nativeMapFallback: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18, backgroundColor: "#E5F2E9" },
+  nativeMapTitle: { color: COLORS.ink, fontSize: 14, fontWeight: "800" },
+  nativeMapSub: { color: COLORS.mute, fontSize: 12, textAlign: "center", marginTop: 4 },
   marker: {
     position: "absolute", width: 34, height: 34, marginLeft: -17, marginTop: -17,
     borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff",
@@ -353,6 +373,8 @@ const styles = StyleSheet.create({
   customerMarker: { backgroundColor: COLORS.green },
   riderMarker: { backgroundColor: COLORS.mango },
   markerText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  mapAttribution: { position: "absolute", right: 7, bottom: 6, backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
+  mapAttributionText: { color: COLORS.mute, fontSize: 9, fontWeight: "700" },
   geoRows: { gap: 4, marginTop: 10 },
   geoLine: { color: COLORS.mute, fontSize: 12.2, lineHeight: 17 },
   riderBox: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, marginBottom: 16 },

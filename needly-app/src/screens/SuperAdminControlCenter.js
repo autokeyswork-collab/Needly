@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, Modal, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, Modal, ActivityIndicator, Platform, Linking } from "react-native";
 import { SuperAdminAPI, AuthAPI, VendorAPI, RiderAPI, PayoutAPI, DisputeAPI, AuditAPI, BookingAPI, NotificationAPI } from "../api/client";
 import { connectSocket, getSocket, subscribeToRealtimeEvents } from "../api/socket";
 import AdminScreen from "./AdminScreen";
@@ -87,6 +87,33 @@ const categoryIcon = (category = "") => {
   if (c.includes("home") || c.includes("clean")) return "🧹";
   return "📦";
 };
+const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
+const hasCoords = (item = {}) => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude));
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const mapBoundsFor = (points = []) => {
+  const valid = points.filter((point) => hasCoords(point));
+  if (!valid.length) {
+    return {
+      minLat: ABEOKUTA_CENTER.latitude - 0.05,
+      maxLat: ABEOKUTA_CENTER.latitude + 0.05,
+      minLng: ABEOKUTA_CENTER.longitude - 0.06,
+      maxLng: ABEOKUTA_CENTER.longitude + 0.06,
+    };
+  }
+  const lats = valid.map((point) => Number(point.latitude));
+  const lngs = valid.map((point) => Number(point.longitude));
+  const minLat = Math.min(...lats, ABEOKUTA_CENTER.latitude);
+  const maxLat = Math.max(...lats, ABEOKUTA_CENTER.latitude);
+  const minLng = Math.min(...lngs, ABEOKUTA_CENTER.longitude);
+  const maxLng = Math.max(...lngs, ABEOKUTA_CENTER.longitude);
+  const latPad = Math.max((maxLat - minLat) * 0.35, 0.018);
+  const lngPad = Math.max((maxLng - minLng) * 0.35, 0.02);
+  return { minLat: minLat - latPad, maxLat: maxLat + latPad, minLng: minLng - lngPad, maxLng: maxLng + lngPad };
+};
+const projectMapPoint = (point, bounds) => ({
+  left: `${clamp(((Number(point.longitude) - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100, 4, 96)}%`,
+  top: `${clamp((1 - ((Number(point.latitude) - bounds.minLat) / (bounds.maxLat - bounds.minLat))) * 100, 5, 95)}%`,
+});
 
 const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
@@ -235,60 +262,125 @@ function RevenueChart({ width = 280, height = 110 }) {
   );
 }
 
-function LiveMapGraphic() {
+function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 205 }) {
+  const points = [
+    ...vendors.filter(hasCoords).slice(0, 18).map((vendor) => ({
+      id: `vendor-${vendor.id}`,
+      latitude: vendor.latitude,
+      longitude: vendor.longitude,
+      label: vendor.name || "Vendor",
+      type: "Vendor",
+      icon: "🏪",
+      color: AMBER,
+    })),
+    ...riders.filter(hasCoords).slice(0, 18).map((rider) => ({
+      id: `rider-${rider.id}`,
+      latitude: rider.latitude,
+      longitude: rider.longitude,
+      label: rider.user?.name || rider.name || "Rider",
+      type: rider.isOnline ? "Online Rider" : "Rider",
+      icon: "🛵",
+      color: rider.isOnline ? GREEN : TEXT_SUB,
+    })),
+    ...orders.flatMap((order) => {
+      const orderId = order.orderNumber || order.reference || order.id || "Order";
+      const deliveryPoint = Number.isFinite(Number(order.deliveryLatitude)) && Number.isFinite(Number(order.deliveryLongitude))
+        ? [{
+            id: `delivery-${order.id}`,
+            latitude: order.deliveryLatitude,
+            longitude: order.deliveryLongitude,
+            label: order.deliveryAddress || orderId,
+            type: "Delivery",
+            icon: "📍",
+            color: RED,
+          }]
+        : [];
+      const vendorPoint = hasCoords(order.vendor || {})
+        ? [{
+            id: `order-vendor-${order.id}`,
+            latitude: order.vendor.latitude,
+            longitude: order.vendor.longitude,
+            label: order.vendor.name || "Vendor",
+            type: "Order Vendor",
+            icon: "🏪",
+            color: AMBER,
+          }]
+        : [];
+      const riderPoint = hasCoords(order.rider || {})
+        ? [{
+            id: `order-rider-${order.id}`,
+            latitude: order.rider.latitude,
+            longitude: order.rider.longitude,
+            label: order.rider.user?.name || "Assigned Rider",
+            type: statusLabel(order.status),
+            icon: "🛵",
+            color: BLUE,
+          }]
+        : [];
+      return [...deliveryPoint, ...vendorPoint, ...riderPoint];
+    }),
+  ];
+  const displayPoints = points.length ? points : [{
+    id: "abeokuta-center",
+    latitude: ABEOKUTA_CENTER.latitude,
+    longitude: ABEOKUTA_CENTER.longitude,
+    label: "Abeokuta",
+    type: "Needly Service Area",
+    icon: "📍",
+    color: PURPLE,
+  }];
+  const bounds = mapBoundsFor(displayPoints);
+  const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+  const center = displayPoints[0] || ABEOKUTA_CENTER;
+  const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${Number(center.latitude)},${Number(center.longitude)}`;
+  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${Number(center.latitude)}&mlon=${Number(center.longitude)}#map=13/${Number(center.latitude)}/${Number(center.longitude)}`;
+  const openMap = () => Linking.openURL(fullMapUrl).catch(() => {});
+
   return (
-    <View style={{ width: "100%", height: 185, borderRadius: 12, overflow: "hidden", backgroundColor: "#F0F4F8", borderWidth: 1, borderColor: BORDER, position: "relative" }}>
-      <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-        <rect width="400" height="200" fill="#EAF0F6" />
-        <path d="M 0,90 Q 150,140 400,60" fill="none" stroke="#C5D9EB" strokeWidth="18" />
-        <path d="M 50,0 Q 120,100 220,200" fill="none" stroke="#FFFFFF" strokeWidth="8" />
-        <path d="M 0,150 Q 200,80 400,120" fill="none" stroke="#FFFFFF" strokeWidth="8" />
-        <path d="M 180,0 Q 200,120 380,200" fill="none" stroke="#FFFFFF" strokeWidth="6" />
-        <path d="M 80,40 L 320,160" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeDasharray="4 4" />
-        <path d="M 220,20 L 120,180" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeDasharray="4 4" />
-        <path d="M 140,130 Q 210,110 270,50" fill="none" stroke="#6F45E9" strokeWidth="4" />
-      </svg>
+    <View style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", backgroundColor: "#EAF0F6", borderWidth: 1, borderColor: BORDER, position: "relative" }}>
+      {Platform.OS === "web" ? (
+        React.createElement("iframe", {
+          title: "Needly live operations map",
+          src: osmUrl,
+          loading: "lazy",
+          referrerPolicy: "no-referrer-when-downgrade",
+          style: { border: 0, width: "100%", height: "100%", filter: "saturate(1.05) contrast(0.96)" },
+        })
+      ) : (
+        <Pressable onPress={openMap} style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 18 }}>
+          <Text style={{ color: TEXT_MAIN, fontWeight: "900", fontSize: 15 }}>Open real map</Text>
+          <Text style={{ color: TEXT_SUB, fontSize: 12, textAlign: "center", marginTop: 6 }}>View Needly live locations in OpenStreetMap.</Text>
+        </Pressable>
+      )}
 
-      <Text style={{ position: "absolute", top: 12, left: 16, fontSize: 11, fontWeight: "800", color: "#64748B" }}>Abeokuta</Text>
-      <Text style={{ position: "absolute", top: 18, right: 75, fontSize: 9, fontWeight: "700", color: "#94A3B8" }}>Obantoko</Text>
-      <Text style={{ position: "absolute", bottom: 12, right: 80, fontSize: 9, fontWeight: "700", color: "#94A3B8" }}>Oke-Mosan</Text>
-      <Text style={{ position: "absolute", bottom: 14, left: 90, fontSize: 9, fontWeight: "700", color: "#94A3B8" }}>Ibara</Text>
-
-      <View style={{ position: "absolute", top: 45, right: 125, width: 22, height: 22, borderRadius: 11, backgroundColor: GREEN, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: WHITE }}>
-        <Text style={{ fontSize: 10 }}>🛵</Text>
-      </View>
-      <View style={{ position: "absolute", top: 105, left: 205, width: 16, height: 16, borderRadius: 8, backgroundColor: AMBER, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: WHITE }}>
-        <Text style={{ fontSize: 8 }}>🏪</Text>
-      </View>
-      <View style={{ position: "absolute", bottom: 45, left: 135, width: 16, height: 16, borderRadius: 8, backgroundColor: RED, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: WHITE }}>
-        <Text style={{ fontSize: 8 }}>📍</Text>
-      </View>
-      <View style={{ position: "absolute", top: 65, left: 215, width: 18, height: 18, borderRadius: 9, backgroundColor: BLUE, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: WHITE }}>
-        <Text style={{ fontSize: 8 }}>🛵</Text>
-      </View>
-
-      <View style={{ position: "absolute", top: 12, left: 16, width: 175, backgroundColor: WHITE, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: BORDER, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: PURPLE_SOFT, justifyContent: "center", alignItems: "center" }}>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: PURPLE }}>AA</Text>
-            </View>
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: "800", color: TEXT_MAIN }}>Azeez A.</Text>
-              <Text style={{ fontSize: 9, color: AMBER, fontWeight: "700" }}>⭐ 5.0</Text>
+      {displayPoints.slice(0, 28).map((point) => {
+        const pos = projectMapPoint(point, bounds);
+        return (
+          <View key={point.id} style={[s.mapPinWrap, { left: pos.left, top: pos.top }]}>
+            <View style={[s.mapPin, { backgroundColor: point.color }]}>
+              <Text style={{ fontSize: 11 }}>{point.icon}</Text>
             </View>
           </View>
-          <Badge label="In Transit" color={PURPLE} bg={PURPLE_SOFT} />
+        );
+      })}
+
+      <View style={s.mapInfoCard}>
+        <Text style={s.mapInfoTitle}>Real OpenStreetMap</Text>
+        <Text numberOfLines={1} style={s.mapInfoSub}>
+          {displayPoints.length} live point(s) around Abeokuta
+        </Text>
+        <View style={{ flexDirection: "row", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+          <Badge label={`${vendors.filter(hasCoords).length} Vendors`} color={AMBER} bg={AMBER_BG} />
+          <Badge label={`${riders.filter(hasCoords).length} Riders`} color={GREEN} bg={GREEN_BG} />
+          <Badge label={`${orders.filter((o) => Number.isFinite(Number(o.deliveryLatitude))).length} Deliveries`} color={RED} bg={RED_BG} />
         </View>
-        <Text style={{ fontSize: 9.5, fontWeight: "700", color: TEXT_MAIN, marginTop: 6 }}>Honda CB 125</Text>
-        <Text style={{ fontSize: 8.5, color: TEXT_SUB }}>Lagos Street, Abeokuta → Customer</Text>
-        <Text style={{ fontSize: 8.5, fontWeight: "700", color: GREEN, marginTop: 2 }}>5 mins (1.2 km away)</Text>
       </View>
 
-      <View style={{ position: "absolute", top: 12, right: 12, backgroundColor: WHITE, borderRadius: 8, borderWidth: 1, borderColor: BORDER }}>
-        <View style={{ paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: BORDER }}><Text style={{ fontSize: 12, fontWeight: "800", color: TEXT_MAIN }}>+</Text></View>
-        <View style={{ paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: BORDER }}><Text style={{ fontSize: 12, fontWeight: "800", color: TEXT_MAIN }}>-</Text></View>
-        <View style={{ paddingHorizontal: 8, paddingVertical: 5 }}><Text style={{ fontSize: 10, fontWeight: "800", color: TEXT_MAIN }}>⛶</Text></View>
+      <Pressable onPress={openMap} style={s.mapOpenBtn}>
+        <Text style={s.mapOpenText}>Open full map</Text>
+      </Pressable>
+      <View style={s.mapAttribution}>
+        <Text style={s.mapAttributionText}>© OpenStreetMap</Text>
       </View>
     </View>
   );
@@ -1005,7 +1097,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
               <Text style={s.panelTitle}>Live Map & Rider Tracking</Text>
               <Text style={{ color: PURPLE, fontSize: 12, fontWeight: "600" }}>View full map</Text>
             </View>
-            <LiveMapGraphic />
+            <LiveMapGraphic orders={liveOrdersRaw} riders={riders} vendors={vendors} />
           </View>
 
           {/* System Alerts Panel */}
@@ -1335,7 +1427,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
                 <Badge label={`${fmtN(activeOpsList.length)} Delivery Routes`} color={PURPLE} bg={PURPLE_SOFT} />
               </View>
             </View>
-            <LiveMapGraphic />
+            <LiveMapGraphic orders={activeOpsList.map((op) => liveOrdersRaw.find((order) => (order.orderNumber || order.reference || order.id) === op.id)).filter(Boolean)} riders={riders} vendors={vendors} height={245} />
           </View>
 
           {/* Live Stream Table */}
@@ -2627,6 +2719,15 @@ const s = StyleSheet.create({
   sheetCellBold: { color: TEXT_MAIN, fontWeight: "800" },
   sheetActionHead: { width: 112, textAlign: "center", borderRightWidth: 0 },
   sheetActionCell: { width: 112, paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center", alignItems: "center" },
+  mapPinWrap: { position: "absolute", width: 28, height: 28, marginLeft: -14, marginTop: -28, alignItems: "center", justifyContent: "center" },
+  mapPin: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: WHITE, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  mapInfoCard: { position: "absolute", top: 10, left: 10, maxWidth: 245, backgroundColor: "rgba(255,255,255,0.94)", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: BORDER, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  mapInfoTitle: { color: TEXT_MAIN, fontSize: 12, fontWeight: "900" },
+  mapInfoSub: { color: TEXT_SUB, fontSize: 10.5, marginTop: 2 },
+  mapOpenBtn: { position: "absolute", right: 10, top: 10, backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  mapOpenText: { color: WHITE, fontSize: 11, fontWeight: "900" },
+  mapAttribution: { position: "absolute", right: 8, bottom: 6, backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
+  mapAttributionText: { color: TEXT_SUB, fontSize: 9, fontWeight: "700" },
   editBtn: { backgroundColor: PURPLE_SOFT, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   editBtnTxt: { fontSize: 11, fontWeight: "700", color: PURPLE },
   btn: { backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
