@@ -340,10 +340,12 @@ router.post("/register", authLimiter, async (req, res) => {
 
     if (requiresApproval) {
       rememberPendingUser(user, { vendor, rider });
-      await queuePendingApprovalMail({ user, vendor, rider });
       const onboardingPayment = targetRole === "VENDOR"
         ? await createVendorOnboardingPayment({ user, vendor })
         : null;
+      queuePendingApprovalMail({ user, vendor, rider }).catch((err) => {
+        console.error("Pending approval email failed", err.message);
+      });
       return res.json({
         pendingApproval: true,
         onboardingPayment,
@@ -471,10 +473,12 @@ router.post("/social", authLimiter, async (req, res) => {
 
       if (requiresApproval) {
         rememberPendingUser(user, { vendor: result.vendor, rider: result.rider });
-        await queuePendingApprovalMail({ user, vendor: result.vendor, rider: result.rider, provider: providerName });
         const onboardingPayment = targetRole === "VENDOR"
           ? await createVendorOnboardingPayment({ user, vendor: result.vendor })
           : null;
+        queuePendingApprovalMail({ user, vendor: result.vendor, rider: result.rider, provider: providerName }).catch((err) => {
+          console.error("Pending approval email failed", err.message);
+        });
         return res.json({
           pendingApproval: true,
           onboardingPayment,

@@ -276,13 +276,24 @@ export default function RegisterScreen({ navigation, route }) {
                 This one-time fee is required before Admin activates your vendor store.
               </Text>
               {onboardingPayment?.authorizationUrl ? (
-                <Pressable
-                  style={styles.payOnboardingBtn}
-                  onPress={() => Linking.openURL(onboardingPayment.authorizationUrl)}
-                >
-                  <Text style={styles.payOnboardingBtnText}>Pay Onboarding Fee</Text>
-                  <FontAwesome name="arrow-right" size={13} color="#fff" />
-                </Pressable>
+                <>
+                  <Pressable
+                    style={styles.payOnboardingBtn}
+                    onPress={() => Linking.openURL(onboardingPayment.authorizationUrl)}
+                  >
+                    <Text style={styles.payOnboardingBtnText}>
+                      Pay ₦{Number(onboardingPayment.amount || VENDOR_ONBOARDING_FEE).toLocaleString()} with {onboardingPayment.gateway === "flutterwave" ? "Flutterwave" : "Payment Link"}
+                    </Text>
+                    <FontAwesome name="arrow-right" size={13} color="#fff" />
+                  </Pressable>
+                  <Pressable
+                    style={styles.paymentLinkBox}
+                    onPress={() => Linking.openURL(onboardingPayment.authorizationUrl)}
+                  >
+                    <Text style={styles.paymentLinkLabel}>Payment link</Text>
+                    <Text numberOfLines={2} style={styles.paymentLinkText}>{onboardingPayment.authorizationUrl}</Text>
+                  </Pressable>
+                </>
               ) : (
                 <Text style={styles.onboardingFeeWarning}>
                   Payment link is not ready yet. Contact Needly Admin if this remains unavailable.
@@ -792,6 +803,9 @@ const styles = StyleSheet.create({
   onboardingFeeText: { color: "#10113D", fontSize: 12.5, fontWeight: "700", textAlign: "center", lineHeight: 18, marginTop: 4 },
   payOnboardingBtn: { marginTop: 12, backgroundColor: "#6F45E9", borderRadius: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   payOnboardingBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  paymentLinkBox: { marginTop: 10, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDD6FE", paddingHorizontal: 12, paddingVertical: 10 },
+  paymentLinkLabel: { color: "#747792", fontSize: 10.5, fontWeight: "900", textTransform: "uppercase", marginBottom: 4 },
+  paymentLinkText: { color: "#6F45E9", fontSize: 11.5, fontWeight: "800", lineHeight: 16 },
   onboardingFeeWarning: { color: "#B45309", fontSize: 11.5, fontWeight: "800", textAlign: "center", marginTop: 10, lineHeight: 16 },
   pendingBadge: { backgroundColor: "#FEF3C7", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: "#FDE68A", marginBottom: 20 },
   pendingBadgeText: { color: "#92400E", fontSize: 12, fontWeight: "800" },
