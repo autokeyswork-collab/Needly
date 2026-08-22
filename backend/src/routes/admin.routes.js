@@ -230,7 +230,7 @@ router.patch("/integrations", async (req, res) => {
  */
 router.get("/roles", async (req, res) => {
   try {
-    const roles = await prisma.role.findMany({
+    const roles = await prisma.appRole.findMany({
       include: {
         rolePermissions: { include: { permission: true } },
         _count: { select: { userRoles: true } },
@@ -239,14 +239,7 @@ router.get("/roles", async (req, res) => {
     });
     res.json(roles);
   } catch (err) {
-    // Fallback default roles
-    res.json([
-      { id: "r-superadmin", name: "Super Admin", isSystem: true, description: "Full platform control" },
-      { id: "r-admin", name: "Admin", isSystem: true, description: "Standard management access" },
-      { id: "r-ops", name: "Operations Manager", isSystem: false, description: "Logistics and dispatch supervisor" },
-      { id: "r-support", name: "Customer Support", isSystem: false, description: "Disputes and customer tickets" },
-      { id: "r-finance", name: "Finance Manager", isSystem: false, description: "Payouts, revenue, and billing" },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load roles" });
   }
 });
 
@@ -255,7 +248,7 @@ router.post("/roles", async (req, res) => {
   if (!name) return res.status(400).json({ error: "Role name is required" });
 
   try {
-    const role = await prisma.role.create({
+    const role = await prisma.appRole.create({
       data: {
         name: name.trim(),
         description: description ? description.trim() : null,
@@ -286,25 +279,7 @@ router.get("/permissions", async (req, res) => {
     const perms = await prisma.permission.findMany({ orderBy: { module: "asc" } });
     res.json(perms);
   } catch (err) {
-    // Fallback permission list
-    const defaults = [
-      { id: "p1", code: "customers.view", module: "Customers", description: "View customer profiles" },
-      { id: "p2", code: "customers.edit", module: "Customers", description: "Edit customer accounts" },
-      { id: "p3", code: "customers.suspend", module: "Customers", description: "Suspend customer accounts" },
-      { id: "p4", code: "vendors.view", module: "Vendors", description: "View vendor roster" },
-      { id: "p5", code: "vendors.approve", module: "Vendors", description: "Approve vendor applications" },
-      { id: "p6", code: "vendors.suspend", module: "Vendors", description: "Suspend vendors" },
-      { id: "p7", code: "riders.view", module: "Riders", description: "View dispatch fleet" },
-      { id: "p8", code: "riders.assign", module: "Riders", description: "Assign orders to riders" },
-      { id: "p9", code: "orders.view", module: "Orders", description: "View orders feed" },
-      { id: "p10", code: "orders.cancel", module: "Orders", description: "Cancel orders" },
-      { id: "p11", code: "payments.view", module: "Finance", description: "View payments" },
-      { id: "p12", code: "payments.refund", module: "Finance", description: "Issue refunds" },
-      { id: "p13", code: "payouts.approve", module: "Finance", description: "Approve payouts" },
-      { id: "p14", code: "roles.create", module: "RBAC", description: "Create roles" },
-      { id: "p15", code: "system.settings", module: "Settings", description: "Manage system configuration" },
-    ];
-    res.json(defaults);
+    res.status(500).json({ error: err.message || "Failed to load permissions" });
   }
 });
 
@@ -317,12 +292,7 @@ router.get("/locations", async (req, res) => {
     const locations = await prisma.location.findMany({ orderBy: { name: "asc" } });
     res.json(locations);
   } catch (err) {
-    res.json([
-      { id: "loc-1", name: "Abeokuta", type: "CITY", active: true, deliveryFee: 500, maxDistance: 25 },
-      { id: "loc-2", name: "Oke-Ilewo / Ibara Zone", type: "ZONE", active: true, deliveryFee: 450, maxDistance: 15 },
-      { id: "loc-3", name: "Panseke / Adigbe Zone", type: "ZONE", active: true, deliveryFee: 500, maxDistance: 15 },
-      { id: "loc-4", name: "Kuto / Ita Eko Zone", type: "ZONE", active: true, deliveryFee: 500, maxDistance: 15 },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load locations" });
   }
 });
 
@@ -355,12 +325,7 @@ router.get("/commissions", async (req, res) => {
     }
     res.json(rules);
   } catch (err) {
-    res.json([
-      { id: "comm-1", targetType: "GLOBAL", targetName: "Needly Platform Fee", ratePercent: 2.5, active: true },
-      { id: "comm-2", targetType: "CATEGORY", targetName: "Food & Bukas", ratePercent: 15.0, active: true },
-      { id: "comm-3", targetType: "CATEGORY", targetName: "Auto Services", ratePercent: 12.0, active: true },
-      { id: "comm-4", targetType: "VENDOR", targetName: "Mama Risi Kitchen", ratePercent: 8.0, active: true },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load commission rules" });
   }
 });
 
@@ -390,10 +355,7 @@ router.get("/promotions", async (req, res) => {
     const promos = await prisma.promotion.findMany({ orderBy: { createdAt: "desc" } });
     res.json(promos);
   } catch (err) {
-    res.json([
-      { id: "p-1", code: "NEEDLYFIRST", title: "First Order ₦500 Off", discountType: "FLAT", discountValue: 500, minSpend: 1500, usageLimit: 500, timesUsed: 84, active: true },
-      { id: "p-2", code: "ABEOKUTAFREE", title: "Free Delivery Abeokuta", discountType: "FLAT", discountValue: 500, minSpend: 2000, usageLimit: 200, timesUsed: 42, active: true },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load promotions" });
   }
 });
 
@@ -431,10 +393,7 @@ router.get("/tickets", async (req, res) => {
     });
     res.json(tickets);
   } catch (err) {
-    res.json([
-      { id: "t-1", ticketNumber: "TICK-9081", userRole: "CUSTOMER", category: "ORDER_DELAY", priority: "HIGH", status: "OPEN", subject: "Food delayed over 45 minutes", description: "Customer waiting at Panseke location.", createdAt: new Date().toISOString() },
-      { id: "t-2", ticketNumber: "TICK-9082", userRole: "VENDOR", category: "PAYOUT", priority: "MEDIUM", status: "ASSIGNED", subject: "Payout reference check", description: "Mama Risi requested payout verification.", createdAt: new Date().toISOString() },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load tickets" });
   }
 });
 
@@ -447,9 +406,7 @@ router.get("/refunds", async (req, res) => {
     const refunds = await prisma.refund.findMany({ orderBy: { createdAt: "desc" } });
     res.json(refunds);
   } catch (err) {
-    res.json([
-      { id: "ref-1", orderId: "ord-8812", customerId: "u-cust-1", amount: 2500, reason: "Order cancelled by vendor", requestedBy: "Customer", status: "APPROVED", createdAt: new Date().toISOString() },
-    ]);
+    res.status(500).json({ error: err.message || "Failed to load refunds" });
   }
 });
 
@@ -458,11 +415,277 @@ router.get("/refunds", async (req, res) => {
  * Fraud & Risk Alert Center
  */
 router.get("/fraud-alerts", async (req, res) => {
-  res.json([
-    { id: "fr-1", type: "Multiple Failed Payments", severity: "HIGH", actor: "user_4912@needly.local", detail: "3 failed payment attempts within 2 minutes", timestamp: new Date().toISOString() },
-    { id: "fr-2", type: "Repeated Cancellations", severity: "MEDIUM", actor: "Rider Tunde Bakare", detail: "2 cancelled pickups within 1 hour", timestamp: new Date().toISOString() },
-    { id: "fr-3", type: "Excessive Coupon Usage", severity: "LOW", actor: "user_881@gmail.com", detail: "Coupon NEEDLYFIRST attempted 4 times", timestamp: new Date().toISOString() },
-  ]);
+  try {
+    const failedPayments = await prisma.payment.findMany({
+      where: { status: "FAILED" },
+      include: { order: { include: { customer: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+    const cancelledOrders = await prisma.order.findMany({
+      where: { status: "CANCELLED" },
+      include: { customer: true, vendor: true },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    });
+    const alerts = [
+      ...failedPayments.map((payment) => ({
+        id: `pay-${payment.id}`,
+        type: "Failed Payment",
+        severity: "HIGH",
+        actor: payment.order?.customer?.email || payment.order?.customer?.name || "Customer",
+        detail: `Payment ${payment.reference} failed for order ${payment.orderId}`,
+        timestamp: payment.createdAt,
+      })),
+      ...cancelledOrders.map((order) => ({
+        id: `ord-${order.id}`,
+        type: "Cancelled Order",
+        severity: "MEDIUM",
+        actor: order.customer?.email || order.customer?.name || "Customer",
+        detail: `${order.vendor?.name || "Vendor"} order cancelled${order.cancelReason ? `: ${order.cancelReason}` : ""}`,
+        timestamp: order.updatedAt,
+      })),
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    res.json(alerts);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load fraud alerts" });
+  }
+});
+
+/**
+ * Admin-wide real data feeds for Super Admin menus.
+ */
+router.get("/orders", async (_req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        items: true,
+        customer: { select: { id: true, name: true, email: true, phone: true } },
+        vendor: true,
+        rider: { include: { user: { select: { id: true, name: true, phone: true, email: true } } } },
+        payment: true,
+        dispute: true,
+        review: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load orders" });
+  }
+});
+
+router.get("/bookings", async (_req, res) => {
+  try {
+    const bookings = await prisma.booking.findMany({
+      include: {
+        customer: { select: { id: true, name: true, email: true, phone: true } },
+        service: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load bookings" });
+  }
+});
+
+router.get("/products", async (_req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      include: { vendor: { select: { id: true, name: true, category: true, area: true } }, addOns: true },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+    });
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load products" });
+  }
+});
+
+router.get("/services", async (_req, res) => {
+  try {
+    const services = await prisma.service.findMany({
+      include: { _count: { select: { bookings: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    });
+    res.json(services);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load services" });
+  }
+});
+
+router.get("/categories", async (_req, res) => {
+  try {
+    const [vendorGroups, productGroups, serviceGroups] = await Promise.all([
+      prisma.vendor.groupBy({ by: ["category"], _count: { _all: true } }),
+      prisma.product.groupBy({ by: ["subcategory"], _count: { _all: true } }),
+      prisma.service.groupBy({ by: ["category"], _count: { _all: true } }),
+    ]);
+    const byName = new Map();
+    vendorGroups.forEach((row) => {
+      const name = row.category || "Marketplace";
+      byName.set(name, { id: `vendor-${name}`, name, vendors: row._count._all, products: 0, services: 0, source: "Vendor" });
+    });
+    productGroups.filter((row) => row.subcategory).forEach((row) => {
+      const name = row.subcategory;
+      const existing = byName.get(name) || { id: `product-${name}`, name, vendors: 0, products: 0, services: 0, source: "Product" };
+      existing.products += row._count._all;
+      byName.set(name, existing);
+    });
+    serviceGroups.forEach((row) => {
+      const name = row.category || "Services";
+      const existing = byName.get(name) || { id: `service-${name}`, name, vendors: 0, products: 0, services: 0, source: "Service" };
+      existing.services += row._count._all;
+      byName.set(name, existing);
+    });
+    res.json(Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name)));
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load categories" });
+  }
+});
+
+router.get("/admins", async (_req, res) => {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN", "MANAGER"] } },
+      select: { id: true, name: true, email: true, phone: true, role: true, approved: true, suspendedAt: true, createdAt: true, locationCity: true, locationState: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(admins);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load admins" });
+  }
+});
+
+router.get("/notifications", async (_req, res) => {
+  try {
+    const notifications = await prisma.notification.findMany({
+      include: { user: { select: { id: true, name: true, email: true, role: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load notifications" });
+  }
+});
+
+router.post("/notifications/broadcast", async (req, res) => {
+  try {
+    const { title, body, role = "ALL", type = "BROADCAST" } = req.body || {};
+    if (!title || !body) return res.status(400).json({ error: "Title and body are required" });
+    const users = await prisma.user.findMany({
+      where: role === "ALL" ? { approved: true } : { approved: true, role: String(role).toUpperCase() },
+      select: { id: true },
+    });
+    if (users.length) {
+      await prisma.notification.createMany({
+        data: users.map((user) => ({ userId: user.id, title: String(title).trim(), body: String(body).trim(), type })),
+      });
+    }
+    await logAction(req, { action: "Sent notification broadcast", targetType: "Notification", targetId: null, targetLabel: `${role}: ${title}` });
+    res.status(201).json({ ok: true, count: users.length });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to send broadcast" });
+  }
+});
+
+router.post("/users", async (req, res) => {
+  try {
+    const { name, email, phone, role = "CUSTOMER", password = "password123", approved = true } = req.body || {};
+    if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
+    const passwordHash = await bcrypt.hash(String(password), 10);
+    const user = await prisma.user.create({
+      data: {
+        name: String(name).trim(),
+        email: String(email).trim().toLowerCase(),
+        phone: phone ? String(phone).trim() : null,
+        role: String(role).toUpperCase(),
+        approved: !!approved,
+        passwordHash,
+      },
+      select: { id: true, name: true, email: true, phone: true, role: true, approved: true, createdAt: true },
+    });
+    await logAction(req, { action: "Created user by Super Admin", targetType: "User", targetId: user.id, targetLabel: user.email });
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to create user" });
+  }
+});
+
+router.post("/vendors", async (req, res) => {
+  try {
+    const { ownerEmail, ownerName, ownerPhone, password = "password123", name, area = "Abeokuta", category = "Local Market", eta = "20-35 min", address, emoji = "🏪", verified = true, isOpen = true } = req.body || {};
+    if (!name) return res.status(400).json({ error: "Vendor name is required" });
+    let owner = null;
+    if (ownerEmail) {
+      owner = await prisma.user.upsert({
+        where: { email: String(ownerEmail).trim().toLowerCase() },
+        update: { role: "VENDOR", approved: true, suspendedAt: null, ...(ownerName ? { name: ownerName } : {}), ...(ownerPhone ? { phone: ownerPhone } : {}) },
+        create: {
+          name: ownerName || name,
+          email: String(ownerEmail).trim().toLowerCase(),
+          phone: ownerPhone || null,
+          role: "VENDOR",
+          approved: true,
+          passwordHash: await bcrypt.hash(String(password), 10),
+        },
+      });
+    }
+    const vendor = await prisma.vendor.create({
+      data: {
+        ownerId: owner?.id || null,
+        name: String(name).trim(),
+        area,
+        category,
+        eta,
+        address: address || null,
+        emoji,
+        isOpen: !!isOpen,
+        verified: !!verified,
+        verifiedAt: verified ? new Date() : null,
+        onboardingFeeStatus: verified ? "WAIVED_BY_ADMIN" : "PENDING",
+      },
+      include: { owner: true, products: true },
+    });
+    await logAction(req, { action: "Created vendor by Super Admin", targetType: "Vendor", targetId: vendor.id, targetLabel: vendor.name });
+    res.status(201).json(vendor);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to create vendor" });
+  }
+});
+
+router.post("/riders", async (req, res) => {
+  try {
+    const { name, email, phone, password = "password123", zone = "Abeokuta", verified = true, isOnline = false } = req.body || {};
+    if (!name || !email) return res.status(400).json({ error: "Rider name and email are required" });
+    const user = await prisma.user.upsert({
+      where: { email: String(email).trim().toLowerCase() },
+      update: { name, phone: phone || null, role: "RIDER", approved: true, suspendedAt: null },
+      create: {
+        name,
+        email: String(email).trim().toLowerCase(),
+        phone: phone || null,
+        role: "RIDER",
+        approved: true,
+        passwordHash: await bcrypt.hash(String(password), 10),
+      },
+    });
+    const rider = await prisma.rider.upsert({
+      where: { userId: user.id },
+      update: { zone, verified: !!verified, verifiedAt: verified ? new Date() : null, isOnline: !!isOnline },
+      create: { userId: user.id, zone, verified: !!verified, verifiedAt: verified ? new Date() : null, isOnline: !!isOnline },
+      include: { user: true },
+    });
+    await logAction(req, { action: "Created rider by Super Admin", targetType: "Rider", targetId: rider.id, targetLabel: rider.user.name });
+    res.status(201).json(rider);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to create rider" });
+  }
 });
 
 /**

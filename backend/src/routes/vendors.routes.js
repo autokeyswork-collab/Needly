@@ -151,42 +151,8 @@ router.get("/admin/all", requireAuth, requireRole("SUPER_ADMIN", "ADMIN"), async
 
     res.json(formatted);
   } catch (err) {
-    // Rich demo fallback
-    res.json([
-      {
-        id: "v-1", name: "Mama Risi Kitchen", emoji: "🍽️", category: "Restaurant",
-        area: "Oke-Ilewo", eta: "20-30 min", isOpen: true, isActive: true, isSuspended: false,
-        verified: true, rating: 4.9, ordersCount: 148, totalRevenue: 742000,
-        avgOrderValue: 5013, reviewsCount: 62, productsCount: 24,
-        lastOrderAt: new Date(Date.now() - 1 * 3600000).toISOString(),
-        daysSinceOrder: 0, performanceTier: "Star",
-        contactName: "Risi Adeyemi", contactEmail: "risi@needly.com", contactPhone: "08031234567",
-        createdAt: new Date(Date.now() - 200 * 86400000).toISOString(),
-        topProducts: ["Jollof Rice", "Fried Fish", "Egusi Soup"],
-      },
-      {
-        id: "v-2", name: "GreenMart Supermarket", emoji: "🛒", category: "Supermarket",
-        area: "Panseke", eta: "15-25 min", isOpen: true, isActive: true, isSuspended: false,
-        verified: true, rating: 4.7, ordersCount: 89, totalRevenue: 445000,
-        avgOrderValue: 5000, reviewsCount: 38, productsCount: 110,
-        lastOrderAt: new Date(Date.now() - 3 * 3600000).toISOString(),
-        daysSinceOrder: 0, performanceTier: "Active",
-        contactName: "Femi Olatunji", contactEmail: "femi@greenmart.ng", contactPhone: "08055667788",
-        createdAt: new Date(Date.now() - 150 * 86400000).toISOString(),
-        topProducts: ["Indomie Noodles", "Peak Milk", "Golden Penny Flour"],
-      },
-      {
-        id: "v-3", name: "HealthPlus Pharmacy", emoji: "💊", category: "Pharmacy",
-        area: "Ita Eko", eta: "25-40 min", isOpen: false, isActive: true, isSuspended: false,
-        verified: false, rating: 4.3, ordersCount: 12, totalRevenue: 48000,
-        avgOrderValue: 4000, reviewsCount: 8, productsCount: 45,
-        lastOrderAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-        daysSinceOrder: 5, performanceTier: "Low",
-        contactName: "Ngozi Eze", contactEmail: "ngozi@healthplus.ng", contactPhone: "08099887766",
-        createdAt: new Date(Date.now() - 45 * 86400000).toISOString(),
-        topProducts: ["Paracetamol", "Vitamin C", "Amoxicillin"],
-      },
-    ]);
+    console.error("Admin vendor list failed:", err);
+    res.status(500).json({ error: err.message || "Failed to load vendor roster" });
   }
 });
 

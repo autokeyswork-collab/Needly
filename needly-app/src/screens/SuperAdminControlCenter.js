@@ -91,6 +91,11 @@ const categoryIcon = (category = "") => {
 const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
   vendor: [["Store Name", "name"], ["Category", "category"], ["Area", "area"], ["ETA", "eta"]],
+  rider: [["Zone", "zone"], ["Rating", "rating", true]],
+  product: [["Product Name", "name"], ["Price", "price", true], ["Emoji", "emoji"], ["Subcategory", "subcategory"], ["Stock", "stock", true]],
+  service: [["Service Name", "name"], ["Category", "category"], ["Price", "price", true], ["Description", "description"]],
+  order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
+  booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [["Promo Code", "code"], ["Title", "title"], ["Discount Value", "discountValue", true]],
@@ -294,16 +299,22 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [query, setQuery] = useState("");
   const [stats, setStats] = useState(null);
   const [liveOps, setLiveOps] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [riders, setRiders] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [services, setServices] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [commissions, setCommissions] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [roles, setRoles] = useState([]);
   const [refunds, setRefunds] = useState([]);
+  const [fraudAlerts, setFraudAlerts] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -318,10 +329,6 @@ export default function SuperAdminControlCenter({ onLogout }) {
 
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [showLocModal, setShowLocModal] = useState(false);
-  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-
   // ── Realtime Contacts state & Audit Deep-Dive ─────────────────────────────
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError]   = useState(null);
@@ -384,14 +391,16 @@ export default function SuperAdminControlCenter({ onLogout }) {
       const rs = await Promise.allSettled([
         SuperAdminAPI.stats(), SuperAdminAPI.liveOps(), AuthAPI.customers(),
         VendorAPI.adminList().catch(() => VendorAPI.list()),
-        RiderAPI.adminList(), BookingAPI.mine(), SuperAdminAPI.locations(),
+        RiderAPI.adminList(), SuperAdminAPI.bookings(), SuperAdminAPI.locations(),
         SuperAdminAPI.commissions(), SuperAdminAPI.promotions(),
         SuperAdminAPI.tickets(), SuperAdminAPI.roles(), SuperAdminAPI.refunds(),
-        PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), NotificationAPI.list(),
-        SuperAdminAPI.health(), SuperAdminAPI.integrations(),
+        PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), SuperAdminAPI.notifications(),
+        SuperAdminAPI.health(), SuperAdminAPI.integrations(), SuperAdminAPI.orders(),
+        SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.categories(), SuperAdminAPI.admins(),
+        SuperAdminAPI.fraudAlerts(),
       ]);
 
-      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig] = rs;
+      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig, od, pd, sv, cg, au, fa] = rs;
       if (st.status === "fulfilled" && st.value) setStats(st.value);
       if (lo.status === "fulfilled" && lo.value) setLiveOps(lo.value);
       if (cu.status === "fulfilled") setCustomers(Array.isArray(cu.value) ? cu.value : cu.value?.customers || []);
@@ -410,6 +419,12 @@ export default function SuperAdminControlCenter({ onLogout }) {
       if (nt.status === "fulfilled") setNotifications(Array.isArray(nt.value) ? nt.value : []);
       if (hl.status === "fulfilled" && hl.value) setHealthData(hl.value);
       if (ig.status === "fulfilled") setIntegrations(Array.isArray(ig.value) ? ig.value : []);
+      if (od.status === "fulfilled") setOrders(Array.isArray(od.value) ? od.value : []);
+      if (pd.status === "fulfilled") setProducts(Array.isArray(pd.value) ? pd.value : []);
+      if (sv.status === "fulfilled") setServices(Array.isArray(sv.value) ? sv.value : []);
+      if (cg.status === "fulfilled") setCategories(Array.isArray(cg.value) ? cg.value : []);
+      if (au.status === "fulfilled") setAdminUsers(Array.isArray(au.value) ? au.value : []);
+      if (fa.status === "fulfilled") setFraudAlerts(Array.isArray(fa.value) ? fa.value : []);
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -478,6 +493,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
       const { type, id } = editingItem;
       if (type === "user") await AuthAPI.editContact(id, editForm);
       else if (type === "vendor") await SuperAdminAPI.updateVendor(id, editForm);
+      else if (type === "rider") await SuperAdminAPI.updateRider(id, editForm);
+      else if (type === "product") await SuperAdminAPI.updateProduct(id, editForm);
+      else if (type === "service") await SuperAdminAPI.updateService(id, editForm);
+      else if (type === "order") await SuperAdminAPI.updateOrder(id, editForm);
+      else if (type === "booking") await SuperAdminAPI.updateBooking(id, editForm);
       else if (type === "location") await SuperAdminAPI.updateLocation(id, editForm);
       else if (type === "commission") await SuperAdminAPI.updateCommission(id, editForm);
       else if (type === "promotion") await SuperAdminAPI.updatePromotion(id, editForm);
@@ -489,6 +509,91 @@ export default function SuperAdminControlCenter({ onLogout }) {
 
   const updateIntegrationDraft = (provider, key, value) => {
     setIntegrationDrafts((current) => ({ ...current, [`${provider}.${key}`]: value }));
+  };
+
+  const addZone = async () => {
+    const name = prompt("Location / delivery zone name:", "Abeokuta");
+    if (!name) return;
+    const deliveryFee = prompt("Delivery fee in naira:", "500");
+    const maxDistance = prompt("Max delivery radius in km:", "25");
+    try {
+      await SuperAdminAPI.createLocation({ name, type: "ZONE", deliveryFee: Number(deliveryFee || 500), maxDistance: Number(maxDistance || 25) });
+      reload();
+    } catch (err) {
+      alert("Add zone failed: " + (err.message || err));
+    }
+  };
+
+  const addAdmin = async () => {
+    const email = prompt("Admin email:");
+    if (!email) return;
+    const name = prompt("Admin full name:", "Needly Admin");
+    try {
+      await SuperAdminAPI.createUser({ name: name || "Needly Admin", email, role: "ADMIN", password: "password123", approved: true });
+      alert("Admin created. Temporary password: password123");
+      reload();
+    } catch (err) {
+      alert("Add admin failed: " + (err.message || err));
+    }
+  };
+
+  const addVendor = async () => {
+    const name = prompt("Vendor / store name:");
+    if (!name) return;
+    const ownerEmail = prompt("Vendor owner email (optional):");
+    const category = prompt("Category:", "Local Market");
+    const area = prompt("Area:", "Abeokuta");
+    try {
+      await SuperAdminAPI.createVendor({ name, ownerEmail, ownerName: name, category, area, verified: true, isOpen: true });
+      alert("Vendor created. Owner temporary password is password123 if a new owner email was supplied.");
+      reload();
+    } catch (err) {
+      alert("Add vendor failed: " + (err.message || err));
+    }
+  };
+
+  const addRider = async () => {
+    const email = prompt("Rider email:");
+    if (!email) return;
+    const name = prompt("Rider full name:", "Needly Rider");
+    const zone = prompt("Rider zone:", "Abeokuta");
+    try {
+      await SuperAdminAPI.createRider({ name: name || "Needly Rider", email, zone, verified: true, password: "password123" });
+      alert("Rider created. Temporary password: password123");
+      reload();
+    } catch (err) {
+      alert("Add rider failed: " + (err.message || err));
+    }
+  };
+
+  const sendBroadcast = async () => {
+    const title = prompt("Broadcast title:", "Needly Update");
+    if (!title) return;
+    const body = prompt("Broadcast message:");
+    if (!body) return;
+    const role = prompt("Send to role: ALL, CUSTOMER, VENDOR, RIDER, ADMIN", "ALL");
+    try {
+      const result = await SuperAdminAPI.broadcastNotification({ title, body, role: (role || "ALL").toUpperCase() });
+      alert(`Broadcast sent to ${result.count || 0} user(s).`);
+      reload();
+    } catch (err) {
+      alert("Broadcast failed: " + (err.message || err));
+    }
+  };
+
+  const approveAllPendingPayouts = async () => {
+    const pending = payouts.filter((p) => String(p.status || "").toUpperCase() === "PENDING");
+    if (!pending.length) {
+      alert("No pending payouts to approve.");
+      return;
+    }
+    if (!confirm(`Mark ${pending.length} pending payout(s) as paid?`)) return;
+    try {
+      await Promise.all(pending.map((p) => PayoutAPI.markPaid(p.id, "Batch approved by Super Admin")));
+      reload();
+    } catch (err) {
+      alert("Batch payout failed: " + (err.message || err));
+    }
   };
 
   const saveIntegrationSetting = async (provider, key) => {
@@ -634,14 +739,14 @@ export default function SuperAdminControlCenter({ onLogout }) {
   ].slice(0, 5);
 
   const quickActions = [
-    { label: "Add Admin", icon: "👤" },
-    { label: "Add Vendor", icon: "🏪" },
-    { label: "Add Rider", icon: "🛵" },
-    { label: "Send Notification", icon: "🔔" },
-    { label: "Approve Payouts", icon: "💳" },
-    { label: "View Reports", icon: "📈" },
-    { label: "System Health", icon: "🫀" },
-    { label: "Audit Logs", icon: "📜" },
+    { label: "Add Admin", icon: "👤", action: addAdmin },
+    { label: "Add Vendor", icon: "🏪", action: addVendor },
+    { label: "Add Rider", icon: "🛵", action: addRider },
+    { label: "Send Notification", icon: "🔔", action: sendBroadcast },
+    { label: "Approve Payouts", icon: "💳", action: approveAllPendingPayouts },
+    { label: "View Reports", icon: "📈", action: () => setActiveTab("reports") },
+    { label: "System Health", icon: "🫀", action: () => setActiveTab("health") },
+    { label: "Audit Logs", icon: "📜", action: () => setActiveTab("auditLogs") },
   ];
 
   const GenericList = ({ items, type, fields, filterKey = "name" }) => {
@@ -664,9 +769,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
                 </Text>
               ))}
             </View>
-            <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
-              <Text style={s.editBtnTxt}>Edit ✏️</Text>
-            </Pressable>
+            {!!editFieldsMap[type]?.length && (
+              <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
+                <Text style={s.editBtnTxt}>Edit ✏️</Text>
+              </Pressable>
+            )}
           </View>
         ))}
       </View>
@@ -1015,7 +1122,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
             <Text style={{ fontSize: 14, fontWeight: "900", color: WHITE, marginBottom: 14 }}>Quick Actions</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {quickActions.map((qa) => (
-                <Pressable key={qa.label} style={{ width: "22%", alignItems: "center" }}>
+                <Pressable key={qa.label} onPress={qa.action} style={{ width: "22%", alignItems: "center" }}>
                   <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", marginBottom: 4 }}>
                     <Text style={{ fontSize: 18 }}>{qa.icon}</Text>
                   </View>
@@ -1029,8 +1136,94 @@ export default function SuperAdminControlCenter({ onLogout }) {
       </ScrollView>
     );
 
-    // Realtime Operations Command Center (liveOps, orders, bookings, riderOps, dispatch, riderFleet)
-    if (activeTab === "liveOps" || activeTab === "orders" || activeTab === "bookings" || activeTab === "riderOps" || activeTab === "dispatch" || activeTab === "riderFleet") {
+    if (activeTab === "orders") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>All Orders Ledger</Text>
+          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+        </View>
+        <GenericList
+          items={orders.map((o) => ({
+            ...o,
+            customerName: o.customer?.name || "Customer",
+            vendorName: o.vendor?.name || "Vendor",
+            riderName: o.rider?.user?.name || "Unassigned",
+            totalFormatted: fmt(o.total),
+            paymentStatus: o.payment?.status || "PENDING",
+          }))}
+          type="order"
+          filterKey="id"
+          fields={[
+            { key: "id", bold: true },
+            { key: "customerName", label: "Customer" },
+            { key: "vendorName", label: "Vendor" },
+            { key: "riderName", label: "Rider" },
+            { key: "totalFormatted", label: "Total" },
+            { key: "status", label: "Status" },
+            { key: "paymentStatus", label: "Payment" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "bookings") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>All Bookings</Text>
+          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+        </View>
+        <GenericList
+          items={bookings.map((b) => ({
+            ...b,
+            customerName: b.customer?.name || "Customer",
+            serviceName: b.service?.name || b.providerName || "Service",
+            totalFormatted: fmt(b.total),
+          }))}
+          type="booking"
+          filterKey="providerName"
+          fields={[
+            { key: "providerName", bold: true },
+            { key: "customerName", label: "Customer" },
+            { key: "serviceName", label: "Service" },
+            { key: "totalFormatted", label: "Total" },
+            { key: "status", label: "Status" },
+            { key: "address", label: "Address" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "riderFleet") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>Rider Fleet</Text>
+          <Pressable onPress={addRider} style={s.btn}><Text style={s.btnTxt}>+ Add Rider</Text></Pressable>
+        </View>
+        <GenericList
+          items={riders.map((r) => ({
+            ...r,
+            name: r.user?.name || r.name || "Rider",
+            email: r.user?.email || "—",
+            phone: r.user?.phone || "—",
+            onlineLabel: r.isOnline ? "Online" : "Offline",
+            verifiedLabel: r.verified ? "Verified" : "Unverified",
+          }))}
+          type="rider"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "zone", label: "Zone" },
+            { key: "phone", label: "Phone" },
+            { key: "onlineLabel", label: "Availability" },
+            { key: "verifiedLabel", label: "Verification" },
+            { key: "rating", label: "Rating" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    // Realtime Operations Command Center (liveOps, riderOps, dispatch)
+    if (activeTab === "liveOps" || activeTab === "riderOps" || activeTab === "dispatch") {
       const activeOpsList = liveOrdersData;
 
       return (
@@ -1496,7 +1689,99 @@ export default function SuperAdminControlCenter({ onLogout }) {
     }
 
 
-    if (activeTab === "vendors" || activeTab === "providers" || activeTab === "products" || activeTab === "services" || activeTab === "categories") {
+    if (activeTab === "products") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>All Products</Text>
+          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+        </View>
+        <GenericList
+          items={products.map((p) => ({
+            ...p,
+            vendorName: p.vendor?.name || "Vendor",
+            category: p.vendor?.category || p.subcategory || "Marketplace",
+            priceFormatted: fmt(p.price),
+            availableLabel: p.isAvailable ? "Available" : "Hidden",
+          }))}
+          type="product"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "vendorName", label: "Vendor" },
+            { key: "category", label: "Category" },
+            { key: "priceFormatted", label: "Price" },
+            { key: "stock", label: "Stock" },
+            { key: "availableLabel", label: "Status" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "services") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>All Services</Text>
+          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+        </View>
+        <GenericList
+          items={services.map((svc) => ({
+            ...svc,
+            priceFormatted: fmt(svc.price),
+            bookingsCount: svc._count?.bookings || 0,
+            availableLabel: svc.isAvailable ? "Available" : "Hidden",
+          }))}
+          type="service"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "category", label: "Category" },
+            { key: "priceFormatted", label: "Price" },
+            { key: "bookingsCount", label: "Bookings" },
+            { key: "availableLabel", label: "Status" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "categories") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>Marketplace Categories</Text>
+          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+        </View>
+        <GenericList
+          items={categories}
+          type="category"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "vendors", label: "Vendors" },
+            { key: "products", label: "Products" },
+            { key: "services", label: "Services" },
+            { key: "source", label: "Source" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "providers") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>Providers & Managers</Text>
+        <GenericList
+          items={adminUsers.filter((user) => user.role === "MANAGER")}
+          type="user"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "email", label: "Email" },
+            { key: "phone", label: "Phone" },
+            { key: "role", label: "Role" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "vendors") {
       const tierCfg = {
         Star:     { color: "#B45309", bg: "#FEF3C7", icon: "⭐" },
         Active:   { color: GREEN,    bg: GREEN_BG,   icon: "✅" },
@@ -1817,9 +2102,9 @@ export default function SuperAdminControlCenter({ onLogout }) {
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <Text style={s.pageH}>Locations & Delivery Zones</Text>
-          <Pressable onPress={() => setShowLocModal(true)} style={s.btn}><Text style={s.btnTxt}>+ Add Zone</Text></Pressable>
+          <Pressable onPress={addZone} style={s.btn}><Text style={s.btnTxt}>+ Add Zone</Text></Pressable>
         </View>
-        <GenericList items={locations.length > 0 ? locations : [{ id: 1, name: "Oke-Ilewo Zone", deliveryFee: "₦500", maxDistance: "8 km" }]} type="location" fields={[{ key: "name", bold: true }, { key: "deliveryFee", label: "Delivery Fee" }, { key: "maxDistance", label: "Radius" }]} />
+        <GenericList items={locations} type="location" fields={[{ key: "name", bold: true }, { key: "type", label: "Type" }, { key: "deliveryFee", label: "Delivery Fee" }, { key: "maxDistance", label: "Radius" }, { key: "active", label: "Active" }]} />
       </ScrollView>
     );
 
@@ -1834,16 +2119,25 @@ export default function SuperAdminControlCenter({ onLogout }) {
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <Text style={s.pageH}>Vendor & Rider Payout Approval Center</Text>
-          <Pressable onPress={() => alert("Batch payout approved for all pending accounts!")} style={s.btn}><Text style={s.btnTxt}>⚡ Batch Approve Payouts</Text></Pressable>
+          <Pressable onPress={approveAllPendingPayouts} style={s.btn}><Text style={s.btnTxt}>⚡ Batch Approve Payouts</Text></Pressable>
         </View>
-        <GenericList items={payouts.length > 0 ? payouts : [{ id: "PY-901", name: "Fresh Bites Restaurant", amount: "₦85,000", bank: "GTBank • 0123456789", status: "Pending Approval" }]} type="payout" fields={[{ key: "name", bold: true }, { key: "amount", label: "Payout Amount" }, { key: "bank", label: "Bank Account" }, { key: "status", label: "Status" }]} />
+        <GenericList
+          items={payouts.map((p) => ({
+            ...p,
+            name: p.rider?.user?.name || "Rider",
+            amountFormatted: fmt(p.amount),
+            bank: [p.rider?.bankName, p.rider?.bankAccountNumber].filter(Boolean).join(" • ") || "No bank on file",
+          }))}
+          type="payout"
+          fields={[{ key: "name", bold: true }, { key: "amountFormatted", label: "Payout Amount" }, { key: "bank", label: "Bank Account" }, { key: "status", label: "Status" }]}
+        />
       </ScrollView>
     );
 
     if (activeTab === "refunds") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <Text style={[s.pageH, { marginBottom: 16 }]}>Customer Refund Requests</Text>
-        <GenericList items={refunds.length > 0 ? refunds : [{ id: "RF-401", customer: "Sarah Johnson", orderId: "ORD-78289", amount: "₦8,900", reason: "Order Cancelled by Merchant", status: "Pending Review" }]} type="refund" fields={[{ key: "customer", bold: true }, { key: "amount", label: "Refund Amount" }, { key: "reason", label: "Reason" }, { key: "status", label: "Status" }]} />
+        <GenericList items={refunds.map((r) => ({ ...r, customer: r.customer?.name || r.customerId || "Customer", amountFormatted: fmt(r.amount) }))} type="refund" fields={[{ key: "customer", bold: true }, { key: "amountFormatted", label: "Refund Amount" }, { key: "reason", label: "Reason" }, { key: "status", label: "Status" }]} />
       </ScrollView>
     );
 
@@ -1853,7 +2147,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
         <Text style={{ color: TEXT_SUB, fontSize: 12, marginBottom: 16 }}>
           The active GLOBAL fee is added to every future customer checkout. Product subtotal stays as the vendor amount.
         </Text>
-        <GenericList items={commissions.length > 0 ? commissions : [{ id: 1, targetName: "Needly Platform Fee", targetType: "GLOBAL", ratePercent: 2.5, active: true }]} type="commission" fields={[{ key: "targetName", bold: true }, { key: "targetType", label: "Target" }, { key: "ratePercent", label: "Platform Fee %" }]} />
+        <GenericList items={commissions} type="commission" fields={[{ key: "targetName", bold: true }, { key: "targetType", label: "Target" }, { key: "ratePercent", label: "Platform Fee %" }, { key: "active", label: "Active" }]} />
       </ScrollView>
     );
 
@@ -1862,20 +2156,123 @@ export default function SuperAdminControlCenter({ onLogout }) {
     if (activeTab === "admins" || activeTab === "roles") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <Text style={s.pageH}>Admins, Roles & API Integrations</Text>
-          <Pressable onPress={() => setShowRoleModal(true)} style={s.btn}><Text style={s.btnTxt}>+ Create Role</Text></Pressable>
+          <Text style={s.pageH}>{activeTab === "admins" ? "Admin Users" : "Roles & Permissions"}</Text>
+          <Pressable onPress={activeTab === "admins" ? addAdmin : () => {
+            const name = prompt("Role name:");
+            if (!name) return;
+            const description = prompt("Role description:", "Custom admin role");
+            SuperAdminAPI.createRole({ name, description }).then(reload).catch((err) => alert("Create role failed: " + err.message));
+          }} style={s.btn}><Text style={s.btnTxt}>{activeTab === "admins" ? "+ Add Admin" : "+ Create Role"}</Text></Pressable>
         </View>
-        <GenericList items={roles.length > 0 ? roles : [{ id: 1, name: "Super Administrator", description: "Full root access across all platform modules", members: 3 }]} type="role" fields={[{ key: "name", bold: true }, { key: "description", label: "Permissions Summary" }]} />
+        {activeTab === "admins" ? (
+          <GenericList items={adminUsers} type="user" fields={[{ key: "name", bold: true }, { key: "email", label: "Email" }, { key: "phone", label: "Phone" }, { key: "role", label: "Role" }, { key: "approved", label: "Approved" }]} />
+        ) : (
+          <GenericList items={roles} type="role" fields={[{ key: "name", bold: true }, { key: "description", label: "Permissions Summary" }, { key: "isSystem", label: "System" }]} />
+        )}
       </ScrollView>
     );
 
-    if (activeTab === "tickets" || activeTab === "disputes" || activeTab === "notifications") return (
+    if (activeTab === "tickets") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <Text style={s.pageH}>Support Tickets & Push Notifications Desk</Text>
-          <Pressable onPress={() => setShowBroadcastModal(true)} style={s.btn}><Text style={s.btnTxt}>+ Send Push Broadcast</Text></Pressable>
+          <Text style={s.pageH}>Support Tickets</Text>
+          <Pressable onPress={sendBroadcast} style={s.btn}><Text style={s.btnTxt}>+ Send Push Broadcast</Text></Pressable>
         </View>
-        <GenericList items={tickets.length > 0 ? tickets : [{ id: "TK-101", subject: "Delayed Order Refund Enquiry", status: "Open", priority: "High", customer: "Michael John" }]} type="ticket" fields={[{ key: "subject", bold: true }, { key: "priority", label: "Priority" }, { key: "status", label: "Status" }]} />
+        <GenericList items={tickets.map((t) => ({ ...t, customer: t.user?.name || t.userId || "User" }))} type="ticket" fields={[{ key: "subject", bold: true }, { key: "customer", label: "User" }, { key: "priority", label: "Priority" }, { key: "status", label: "Status" }]} />
+      </ScrollView>
+    );
+
+    if (activeTab === "disputes") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>Reviews & Disputes</Text>
+        <GenericList items={disputes.map((d) => ({ ...d, vendorName: d.vendorName || d.vendor?.name || "Vendor", orderRef: d.orderId }))} type="dispute" fields={[{ key: "reason", bold: true }, { key: "vendorName", label: "Vendor" }, { key: "orderRef", label: "Order" }, { key: "status", label: "Status" }]} />
+      </ScrollView>
+    );
+
+    if (activeTab === "notifications") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <Text style={s.pageH}>Notifications & Broadcasts</Text>
+          <Pressable onPress={sendBroadcast} style={s.btn}><Text style={s.btnTxt}>+ Send Broadcast</Text></Pressable>
+        </View>
+        <GenericList items={notifications.map((n) => ({ ...n, recipient: n.user?.name || n.userId || "User", message: n.body || n.message }))} type="notification" fields={[{ key: "title", bold: true }, { key: "recipient", label: "Recipient" }, { key: "message", label: "Message" }, { key: "type", label: "Type" }, { key: "read", label: "Read" }]} />
+      </ScrollView>
+    );
+
+    if (activeTab === "auditLogs") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>Audit Logs</Text>
+        <GenericList
+          items={auditLogs.map((log) => ({
+            ...log,
+            actor: log.actorName || log.actorEmail || log.actorId,
+            target: log.targetLabel || log.targetType,
+            time: log.createdAt ? new Date(log.createdAt).toLocaleString() : "—",
+          }))}
+          type="audit"
+          fields={[{ key: "action", bold: true }, { key: "actor", label: "Actor" }, { key: "target", label: "Target" }, { key: "time", label: "Time" }]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "security") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>Security & Risk Alerts</Text>
+        <GenericList
+          items={fraudAlerts}
+          type="risk"
+          fields={[{ key: "type", bold: true }, { key: "severity", label: "Severity" }, { key: "actor", label: "Actor" }, { key: "detail", label: "Detail" }]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "health") {
+      const rows = healthData ? Object.entries(healthData)
+        .filter(([key]) => !["lastCheckedAt"].includes(key))
+        .map(([key, value]) => ({
+          id: key,
+          service: key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
+          status: value,
+        })) : [];
+      return (
+        <ScrollView style={{ flex: 1, padding: 20 }}>
+          <Text style={[s.pageH, { marginBottom: 16 }]}>System Health</Text>
+          <GenericList items={rows} type="health" fields={[{ key: "service", bold: true }, { key: "status", label: "Status" }]} />
+        </ScrollView>
+      );
+    }
+
+    if (activeTab === "analytics" || activeTab === "reports") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>{activeTab === "analytics" ? "Analytics" : "Reports"}</Text>
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
+          <KpiCard icon="₦" bg="#F3E8FF" label="Gross Revenue" value={fmt(revenue)} change={stats?.comparisons?.thisMonthVsLastMonth || "0%"} up />
+          <KpiCard icon="📦" bg="#E0F2FE" label="Orders" value={fmtN(totalOrderHistory)} change={stats?.comparisons?.thisWeekVsLastWeek || "0%"} up />
+          <KpiCard icon="👥" bg="#EDE9FF" label="Customers" value={fmtN(totalCust)} change={stats?.comparisons?.todayVsYesterday || "0%"} up />
+          <KpiCard icon="🏪" bg="#FFEDD5" label="Vendors" value={fmtN(totalVend)} change="live" up />
+        </View>
+        <View style={s.panel}>
+          <PH title="Category Performance" />
+          <GenericList items={topCategories} type="category" fields={[{ key: "name", bold: true }, { key: "orders", label: "Count" }, { key: "amount", label: "Revenue" }]} />
+        </View>
+      </ScrollView>
+    );
+
+    if (activeTab === "settings") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <Text style={[s.pageH, { marginBottom: 16 }]}>Settings</Text>
+        <View style={s.panel}>
+          <Text style={s.panelTitle}>Super Admin Controls</Text>
+          <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 6, marginBottom: 14 }}>
+            Manage operational settings from the dedicated menus. API keys live in Integrations, fees live in Platform Fee, and zones live in Locations.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <Pressable onPress={() => setActiveTab("integrations")} style={s.btn}><Text style={s.btnTxt}>Integrations</Text></Pressable>
+            <Pressable onPress={() => setActiveTab("commissions")} style={s.btn}><Text style={s.btnTxt}>Platform Fee</Text></Pressable>
+            <Pressable onPress={() => setActiveTab("locations")} style={s.btn}><Text style={s.btnTxt}>Locations</Text></Pressable>
+            <Pressable onPress={sendBroadcast} style={s.btn}><Text style={s.btnTxt}>Broadcast</Text></Pressable>
+          </View>
+        </View>
       </ScrollView>
     );
 
@@ -1885,19 +2282,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <Text style={[s.pageH, { marginBottom: 16 }]}>{tabObj.label || "System Administration"}</Text>
         <View style={s.panel}>
-          {[
-            ["API Gateway", "Operational", GREEN],
-            ["Database Core", "Operational", GREEN],
-            ["Storage Service", "Operational", GREEN],
-            ["Real-Time Sockets", "Operational", GREEN],
-            ["SMS Gateway", "Degraded", AMBER],
-            ["Payment Gateway", "Operational", GREEN],
-          ].map(([svc, stat, color]) => (
-            <View key={svc} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER }}>
-              <Text style={{ fontSize: 13, color: TEXT_MAIN, fontWeight: "700" }}>{svc}</Text>
-              <Badge label={stat} color={color} bg={color + "22"} />
-            </View>
-          ))}
+          <Text style={{ color: TEXT_SUB, fontSize: 13 }}>This menu is connected but has no records to display yet.</Text>
         </View>
       </ScrollView>
     );
