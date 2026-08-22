@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+flutterwave-keys.txt
 
 # Logs and caches
 *.log
