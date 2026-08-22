@@ -128,6 +128,8 @@ export default function AdminScreen() {
     setVendorProfileDraft({
       name: v.name, category: v.category, area: v.area, eta: v.eta,
       contactName: v.owner?.name || v.manager?.name || "", contactPhone: v.owner?.phone || v.manager?.phone || "",
+      bankName: v.bankName || "", bankAccountNumber: v.bankAccountNumber || "", bankAccountName: v.bankAccountName || "",
+      bankAccountLocked: !!v.bankAccountLocked,
     });
     setVendorVerificationDraft({
       businessRegNumber: v.businessRegNumber || "", ownerIdType: v.ownerIdType || "", ownerIdNumber: v.ownerIdNumber || "",
@@ -147,7 +149,16 @@ export default function AdminScreen() {
   const saveVendorProfile = async (v) => {
     setSavingVendorProfile(true);
     try {
-      await VendorAPI.adminEditProfile(v.id, { name: vendorProfileDraft.name, category: vendorProfileDraft.category, area: vendorProfileDraft.area, eta: vendorProfileDraft.eta });
+      await VendorAPI.adminEditProfile(v.id, {
+        name: vendorProfileDraft.name,
+        category: vendorProfileDraft.category,
+        area: vendorProfileDraft.area,
+        eta: vendorProfileDraft.eta,
+        bankName: vendorProfileDraft.bankName,
+        bankAccountNumber: vendorProfileDraft.bankAccountNumber,
+        bankAccountName: vendorProfileDraft.bankAccountName,
+        bankAccountLocked: vendorProfileDraft.bankAccountLocked,
+      });
       const contactId = v.owner?.id || v.manager?.id;
       if (contactId) await AuthAPI.editContact(contactId, { name: vendorProfileDraft.contactName, phone: vendorProfileDraft.contactPhone });
       await Promise.all([loadVendorRoster(), loadAuditLog()]);
@@ -606,6 +617,35 @@ export default function AdminScreen() {
                           placeholder="Area Location"
                           style={styles.miniInput}
                         />
+                        <Text style={styles.editCardTitle}>DIRECT PAYMENT ACCOUNT</Text>
+                        <TextInput
+                          value={vendorProfileDraft.bankName}
+                          onChangeText={(t) => setVendorProfileDraft((d) => ({ ...d, bankName: t }))}
+                          placeholder="Bank name"
+                          style={styles.miniInput}
+                        />
+                        <TextInput
+                          value={vendorProfileDraft.bankAccountNumber}
+                          onChangeText={(t) => setVendorProfileDraft((d) => ({ ...d, bankAccountNumber: t.replace(/[^0-9]/g, "") }))}
+                          placeholder="Account number"
+                          keyboardType="numeric"
+                          maxLength={10}
+                          style={styles.miniInput}
+                        />
+                        <TextInput
+                          value={vendorProfileDraft.bankAccountName}
+                          onChangeText={(t) => setVendorProfileDraft((d) => ({ ...d, bankAccountName: t }))}
+                          placeholder="Account name"
+                          style={styles.miniInput}
+                        />
+                        <Pressable
+                          onPress={() => setVendorProfileDraft((d) => ({ ...d, bankAccountLocked: !d.bankAccountLocked }))}
+                          style={[styles.lockToggle, vendorProfileDraft.bankAccountLocked && styles.lockToggleActive]}
+                        >
+                          <Text style={[styles.lockToggleText, vendorProfileDraft.bankAccountLocked && styles.lockToggleTextActive]}>
+                            {vendorProfileDraft.bankAccountLocked ? "🔒 Account locked" : "🔓 Account unlocked"}
+                          </Text>
+                        </Pressable>
                         <Pressable onPress={() => saveVendorProfile(v)} disabled={savingVendorProfile} style={styles.saveBtn}>
                           <Text style={styles.saveBtnText}>{savingVendorProfile ? "Saving…" : "Save Profile Updates"}</Text>
                         </Pressable>
@@ -854,6 +894,10 @@ const styles = StyleSheet.create({
   editCard: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", gap: 8 },
   editCardTitle: { fontSize: 10, fontWeight: "900", color: "#64748B", letterSpacing: 0.5 },
   miniInput: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, backgroundColor: "#ffffff", color: DARK_NAVY },
+  lockToggle: { borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#F8FAFC", borderRadius: 12, paddingVertical: 10, alignItems: "center" },
+  lockToggleActive: { borderColor: "#C4B5FD", backgroundColor: "#F4EDFF" },
+  lockToggleText: { color: "#64748B", fontSize: 12, fontWeight: "900" },
+  lockToggleTextActive: { color: PURPLE },
   saveBtn: { backgroundColor: PURPLE, borderRadius: 12, paddingVertical: 10, alignItems: "center" },
   saveBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 12.5 },
 

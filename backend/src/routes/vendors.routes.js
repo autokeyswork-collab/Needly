@@ -141,6 +141,11 @@ router.get("/admin/all", requireAuth, requireRole("SUPER_ADMIN", "ADMIN"), async
         daysSinceOrder,
         performanceTier,
         topProducts:     (v.products || []).slice(0, 3).map(p => p.name),
+        bankName:        v.bankName || null,
+        bankAccountNumber: v.bankAccountNumber || null,
+        bankAccountName: v.bankAccountName || null,
+        bankAccountLocked: !!v.bankAccountLocked,
+        bankAccountLockedAt: v.bankAccountLockedAt || null,
       };
     });
 
@@ -218,7 +223,7 @@ async function assertOwnsVendor(req, res, next) {
   if (!vendor) return res.status(404).json({ error: "Vendor not found" });
   const isOwner = vendor.ownerId === req.user.id;
   const isManager = vendor.managerId === req.user.id;
-  if (!isOwner && !isManager && req.user.role !== "ADMIN") {
+  if (!isOwner && !isManager && req.user.role !== "ADMIN" && req.user.role !== "SUPER_ADMIN") {
     return res.status(403).json({ error: "You don't manage this store" });
   }
   req.vendor = vendor;
@@ -230,6 +235,44 @@ router.patch("/:id/open", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN")
   const updated = await prisma.vendor.update({
     where: { id: req.params.id },
     data: { isOpen: !req.vendor.isOpen },
+  });
+  res.json(updated);
+});
+
+/** PATCH /vendors/:id/bank-account — set vendor direct-payment account. */
+router.patch("/:id/bank-account", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
+  const { bankName, bankAccountNumber, bankAccountName, bankAccountLocked } = req.body;
+  const isAdmin = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
+  const cleanBankName = String(bankName || "").trim();
+  const cleanAccountNumber = String(bankAccountNumber || "").replace(/\D/g, "").trim();
+  const cleanAccountName = String(bankAccountName || "").trim();
+
+  if (!cleanBankName || !cleanAccountNumber || !cleanAccountName) {
+    return res.status(400).json({ error: "Bank name, account number, and account name are required" });
+  }
+  if (cleanAccountNumber.length < 10) {
+    return res.status(400).json({ error: "Enter a valid account number" });
+  }
+  if (req.vendor.bankAccountLocked && !isAdmin) {
+    return res.status(403).json({ error: "This bank account is locked. Contact Admin to change it." });
+  }
+
+  const shouldLock = isAdmin ? bankAccountLocked !== false : true;
+  const updated = await prisma.vendor.update({
+    where: { id: req.vendor.id },
+    data: {
+      bankName: cleanBankName,
+      bankAccountNumber: cleanAccountNumber,
+      bankAccountName: cleanAccountName,
+      bankAccountLocked: shouldLock,
+      bankAccountLockedAt: shouldLock ? (req.vendor.bankAccountLockedAt || new Date()) : null,
+    },
+  });
+  await logAction(req, {
+    action: isAdmin ? "Admin updated vendor bank account" : "Vendor locked bank account",
+    targetType: "Vendor",
+    targetId: updated.id,
+    targetLabel: updated.name,
   });
   res.json(updated);
 });
@@ -332,13 +375,20 @@ router.delete("/:vendorId/products/:productId/addons/:addOnId", requireAuth, req
  * instead, since that's a User field, not a Vendor field).
  */
 router.patch("/:id/admin-edit", requireAuth, requireRole("ADMIN"), async (req, res) => {
-  const { name, category, area, eta, emoji } = req.body;
+  const { name, category, area, eta, emoji, bankName, bankAccountNumber, bankAccountName, bankAccountLocked } = req.body;
   const data = {};
   if (name !== undefined) data.name = name;
   if (category !== undefined) data.category = category;
   if (area !== undefined) data.area = area;
   if (eta !== undefined) data.eta = eta;
   if (emoji !== undefined) data.emoji = emoji;
+  if (bankName !== undefined) data.bankName = String(bankName || "").trim() || null;
+  if (bankAccountNumber !== undefined) data.bankAccountNumber = String(bankAccountNumber || "").replace(/\D/g, "") || null;
+  if (bankAccountName !== undefined) data.bankAccountName = String(bankAccountName || "").trim() || null;
+  if (bankAccountLocked !== undefined) {
+    data.bankAccountLocked = !!bankAccountLocked;
+    data.bankAccountLockedAt = bankAccountLocked ? new Date() : null;
+  }
   if (Object.keys(data).length === 0) return res.status(400).json({ error: "No fields to update" });
 
   const vendor = await prisma.vendor.update({ where: { id: req.params.id }, data });

@@ -210,6 +210,11 @@ export function OrdersProvider({ children }) {
     await refreshVendors();
   }, [refreshVendors]);
 
+  const updateVendorBankAccount = useCallback(async (vendorId, bank) => {
+    await VendorAPI.setBankAccount(vendorId, bank);
+    await refreshVendors();
+  }, [refreshVendors]);
+
   const addAddOn = useCallback(async (vendorId, productId, addOn) => {
     await VendorAPI.addAddOn(vendorId, productId, addOn);
     await refreshVendors();
@@ -256,7 +261,7 @@ export function OrdersProvider({ children }) {
       disputes, refreshDisputes,
       placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider,
       raiseDispute, resolveDispute,
-      updatePrice, updateProductDetails, addProduct, addAddOn, removeAddOn, toggleProductAvailable, toggleVendorOpen,
+      updatePrice, updateProductDetails, addProduct, updateVendorBankAccount, addAddOn, removeAddOn, toggleProductAvailable, toggleVendorOpen,
       refresh,
     }}>
       {children}

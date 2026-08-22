@@ -70,6 +70,7 @@ export default function VendorScreen() {
     cancelOrder,
     updatePrice,
     addProduct,
+    updateVendorBankAccount,
     updateProductDetails,
     addAddOn,
     removeAddOn,
@@ -165,12 +166,23 @@ export default function VendorScreen() {
   const [addOnDrafts, setAddOnDrafts] = useState({});
   const [actionError, setActionError] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [bankDraft, setBankDraft] = useState({ bankName: "", bankAccountNumber: "", bankAccountName: "" });
+  const [savingBank, setSavingBank] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [decliningOrderId, setDecliningOrderId] = useState(null);
   const [declineOtherNote, setDeclineOtherNote] = useState(null);
   const [orderView, setOrderView] = useState("active");
   const scrollRef = useRef(null);
   const sectionOffsets = useRef({ orders: 0, menu: 0, issues: 0 });
+
+  useEffect(() => {
+    if (!activeVendor) return;
+    setBankDraft({
+      bankName: activeVendor.bankName || "",
+      bankAccountNumber: activeVendor.bankAccountNumber || "",
+      bankAccountName: activeVendor.bankAccountName || "",
+    });
+  }, [activeVendor?.id, activeVendor?.bankName, activeVendor?.bankAccountNumber, activeVendor?.bankAccountName]);
 
   const acceptOrder = async (orderId) => {
     setActionError(null);
@@ -230,6 +242,8 @@ export default function VendorScreen() {
   const openDisputes = myDisputes.filter((d) => (d.status || "").toLowerCase() === "open");
   const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const vendorAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
+  const bankLocked = !!activeVendor.bankAccountLocked;
+  const hasBankAccount = !!(activeVendor.bankName && activeVendor.bankAccountNumber && activeVendor.bankAccountName);
 
   const installApp = async () => {
     if (Platform.OS !== "web") return;
@@ -270,6 +284,30 @@ export default function VendorScreen() {
     }
     if (key === "Issues") {
       scrollToSection("issues");
+    }
+  };
+
+  const submitBankAccount = async () => {
+    setActionError(null);
+    if (bankLocked) {
+      setActionError("This vendor bank account is locked. Contact Admin to change it.");
+      return;
+    }
+    if (!bankDraft.bankName.trim() || !bankDraft.bankAccountNumber.trim() || !bankDraft.bankAccountName.trim()) {
+      setActionError("Enter bank name, account number, and account name before saving.");
+      return;
+    }
+    setSavingBank(true);
+    try {
+      await updateVendorBankAccount(activeVendorId, {
+        bankName: bankDraft.bankName.trim(),
+        bankAccountNumber: bankDraft.bankAccountNumber.replace(/[^0-9]/g, ""),
+        bankAccountName: bankDraft.bankAccountName.trim(),
+      });
+    } catch (err) {
+      setActionError(err.message || "Could not save vendor account details.");
+    } finally {
+      setSavingBank(false);
     }
   };
 
@@ -465,6 +503,69 @@ export default function VendorScreen() {
           <Text style={styles.errorText}>❌ {actionError}</Text>
         </View>
       )}
+
+      <View style={[styles.bankCard, bankLocked && styles.bankCardLocked]}>
+        <View style={styles.bankHeaderRow}>
+          <View style={styles.bankTitleCluster}>
+            <View style={styles.bankIconWrap}>
+              <Ionicons name={bankLocked ? "lock-closed" : "card"} size={21} color={PURPLE} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.bankTitle}>Vendor Payment Account</Text>
+              <Text style={styles.bankSub}>
+                {bankLocked
+                  ? "Locked. Customers can pay this account directly."
+                  : "Add your bank account once. It locks after saving."}
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.bankStatusPill, bankLocked && styles.bankStatusPillLocked]}>
+            <Text style={[styles.bankStatusText, bankLocked && styles.bankStatusTextLocked]}>
+              {bankLocked ? "LOCKED" : "OPEN"}
+            </Text>
+          </View>
+        </View>
+
+        {hasBankAccount && bankLocked ? (
+          <View style={styles.bankLockedSummary}>
+            <Text style={styles.bankAccountName}>{activeVendor.bankAccountName}</Text>
+            <Text style={styles.bankAccountLine}>{activeVendor.bankName} · {activeVendor.bankAccountNumber}</Text>
+            <Text style={styles.bankNote}>Only Admin can change this account now.</Text>
+          </View>
+        ) : (
+          <View style={styles.bankForm}>
+            <TextInput
+              value={bankDraft.bankName}
+              onChangeText={(text) => setBankDraft((prev) => ({ ...prev, bankName: text }))}
+              editable={!bankLocked}
+              placeholder="Bank name e.g. GTBank, Access Bank"
+              placeholderTextColor="#94A3B8"
+              style={[styles.input, bankLocked && styles.inputDisabled]}
+            />
+            <TextInput
+              value={bankDraft.bankAccountNumber}
+              onChangeText={(text) => setBankDraft((prev) => ({ ...prev, bankAccountNumber: text.replace(/[^0-9]/g, "") }))}
+              editable={!bankLocked}
+              keyboardType="numeric"
+              maxLength={10}
+              placeholder="Account number"
+              placeholderTextColor="#94A3B8"
+              style={[styles.input, bankLocked && styles.inputDisabled]}
+            />
+            <TextInput
+              value={bankDraft.bankAccountName}
+              onChangeText={(text) => setBankDraft((prev) => ({ ...prev, bankAccountName: text }))}
+              editable={!bankLocked}
+              placeholder="Account name"
+              placeholderTextColor="#94A3B8"
+              style={[styles.input, bankLocked && styles.inputDisabled]}
+            />
+            <Pressable onPress={submitBankAccount} disabled={savingBank || bankLocked} style={[styles.saveBankBtn, (savingBank || bankLocked) && styles.saveBankBtnDisabled]}>
+              <Text style={styles.saveBankBtnText}>{savingBank ? "Saving..." : "Save & Lock Account"}</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       {/* Revenue Analytics Cards */}
       {stats && (
@@ -937,6 +1038,26 @@ const styles = StyleSheet.create({
   alertText: { color: "#991B1B", fontSize: 13 },
   errorBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 18, padding: 13, marginBottom: 14 },
   errorText: { color: "#991B1B", fontSize: 13 },
+  bankCard: { backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 14, marginBottom: 14, shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  bankCardLocked: { backgroundColor: "#FBFAFF", borderColor: "#DED2FF" },
+  bankHeaderRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 12 },
+  bankTitleCluster: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+  bankIconWrap: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center" },
+  bankTitle: { color: INK, fontSize: 15.5, fontWeight: "900" },
+  bankSub: { color: MUTED, fontSize: 11.5, fontWeight: "700", lineHeight: 16, marginTop: 2 },
+  bankStatusPill: { borderRadius: 999, backgroundColor: "#ECFDF5", paddingHorizontal: 9, paddingVertical: 5 },
+  bankStatusPillLocked: { backgroundColor: "#F4EDFF" },
+  bankStatusText: { color: EMERALD, fontSize: 10.5, fontWeight: "900" },
+  bankStatusTextLocked: { color: PURPLE },
+  bankForm: { gap: 9 },
+  bankLockedSummary: { borderRadius: 18, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#EEEAF8", padding: 13 },
+  bankAccountName: { color: INK, fontSize: 16, fontWeight: "900" },
+  bankAccountLine: { color: PURPLE, fontSize: 13.5, fontWeight: "900", marginTop: 4 },
+  bankNote: { color: MUTED, fontSize: 11.5, fontWeight: "700", marginTop: 8 },
+  inputDisabled: { backgroundColor: "#F8FAFC", color: MUTED },
+  saveBankBtn: { height: 46, borderRadius: 23, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  saveBankBtnDisabled: { opacity: 0.5 },
+  saveBankBtnText: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "900" },
 
   /* Stats Grid */
   statGrid: { flexDirection: "row", gap: 9, marginBottom: 14 },

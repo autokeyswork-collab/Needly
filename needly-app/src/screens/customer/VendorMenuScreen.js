@@ -139,6 +139,23 @@ export default function VendorMenuScreen({ route, navigation }) {
                 </View>
               )}
 
+              {vendor.bankAccountLocked && vendor.bankAccountNumber && (
+                <View style={[styles.paymentCard, { marginHorizontal: sidePad }]}>
+                  <View style={styles.paymentIcon}>
+                    <Ionicons name="card-outline" size={22} color={PURPLE} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.paymentTitle}>Pay vendor directly</Text>
+                    <Text numberOfLines={1} style={styles.paymentName}>{vendor.bankAccountName}</Text>
+                    <Text numberOfLines={1} style={styles.paymentDetails}>{vendor.bankName} · {vendor.bankAccountNumber}</Text>
+                  </View>
+                  <View style={styles.paymentLockedPill}>
+                    <Ionicons name="lock-closed" size={11} color={PURPLE} />
+                    <Text style={styles.paymentLockedText}>Locked</Text>
+                  </View>
+                </View>
+              )}
+
               {hasSubcategories && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={[styles.filterContent, { paddingHorizontal: sidePad }]}>
                   {subcategories.map((subcategory) => {
@@ -257,6 +274,13 @@ const styles = StyleSheet.create({
   infoDivider: { width: 1, height: 34, backgroundColor: LINE },
   addressCard: { marginTop: 12, backgroundColor: "#F8F5FF", borderRadius: 18, borderWidth: 1, borderColor: "#E9E0FF", padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
   addressText: { flex: 1, color: MUTED, fontSize: 12, fontWeight: "800", lineHeight: 17 },
+  paymentCard: { marginTop: 12, backgroundColor: "#FBFAFF", borderRadius: 20, borderWidth: 1, borderColor: "#E1D7FF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  paymentIcon: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#F2ECFF", alignItems: "center", justifyContent: "center" },
+  paymentTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
+  paymentName: { color: INK, fontSize: 12.5, fontWeight: "800", marginTop: 2 },
+  paymentDetails: { color: PURPLE, fontSize: 12.5, fontWeight: "900", marginTop: 2 },
+  paymentLockedPill: { borderRadius: 999, backgroundColor: "#F2ECFF", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5 },
+  paymentLockedText: { color: PURPLE, fontSize: 10.5, fontWeight: "900" },
   filterScroll: { marginTop: 14, marginBottom: 4 },
   filterContent: { gap: 8, paddingVertical: 2 },
   chip: { minHeight: 34, borderRadius: 17, paddingHorizontal: 13, backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#E7DCFF", alignItems: "center", justifyContent: "center" },

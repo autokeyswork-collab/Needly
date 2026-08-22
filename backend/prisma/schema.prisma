@@ -110,6 +110,11 @@ model Vendor {
   businessRegNumber String?
   ownerIdType       String?
   ownerIdNumber     String?
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  bankAccountLocked Boolean            @default(false)
+  bankAccountLockedAt DateTime?
   verified          Boolean            @default(false)
   verifiedAt        DateTime?
   verificationNotes String?
