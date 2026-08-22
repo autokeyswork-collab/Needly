@@ -4,6 +4,7 @@ import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
 import { STATUS_FLOW, STATUS_LABEL } from "../data/mockData";
 import { useOrders } from "../context/OrdersContext";
+import { useAuth } from "../context/AuthContext";
 import { AuthAPI, VendorAPI, RiderAPI, OrderAPI, AuditAPI, PayoutAPI, OperationalIssueAPI, normalizeOrder } from "../api/client";
 
 const PURPLE = "#6F45E9";
@@ -27,6 +28,8 @@ const ADMIN_TABS = [
 
 export default function AdminScreen() {
   const { orders, disputes, resolveDispute, vendors, refreshVendors, cancelOrder, unassignRider } = useOrders();
+  const { user: currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
   const [activeTab, setActiveTab] = useState("overview");
 
   const [pending, setPending] = useState([]);
@@ -395,6 +398,7 @@ export default function AdminScreen() {
                 {pending.map((u) => {
                   const isApproving = approvingId === u.id;
                   const vendorPaymentPending = u.role === "VENDOR" && u.vendor?.onboardingFeeStatus !== "PAID";
+                  const blocksApproval = vendorPaymentPending && !isSuperAdmin;
                   return (
                   <View key={u.id} style={styles.pendingCard}>
                     <View style={{ flex: 1, paddingRight: 10 }}>
@@ -407,21 +411,24 @@ export default function AdminScreen() {
                       )}
                       {vendorPaymentPending && (
                         <Text style={styles.pendingHelpText}>
-                          Approval unlocks after Flutterwave confirms the vendor onboarding payment.
+                          {isSuperAdmin
+                            ? "Super Admin override available before Flutterwave confirms payment."
+                            : "Approval unlocks after Flutterwave confirms the vendor onboarding payment."}
                         </Text>
                       )}
                     </View>
                     <Pressable
-                      disabled={isApproving || vendorPaymentPending}
+                      disabled={isApproving || blocksApproval}
                       onPress={() => approve(u)}
                       style={({ pressed }) => [
                         styles.approveBtn,
                         pressed && styles.approveBtnPressed,
-                        (isApproving || vendorPaymentPending) && styles.approveBtnDisabled,
+                        (isApproving || blocksApproval) && styles.approveBtnDisabled,
+                        vendorPaymentPending && isSuperAdmin && styles.approveBtnOverride,
                       ]}
                     >
                       <Text style={styles.approveBtnText}>
-                        {isApproving ? "Approving..." : vendorPaymentPending ? "Waiting for Payment" : "Approve Account"}
+                        {isApproving ? "Approving..." : blocksApproval ? "Waiting for Payment" : vendorPaymentPending ? "Override Approve" : "Approve Account"}
                       </Text>
                     </Pressable>
                   </View>
@@ -977,6 +984,7 @@ const styles = StyleSheet.create({
   pendingMeta: { fontSize: 12, color: "#92400E", marginTop: 2 },
   pendingHelpText: { fontSize: 11.5, color: "#7C2D12", fontWeight: "800", marginTop: 4, lineHeight: 16 },
   approveBtn: { backgroundColor: EMERALD, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
+  approveBtnOverride: { backgroundColor: PURPLE },
   approveBtnPressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
   approveBtnDisabled: { opacity: 0.65 },
   approveBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 12.5 },

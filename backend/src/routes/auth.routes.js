@@ -882,7 +882,8 @@ router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req
       include: { vendor: true },
     });
     if (!existing) return res.status(404).json({ error: "User not found" });
-    if (existing.role === "VENDOR" && existing.vendor?.onboardingFeeStatus !== "PAID") {
+    const canOverrideOnboardingFee = req.user.role === "SUPER_ADMIN";
+    if (existing.role === "VENDOR" && existing.vendor?.onboardingFeeStatus !== "PAID" && !canOverrideOnboardingFee) {
       return res.status(400).json({
         error: `Vendor must pay the ₦${Number(existing.vendor?.onboardingFeeAmount || VENDOR_ONBOARDING_FEE_NAIRA).toLocaleString()} onboarding fee before approval.`,
       });
