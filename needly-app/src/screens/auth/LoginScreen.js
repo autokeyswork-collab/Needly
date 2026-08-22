@@ -168,7 +168,7 @@ export default function LoginScreen({ navigation }) {
               <View style={styles.heroTopFade} />
               <View style={styles.heroBottomFade} />
               <View style={styles.heroBrand}>
-                <NeedlyLogo size="hero" theme="dark" variant="compact" showBadges={false} />
+                <NeedlyLogo size="large" theme="dark" variant="compact" showBadges={false} />
                 <Text style={styles.heroTagline}>Everything you need,{"\n"}in one place.</Text>
               </View>
               <View style={styles.heroStory}>
@@ -427,10 +427,10 @@ const styles = StyleSheet.create({
   heroImageMobile: { borderRadius: 24 },
   heroTopFade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.02)" },
   heroBottomFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "45%", backgroundColor: "rgba(36,16,95,0.72)" },
-  heroBrand: { position: "absolute", top: 76, left: 54, gap: 12 },
+  heroBrand: { position: "absolute", top: 76, left: 42, right: 28, flexDirection: "row", alignItems: "center", gap: 18 },
   heroBrandMobile: { top: 18, left: 18, transform: [{ scale: 0.68 }] },
   heroBrandMobileCompact: { top: 14, left: 14, transform: [{ scale: 0.56 }] },
-  heroTagline: { marginLeft: 136, marginTop: -54, color: ORANGE, fontSize: 20, lineHeight: 28, fontWeight: "800" },
+  heroTagline: { flexShrink: 1, color: ORANGE, fontSize: 18, lineHeight: 25, fontWeight: "800" },
   heroStory: { position: "absolute", left: 52, right: 42, bottom: 42 },
   heroStoryCompact: { left: 20, right: 20, bottom: 18 },
   locationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 13, marginBottom: 20 },
