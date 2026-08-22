@@ -95,9 +95,37 @@ function broadcastInventoryUpdate(productData) {
   ioInstance.to("admin:dashboard").emit("dashboard:refresh", { reason: "inventory", id: productData?.id, at: new Date().toISOString() });
 }
 
-function broadcastNotification(userId, notification) {
-  if (!ioInstance) return;
-  ioInstance.to(`user:${userId}`).emit("notification:created", notification);
+async function broadcastNotification(userId, notification) {
+  if (!userId) return null;
+  const payload = {
+    title: notification?.title || "Needly update",
+    body: notification?.body || notification?.message || "You have a new Needly notification.",
+    type: notification?.type || "INFO",
+  };
+
+  let saved = {
+    id: notification?.id || `nt-${Date.now()}`,
+    userId,
+    ...payload,
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    saved = await prisma.notification.create({
+      data: {
+        userId,
+        title: payload.title,
+        body: payload.body,
+        type: payload.type,
+      },
+    });
+  } catch (err) {
+    // Keep realtime notifications alive even if persistence is temporarily unavailable.
+  }
+
+  if (ioInstance) ioInstance.to(`user:${userId}`).emit("notification:created", saved);
+  return saved;
 }
 
 function broadcastAdminAlert(alert) {

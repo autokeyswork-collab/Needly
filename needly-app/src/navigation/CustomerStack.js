@@ -5,6 +5,7 @@ import CategoryResultsScreen from "../screens/customer/CategoryResultsScreen";
 import CustomerOrdersScreen from "../screens/customer/CustomerOrdersScreen";
 import CustomerWalletScreen from "../screens/customer/CustomerWalletScreen";
 import CustomerBookingsScreen from "../screens/customer/CustomerBookingsScreen";
+import CustomerNotificationsScreen from "../screens/customer/CustomerNotificationsScreen";
 import CustomerAccountScreen from "../screens/customer/CustomerAccountScreen";
 import AutoBookingScreen from "../screens/customer/AutoBookingScreen";
 import VendorMenuScreen from "../screens/customer/VendorMenuScreen";
@@ -28,6 +29,7 @@ export default function CustomerStack() {
       <Stack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NeedlyPay" component={CustomerWalletScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerBookings" component={CustomerBookingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CustomerNotifications" component={CustomerNotificationsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerAccount" component={CustomerAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AutoBooking" component={AutoBookingScreen} options={{ title: "Book auto service" }} />
       <Stack.Screen name="VendorMenu" component={VendorMenuScreen} options={{ headerShown: false }} />

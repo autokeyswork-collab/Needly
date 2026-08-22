@@ -62,6 +62,19 @@ export function OrdersProvider({ children }) {
     }
   }, [user]);
 
+  const markNotificationRead = useCallback(async (id) => {
+    if (!id) return;
+    setNotifications((prev) => prev.map((item) => item.id === id ? { ...item, read: true } : item));
+    await NotificationAPI.markRead(id);
+    await refreshNotifications();
+  }, [refreshNotifications]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+    await NotificationAPI.markAllRead();
+    await refreshNotifications();
+  }, [refreshNotifications]);
+
   const refreshDisputes = useCallback(async () => {
     if (!user || !["VENDOR", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(user.role)) return;
     try {
@@ -239,7 +252,7 @@ export function OrdersProvider({ children }) {
       vendors, refreshVendors,
       orders, riderData, refreshOrders,
       bookings, refreshBookings, createBooking, advanceBookingStatus, cancelBooking,
-      notifications, refreshNotifications,
+      notifications, refreshNotifications, markNotificationRead, markAllNotificationsRead,
       disputes, refreshDisputes,
       placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider,
       raiseDispute, resolveDispute,

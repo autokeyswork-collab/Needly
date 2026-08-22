@@ -350,6 +350,7 @@ export const BookingAPI = {
 export const NotificationAPI = {
   list: () => request("/notifications").catch(() => []),
   markRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }).catch(() => ({ ok: true })),
+  markAllRead: () => request("/notifications/read-all", { method: "PATCH" }).catch(() => ({ ok: true })),
 };
 
 

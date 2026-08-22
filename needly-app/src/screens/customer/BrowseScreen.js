@@ -347,7 +347,7 @@ export default function BrowseScreen({ navigation }) {
                   badge={cartCount}
                   onPress={() => vendors[0]?.id ? navigation.navigate("Cart", { vendorId: vendors[0].id, cart: {} }) : navigation.navigate("CustomerOrders")}
                 />
-                <IconButton name="bell-outline" family="Ionicons" badge={unreadNotifications} onPress={() => navigation.navigate("CustomerAccount")} />
+                <IconButton name="bell-outline" family="Ionicons" badge={unreadNotifications} onPress={() => navigation.navigate("CustomerNotifications")} />
               </View>
             </View>
 
