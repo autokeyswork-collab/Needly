@@ -755,27 +755,67 @@ export default function SuperAdminControlCenter({ onLogout }) {
       const targetVal = String(it[filterKey] || it.id || "").toLowerCase();
       return targetVal.includes(query.trim().toLowerCase());
     });
+    const canEdit = !!editFieldsMap[type]?.length;
+    const columnWidth = 152;
+    const firstColumnWidth = 190;
+    const tableWidth = fields.reduce((sum, _field, idx) => sum + (idx === 0 ? firstColumnWidth : columnWidth), canEdit ? 112 : 0);
+    const cellText = (value) => {
+      if (value === true) return "Yes";
+      if (value === false) return "No";
+      if (value === null || value === undefined || value === "") return "—";
+      return String(value);
+    };
 
     return (
       <View style={s.panel}>
-        <PH title={`${type.toUpperCase()} (${filtered.length})`} />
+        <View style={s.sheetHeader}>
+          <PH title={`${type.toUpperCase()} (${filtered.length})`} />
+          <Text style={s.sheetHint}>Spreadsheet view</Text>
+        </View>
         {filtered.length === 0 && <Text style={{ color: TEXT_SUB, fontStyle: "italic", paddingVertical: 12 }}>No records found.</Text>}
-        {filtered.map((item, idx) => (
-          <View key={item.id || idx} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: BORDER }}>
-            <View style={{ flex: 1 }}>
-              {fields.map((f) => (
-                <Text key={f.key} style={{ fontSize: f.bold ? 13 : 11, fontWeight: f.bold ? "700" : "400", color: f.bold ? TEXT_MAIN : TEXT_SUB, marginBottom: 1 }}>
-                  {f.label ? f.label + ": " : ""}{item[f.key] ?? "—"}
-                </Text>
+        {filtered.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.sheetScroller}>
+            <View style={[s.sheetTable, { minWidth: tableWidth }]}>
+              <View style={s.sheetRowHead}>
+                {fields.map((field, idx) => (
+                  <Text
+                    key={field.key}
+                    numberOfLines={1}
+                    style={[s.sheetHeadCell, { width: idx === 0 ? firstColumnWidth : columnWidth }]}
+                  >
+                    {field.label || field.key}
+                  </Text>
+                ))}
+                {canEdit && <Text style={[s.sheetHeadCell, s.sheetActionHead]}>Action</Text>}
+              </View>
+
+              {filtered.map((item, idx) => (
+                <View key={item.id || idx} style={[s.sheetRow, idx % 2 === 1 && s.sheetRowAlt]}>
+                  {fields.map((field, colIdx) => (
+                    <Text
+                      key={field.key}
+                      numberOfLines={2}
+                      style={[
+                        s.sheetCell,
+                        field.bold && s.sheetCellBold,
+                        { width: colIdx === 0 ? firstColumnWidth : columnWidth },
+                      ]}
+                    >
+                      {cellText(item[field.key])}
+                    </Text>
+                  ))}
+                  {canEdit && (
+                    <View style={s.sheetActionCell}>
+                      <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
+                        <Text style={s.editBtnTxt}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
               ))}
             </View>
-            {!!editFieldsMap[type]?.length && (
-              <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
-                <Text style={s.editBtnTxt}>Edit ✏️</Text>
-              </Pressable>
-            )}
-          </View>
-        ))}
+          </ScrollView>
+        )}
       </View>
     );
   };
@@ -2575,6 +2615,18 @@ const s = StyleSheet.create({
   panel: { backgroundColor: WHITE, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: BORDER, shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   panelTitle: { fontSize: 13, fontWeight: "800", color: TEXT_MAIN },
   pageH: { fontSize: 20, fontWeight: "900", color: TEXT_MAIN },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 },
+  sheetHint: { color: TEXT_SUB, fontSize: 10.5, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
+  sheetScroller: { marginHorizontal: -4 },
+  sheetTable: { marginHorizontal: 4, borderWidth: 1, borderColor: BORDER, borderRadius: 12, overflow: "hidden", backgroundColor: WHITE },
+  sheetRowHead: { flexDirection: "row", backgroundColor: "#F5F3FF", borderBottomWidth: 1, borderBottomColor: BORDER },
+  sheetHeadCell: { paddingHorizontal: 12, paddingVertical: 10, color: PURPLE, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5, borderRightWidth: 1, borderRightColor: "#E6E1FF" },
+  sheetRow: { flexDirection: "row", minHeight: 46, borderBottomWidth: 1, borderBottomColor: "#F0EDF8", backgroundColor: WHITE },
+  sheetRowAlt: { backgroundColor: "#FCFBFF" },
+  sheetCell: { paddingHorizontal: 12, paddingVertical: 10, color: TEXT_SUB, fontSize: 12, lineHeight: 16, borderRightWidth: 1, borderRightColor: "#F0EDF8" },
+  sheetCellBold: { color: TEXT_MAIN, fontWeight: "800" },
+  sheetActionHead: { width: 112, textAlign: "center", borderRightWidth: 0 },
+  sheetActionCell: { width: 112, paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center", alignItems: "center" },
   editBtn: { backgroundColor: PURPLE_SOFT, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   editBtnTxt: { fontSize: 11, fontWeight: "700", color: PURPLE },
   btn: { backgroundColor: PURPLE, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
