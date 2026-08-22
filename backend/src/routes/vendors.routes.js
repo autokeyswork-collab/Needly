@@ -236,27 +236,44 @@ router.patch("/:id/open", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN")
 
 /** POST /vendors/:id/products — add a new product. */
 router.post("/:id/products", requireAuth, requireRole("VENDOR", "MANAGER", "ADMIN"), assertOwnsVendor, async (req, res) => {
-  const { name, price, emoji, subcategory, imageUrl } = req.body;
-  const parsedPrice = Number.parseInt(price, 10);
-  if (!name || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-    return res.status(400).json({ error: "name and a valid price are required" });
-  }
-  if (imageUrl && String(imageUrl).length > 1800000) {
-    return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
-  }
+  try {
+    const { name, price, emoji, subcategory, imageUrl } = req.body;
+    const parsedPrice = Number.parseInt(price, 10);
+    if (!name || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      return res.status(400).json({ error: "name and a valid price are required" });
+    }
+    if (imageUrl && String(imageUrl).length > 1800000) {
+      return res.status(400).json({ error: "Product image is too large. Please choose a smaller photo." });
+    }
 
-  const product = await prisma.product.create({
-    data: {
-      vendorId: req.params.id,
-      name: String(name).trim(),
-      price: parsedPrice,
-      emoji: emoji || "🍽️",
-      subcategory,
-      imageUrl: imageUrl || null,
-    },
-  });
-  broadcastInventoryUpdate({ vendorId: req.params.id, product, action: "create" });
-  res.status(201).json(product);
+    const product = await prisma.product.create({
+      data: {
+        vendorId: req.params.id,
+        name: String(name).trim(),
+        price: parsedPrice,
+        emoji: emoji || "🍽️",
+        subcategory,
+        imageUrl: imageUrl || null,
+      },
+      select: {
+        id: true,
+        vendorId: true,
+        name: true,
+        price: true,
+        emoji: true,
+        imageUrl: true,
+        subcategory: true,
+        stock: true,
+        isAvailable: true,
+        createdAt: true,
+      },
+    });
+    broadcastInventoryUpdate({ vendorId: req.params.id, product, action: "create" });
+    res.status(201).json(product);
+  } catch (err) {
+    console.error("Add product failed:", err);
+    res.status(500).json({ error: err.message || "Could not add product" });
+  }
 });
 
 /** PATCH /vendors/:vendorId/products/:productId — update price (or name/emoji). */
