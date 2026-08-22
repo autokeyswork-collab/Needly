@@ -64,17 +64,28 @@ async function reverseGeocode(latitude, longitude) {
 }
 
 export default function CartScreen({ route, navigation }) {
-  const { vendorId, cart = {} } = route.params || {};
-  const { vendors, placeOrder } = useOrders();
+  const { vendorId, cart: routeCart = {} } = route.params || {};
+  const {
+    vendors,
+    placeOrder,
+    customerActivity,
+    customerActivityLoaded,
+    saveCheckoutDraft,
+    clearCheckoutDraft,
+    clearDraftCart,
+  } = useOrders();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
   const vendor = vendors.find((v) => v.id === vendorId);
+  const savedCart = customerActivity?.draftCarts?.[vendorId] || {};
+  const cart = Object.keys(routeCart || {}).length ? routeCart : savedCart;
+  const checkoutDraft = customerActivity?.checkoutDrafts?.[vendorId] || {};
 
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [deliveryPhone, setDeliveryPhone] = useState(user?.phone || "");
-  const [deliveryLocation, setDeliveryLocation] = useState(null);
+  const [deliveryAddress, setDeliveryAddress] = useState(checkoutDraft.deliveryAddress || "");
+  const [deliveryPhone, setDeliveryPhone] = useState(checkoutDraft.deliveryPhone || user?.phone || "");
+  const [deliveryLocation, setDeliveryLocation] = useState(checkoutDraft.deliveryLocation || null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +123,23 @@ export default function CartScreen({ route, navigation }) {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    const draft = customerActivity?.checkoutDrafts?.[vendorId];
+    if (!customerActivityLoaded || !draft) return;
+    setDeliveryAddress((current) => current || draft.deliveryAddress || "");
+    setDeliveryPhone((current) => current || draft.deliveryPhone || user?.phone || "");
+    setDeliveryLocation((current) => current || draft.deliveryLocation || null);
+  }, [customerActivity?.checkoutDrafts, customerActivityLoaded, user?.phone, vendorId]);
+
+  useEffect(() => {
+    if (!vendorId || !customerActivityLoaded) return;
+    saveCheckoutDraft(vendorId, {
+      deliveryAddress,
+      deliveryPhone,
+      deliveryLocation,
+    });
+  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, saveCheckoutDraft, vendorId]);
 
   const useCurrentLocation = () => {
     setGeoLoading(true);
@@ -157,6 +185,8 @@ export default function CartScreen({ route, navigation }) {
       );
       const { authorizationUrl } = await PaymentAPI.initialize(id);
       await Linking.openURL(authorizationUrl);
+      clearDraftCart(vendor.id);
+      clearCheckoutDraft(vendor.id);
       navigation.replace("Tracking", { orderId: id });
     } catch (err) {
       setError(err.message);

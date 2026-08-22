@@ -121,7 +121,7 @@ function IconButton({ name, family = "FontAwesome", badge, onPress }) {
 export default function BrowseScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
-  const { vendors = [], orders = [], notifications = [], loading } = useOrders();
+  const { vendors = [], orders = [], notifications = [], loading, draftCartCount = 0, customerActivity } = useOrders();
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 22;
   const carouselWidth = shellWidth - sidePad * 2;
@@ -143,7 +143,7 @@ export default function BrowseScreen({ navigation }) {
   const customerState = user?.locationState || "Ogun";
   const customerAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
 
-  const cartCount = 0;
+  const cartCount = draftCartCount;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
   const unreadMessages = notifications.filter((n) => /message|chat/i.test(n.type || n.title || "")).length;
 
@@ -345,7 +345,12 @@ export default function BrowseScreen({ navigation }) {
                 <IconButton
                   name="shopping-cart"
                   badge={cartCount}
-                  onPress={() => vendors[0]?.id ? navigation.navigate("Cart", { vendorId: vendors[0].id, cart: {} }) : navigation.navigate("CustomerOrders")}
+                  onPress={() => {
+                    const [vendorId, cart] = Object.entries(customerActivity?.draftCarts || {})[0] || [];
+                    if (vendorId) navigation.navigate("Cart", { vendorId, cart });
+                    else if (vendors[0]?.id) navigation.navigate("Cart", { vendorId: vendors[0].id, cart: {} });
+                    else navigation.navigate("CustomerOrders");
+                  }}
                 />
                 <IconButton name="bell-outline" family="Ionicons" badge={unreadNotifications} onPress={() => navigation.navigate("CustomerNotifications")} />
               </View>

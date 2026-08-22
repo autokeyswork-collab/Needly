@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, normalizeOrder } from "../api/client";
 import { connectSocket, subscribeToRealtimeEvents } from "../api/socket";
 import { useAuth } from "./AuthContext";
+import { countDraftCartItems, loadCustomerActivity, saveCustomerActivity } from "../utils/customerActivity";
 
 const OrdersContext = createContext(null);
 
@@ -13,6 +14,8 @@ export function OrdersProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [riderData, setRiderData] = useState({ available: [], assigned: [], completedToday: [] });
   const [disputes, setDisputes] = useState([]);
+  const [customerActivity, setCustomerActivity] = useState({ draftCarts: {}, checkoutDrafts: {}, updatedAt: null });
+  const [customerActivityLoaded, setCustomerActivityLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -100,6 +103,23 @@ export function OrdersProvider({ children }) {
     if (user) refresh();
   }, [user, refresh]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!user || user.role !== "CUSTOMER") {
+      setCustomerActivity({ draftCarts: {}, checkoutDrafts: {}, updatedAt: null });
+      setCustomerActivityLoaded(false);
+      return () => { mounted = false; };
+    }
+    setCustomerActivityLoaded(false);
+    loadCustomerActivity(user.id).then((activity) => {
+      if (mounted) {
+        setCustomerActivity(activity);
+        setCustomerActivityLoaded(true);
+      }
+    });
+    return () => { mounted = false; };
+  }, [user]);
+
   // Universal Socket.io real-time event listeners
   useEffect(() => {
     if (!user) return;
@@ -144,6 +164,63 @@ export function OrdersProvider({ children }) {
     await refreshVendors();
     return order.id;
   }, [refreshOrders, refreshVendors]);
+
+  const persistCustomerActivity = useCallback((updater) => {
+    if (!user?.id || user.role !== "CUSTOMER" || !customerActivityLoaded) return;
+    setCustomerActivity((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      saveCustomerActivity(user.id, next).catch(() => {});
+      return next;
+    });
+  }, [customerActivityLoaded, user]);
+
+  const saveDraftCart = useCallback((vendorId, cart) => {
+    if (!vendorId) return;
+    const cleanCart = Object.fromEntries(
+      Object.entries(cart || {}).filter(([, qty]) => Number(qty) > 0)
+    );
+    persistCustomerActivity((current) => {
+      const nextCarts = { ...(current.draftCarts || {}) };
+      if (Object.keys(cleanCart).length) {
+        nextCarts[vendorId] = cleanCart;
+      } else {
+        delete nextCarts[vendorId];
+      }
+      return { ...current, draftCarts: nextCarts };
+    });
+  }, [persistCustomerActivity]);
+
+  const clearDraftCart = useCallback((vendorId) => {
+    if (!vendorId) return;
+    persistCustomerActivity((current) => {
+      const nextCarts = { ...(current.draftCarts || {}) };
+      delete nextCarts[vendorId];
+      return { ...current, draftCarts: nextCarts };
+    });
+  }, [persistCustomerActivity]);
+
+  const saveCheckoutDraft = useCallback((vendorId, draft) => {
+    if (!vendorId) return;
+    persistCustomerActivity((current) => ({
+      ...current,
+      checkoutDrafts: {
+        ...(current.checkoutDrafts || {}),
+        [vendorId]: {
+          ...(current.checkoutDrafts?.[vendorId] || {}),
+          ...draft,
+        },
+      },
+    }));
+  }, [persistCustomerActivity]);
+
+  const clearCheckoutDraft = useCallback((vendorId) => {
+    if (!vendorId) return;
+    persistCustomerActivity((current) => {
+      const nextDrafts = { ...(current.checkoutDrafts || {}) };
+      delete nextDrafts[vendorId];
+      return { ...current, checkoutDrafts: nextDrafts };
+    });
+  }, [persistCustomerActivity]);
 
   const advanceOrder = useCallback(async (orderId) => {
     await OrderAPI.advance(orderId);
@@ -263,6 +340,8 @@ export function OrdersProvider({ children }) {
       orders, riderData, refreshOrders,
       bookings, refreshBookings, createBooking, advanceBookingStatus, cancelBooking,
       notifications, refreshNotifications, markNotificationRead, markAllNotificationsRead,
+      customerActivity, customerActivityLoaded, draftCartCount: countDraftCartItems(customerActivity),
+      saveDraftCart, clearDraftCart, saveCheckoutDraft, clearCheckoutDraft,
       disputes, refreshDisputes,
       placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider, confirmVendorPaymentReceived,
       raiseDispute, resolveDispute,

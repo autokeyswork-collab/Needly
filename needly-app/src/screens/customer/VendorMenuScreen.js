@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Image, ImageBackground, Pressable, ScrollView, SectionList, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { fmtNaira } from "../../theme/colors";
@@ -42,7 +42,7 @@ function groupBySubcategory(items) {
 
 export default function VendorMenuScreen({ route, navigation }) {
   const { vendorId } = route.params || {};
-  const { vendors } = useOrders();
+  const { vendors, customerActivity, customerActivityLoaded, saveDraftCart } = useOrders();
   const { width } = useWindowDimensions();
   const vendor = (vendors || []).find((v) => v.id === vendorId);
   const [cart, setCart] = useState({});
@@ -59,8 +59,26 @@ export default function VendorMenuScreen({ route, navigation }) {
   const sections = useMemo(() => groupBySubcategory(displayItems), [displayItems]);
   const heroImage = CATEGORY_FALLBACK[vendor?.category] || CATEGORY_IMAGES.Restaurant;
 
-  const add = (id) => setCart((current) => ({ ...current, [id]: (current[id] || 0) + 1 }));
-  const remove = (id) => setCart((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) - 1) }));
+  useEffect(() => {
+    if (!customerActivityLoaded) return;
+    setCart(customerActivity?.draftCarts?.[vendorId] || {});
+  }, [customerActivity?.draftCarts, customerActivityLoaded, vendorId]);
+
+  const updateCart = (updater) => {
+    setCart((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      saveDraftCart(vendorId, next);
+      return next;
+    });
+  };
+
+  const add = (id) => updateCart((current) => ({ ...current, [id]: (current[id] || 0) + 1 }));
+  const remove = (id) => updateCart((current) => {
+    const nextQty = Math.max(0, (current[id] || 0) - 1);
+    const next = { ...current, [id]: nextQty };
+    if (nextQty === 0) delete next[id];
+    return next;
+  });
   const count = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const total = items.reduce((sum, item) => sum + (cart[item.id] || 0) * (item.price || 0), 0);
 
