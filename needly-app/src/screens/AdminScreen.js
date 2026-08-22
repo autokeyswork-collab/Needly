@@ -275,10 +275,10 @@ export default function AdminScreen() {
       <View style={styles.shell}>
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <View>
-            <Text style={styles.headerEyebrow}>Needly Operations</Text>
-            <Text style={styles.headerTitle}>Admin Center</Text>
-            <Text style={styles.headerSubtitle}>Abeokuta marketplace control</Text>
+          <View style={styles.headerTitleBlock}>
+            <Text style={styles.headerEyebrow} numberOfLines={1}>Needly Operations</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>Admin Center</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>Abeokuta marketplace control</Text>
           </View>
           <View style={styles.headerBadge}>
             <Text style={styles.headerBadgeText}>LIVE</Text>
@@ -315,7 +315,7 @@ export default function AdminScreen() {
                 style={[styles.tabButton, isActive && styles.tabButtonActive]}
               >
                 <Text style={styles.tabIcon}>{tab.icon}</Text>
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]} numberOfLines={1}>{tab.label}</Text>
                 {badgeCount > 0 && (
                   <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
                     <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>{badgeCount}</Text>
@@ -882,14 +882,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     minHeight: "100%",
     paddingHorizontal: 18,
-    paddingTop: 18,
+    paddingTop: 0,
     paddingBottom: 36,
+    overflow: "hidden",
   },
 
   header: {
     backgroundColor: PURPLE,
-    borderRadius: 30,
-    padding: 18,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 18,
+    marginHorizontal: -18,
     marginBottom: 14,
     shadowColor: PURPLE,
     shadowOpacity: 0.24,
@@ -898,29 +905,34 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   headerTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  headerTitleBlock: { flex: 1, minWidth: 0 },
   headerEyebrow: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "900", textTransform: "uppercase", marginBottom: 4 },
-  headerTitle: { fontSize: 24, fontWeight: "900", color: "#ffffff" },
+  headerTitle: { fontSize: 23, fontWeight: "900", color: "#ffffff" },
   headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.82)", marginTop: 2, fontWeight: "700" },
-  headerBadge: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  headerBadge: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", flexShrink: 0 },
   headerBadgeText: { color: "#ffffff", fontSize: 10.5, fontWeight: "900" },
-  headerSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 18, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 12 },
+  headerSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 16, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 11 },
   headerSummaryItem: { flex: 1, alignItems: "center" },
-  headerSummaryValue: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
-  headerSummaryLabel: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "800", marginTop: 1 },
+  headerSummaryValue: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
+  headerSummaryLabel: { color: "rgba(255,255,255,0.78)", fontSize: 10.5, fontWeight: "800", marginTop: 1 },
   headerSummaryDivider: { width: 1, height: 26, backgroundColor: "rgba(255,255,255,0.2)" },
 
   tabContainer: {
     marginHorizontal: -18,
     marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingBottom: 10,
   },
   tabScrollContent: { gap: 8, paddingHorizontal: 18 },
   tabButton: {
     flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC",
-    borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8, borderWidth: 1, borderColor: "#E2E8F0",
+    borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#E2E8F0", maxWidth: 176,
   },
   tabButtonActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   tabIcon: { fontSize: 14 },
-  tabText: { color: "#64748B", fontSize: 12.5, fontWeight: "800" },
+  tabText: { color: "#64748B", fontSize: 12, fontWeight: "800", flexShrink: 1 },
   tabTextActive: { color: "#ffffff", fontWeight: "900" },
   tabBadge: { backgroundColor: MANGO, borderRadius: 10, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   tabBadgeActive: { backgroundColor: "#ffffff" },
