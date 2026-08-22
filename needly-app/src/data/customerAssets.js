@@ -19,6 +19,9 @@ export const CATEGORY_AVATAR_IMAGES = {
 export const CUSTOMER_AVATAR = require("../assets/marketplace/customer.jpg");
 export const LOGIN_AVATAR = require("../assets/marketplace/login-avatar-transparent-v2.png");
 export const LOGIN_HERO_MARKET = require("../assets/marketplace/login-hero-market.png");
+export const LOGIN_HERO_FOOD_CENTER = require("../assets/marketplace/abeokuta-food-center.png");
+export const LOGIN_HERO_CLEANING_LADY = require("../assets/marketplace/abeokuta-cleaning-lady.png");
+export const LOGIN_HERO_CAR_STAND = require("../assets/marketplace/abeokuta-car-stand.png");
 
 export const LOGIN_HERO_SLIDES = [
   {
@@ -37,23 +40,23 @@ export const LOGIN_HERO_SLIDES = [
   },
   {
     key: "food",
-    image: CATEGORY_IMAGES.Restaurant,
-    location: "Food near you",
+    image: LOGIN_HERO_FOOD_CENTER,
+    location: "Abeokuta Food Center",
     title: "Meals In Minutes",
-    text: "Order favourite meals, grills and local dishes from trusted Needly vendors.",
+    text: "Order favourite meals, grills and local dishes from trusted Abeokuta vendors.",
   },
   {
     key: "home-services",
-    image: CATEGORY_IMAGES["Home Services"],
-    location: "Home Services",
+    image: LOGIN_HERO_CLEANING_LADY,
+    location: "Abeokuta Home Services",
     title: "Book Help Fast",
-    text: "Find cleaners, laundry, repairs and useful services without leaving home.",
+    text: "Find trusted cleaners, laundry, repairs and useful home services around Abeokuta.",
   },
   {
     key: "auto",
-    image: CATEGORY_IMAGES.Auto,
-    location: "Auto Services",
+    image: LOGIN_HERO_CAR_STAND,
+    location: "Abeokuta Car Stand",
     title: "Keep Moving",
-    text: "Book mechanics, car wash, vulcanizers and rider support across Abeokuta.",
+    text: "Book mechanics, car wash, vulcanizers and rider support from local auto stands.",
   },
 ];
