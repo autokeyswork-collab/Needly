@@ -177,7 +177,7 @@ async function createVendorOnboardingPayment({ user, vendor }) {
       phone: user.phone,
       amountNaira: feeAmount,
       reference,
-      callbackUrl: `${process.env.APP_BASE_URL}/payments/vendor-onboarding/callback`,
+      callbackUrl: appUrl(`/?role=VENDOR&email=${encodeURIComponent(user.email)}&onboarding=paid&pendingApproval=1`),
       metadata: {
         type: "vendor_onboarding",
         vendorId: vendor.id,
@@ -691,7 +691,7 @@ router.get("/locations", async (req, res) => {
 /** GET /auth/pending — admin-only list of vendor/rider accounts awaiting approval. */
 router.get("/pending", requireAuth, requireRole("ADMIN"), async (req, res) => {
   const pending = await prisma.user.findMany({
-    where: { approved: false, role: { in: ["VENDOR", "RIDER"] } },
+    where: { approved: false, suspendedAt: null, role: { in: ["VENDOR", "RIDER"] } },
     select: {
       id: true,
       name: true,
@@ -893,8 +893,11 @@ router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req
       data: { approved: true, suspendedAt: null },
       include: { vendor: true },
     });
-    if (user.role === "VENDOR") {
-      await prisma.vendor.updateMany({ where: { ownerId: user.id }, data: { verified: true } });
+    if (user.role === "VENDOR" && user.vendor) {
+      user.vendor = await prisma.vendor.update({
+        where: { id: user.vendor.id },
+        data: { verified: true, verifiedAt: new Date() },
+      });
     }
   } catch (err) {
     // Fallback for in-memory pending user approval

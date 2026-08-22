@@ -30,6 +30,7 @@ export default function AdminScreen() {
   const [activeTab, setActiveTab] = useState("overview");
 
   const [pending, setPending] = useState([]);
+  const [approvingId, setApprovingId] = useState(null);
   const [vendorRoster, setVendorRoster] = useState([]);
   const [riderRoster, setRiderRoster] = useState([]);
   const [customerRoster, setCustomerRoster] = useState([]);
@@ -114,10 +115,19 @@ export default function AdminScreen() {
     return () => clearTimeout(timeout);
   }, [orderSearch, orderStatusFilter, orderPaymentFilter, orders]);
 
-  const approve = async (id) => {
-    await AuthAPI.approveUser(id);
-    await Promise.all([loadPending(), loadVendorRoster(), loadRiderRoster(), loadAuditLog(), loadMailTray()]);
-    if (refreshVendors) await refreshVendors();
+  const approve = async (user) => {
+    if (!user?.id || approvingId) return;
+    setApprovingId(user.id);
+    try {
+      await AuthAPI.approveUser(user.id);
+      await Promise.all([loadPending(), loadVendorRoster(), loadRiderRoster(), loadAuditLog(), loadMailTray()]);
+      if (refreshVendors) await refreshVendors();
+      alert(`${user.name || "Account"} has been approved.`);
+    } catch (err) {
+      alert(`Approve failed: ${err.message || err}`);
+    } finally {
+      setApprovingId(null);
+    }
   };
   const suspendAccount = async (userId) => { await AuthAPI.suspendUser(userId); loadVendorRoster(); loadRiderRoster(); loadCustomerRoster(); loadAuditLog(); };
   const reactivateAccount = async (userId) => { await AuthAPI.approveUser(userId); loadVendorRoster(); loadRiderRoster(); loadCustomerRoster(); loadAuditLog(); };
@@ -261,16 +271,40 @@ export default function AdminScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      {/* Top Command Banner */}
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.shell}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Needly Admin Center</Text>
-        <Text style={styles.headerSubtitle}>Abeokuta Operations Management</Text>
+        <View style={styles.headerTopRow}>
+          <View>
+            <Text style={styles.headerEyebrow}>Needly Operations</Text>
+            <Text style={styles.headerTitle}>Admin Center</Text>
+            <Text style={styles.headerSubtitle}>Abeokuta marketplace control</Text>
+          </View>
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>LIVE</Text>
+          </View>
+        </View>
+
+        <View style={styles.headerSummaryRow}>
+          <View style={styles.headerSummaryItem}>
+            <Text style={styles.headerSummaryValue}>{pending.length}</Text>
+            <Text style={styles.headerSummaryLabel}>Approvals</Text>
+          </View>
+          <View style={styles.headerSummaryDivider} />
+          <View style={styles.headerSummaryItem}>
+            <Text style={styles.headerSummaryValue}>{openDisputes.length + openIssues.length}</Text>
+            <Text style={styles.headerSummaryLabel}>Issues</Text>
+          </View>
+          <View style={styles.headerSummaryDivider} />
+          <View style={styles.headerSummaryItem}>
+            <Text style={styles.headerSummaryValue}>{pendingPayouts.length}</Text>
+            <Text style={styles.headerSummaryLabel}>Payouts</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Navigation Page Tabs Bar */}
       <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
           {ADMIN_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badgeCount = getBadgeCount(tab.id);
@@ -293,8 +327,7 @@ export default function AdminScreen() {
         </ScrollView>
       </View>
 
-      {/* Page Content Body */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <View style={styles.pageContent}>
         {/* 1. OVERVIEW PAGE */}
         {activeTab === "overview" && (
           <View style={styles.pageWrap}>
@@ -359,17 +392,34 @@ export default function AdminScreen() {
               </View>
             ) : (
               <View style={{ gap: 12 }}>
-                {pending.map((u) => (
+                {pending.map((u) => {
+                  const isApproving = approvingId === u.id;
+                  return (
                   <View key={u.id} style={styles.pendingCard}>
                     <View style={{ flex: 1, paddingRight: 10 }}>
                       <Text style={styles.pendingTitle}>{u.name} ({u.role})</Text>
                       <Text style={styles.pendingMeta}>{u.email} · {u.phone || "No phone registered"}</Text>
+                      {u.role === "VENDOR" && (
+                        <Text style={styles.pendingMeta}>
+                          Onboarding: {u.vendor?.onboardingFeeStatus || "PENDING"}
+                        </Text>
+                      )}
                     </View>
-                    <Pressable onPress={() => approve(u.id)} style={styles.approveBtn}>
-                      <Text style={styles.approveBtnText}>Approve Account</Text>
+                    <Pressable
+                      disabled={isApproving}
+                      onPress={() => approve(u)}
+                      style={({ pressed }) => [
+                        styles.approveBtn,
+                        pressed && styles.approveBtnPressed,
+                        isApproving && styles.approveBtnDisabled,
+                      ]}
+                    >
+                      <Text style={styles.approveBtnText}>
+                        {isApproving ? "Approving..." : "Approve Account"}
+                      </Text>
                     </Pressable>
                   </View>
-                ))}
+                );})}
               </View>
             )}
           </View>
@@ -811,37 +861,67 @@ export default function AdminScreen() {
             </View>
           </View>
         )}
-      </ScrollView>
-    </View>
+      </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 16, paddingBottom: 60 },
+  screen: { flex: 1, backgroundColor: "#F6F3FF" },
+  content: { paddingBottom: 72, alignItems: "center" },
+  shell: {
+    width: "100%",
+    maxWidth: 430,
+    backgroundColor: "#FFFFFF",
+    minHeight: "100%",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 36,
+  },
 
   header: {
-    backgroundColor: DARK_NAVY, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14,
+    backgroundColor: PURPLE,
+    borderRadius: 30,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
   },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: "#ffffff" },
-  headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 2 },
+  headerTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  headerEyebrow: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "900", textTransform: "uppercase", marginBottom: 4 },
+  headerTitle: { fontSize: 24, fontWeight: "900", color: "#ffffff" },
+  headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.82)", marginTop: 2, fontWeight: "700" },
+  headerBadge: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  headerBadgeText: { color: "#ffffff", fontSize: 10.5, fontWeight: "900" },
+  headerSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 18, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 12 },
+  headerSummaryItem: { flex: 1, alignItems: "center" },
+  headerSummaryValue: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  headerSummaryLabel: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "800", marginTop: 1 },
+  headerSummaryDivider: { width: 1, height: 26, backgroundColor: "rgba(255,255,255,0.2)" },
 
   tabContainer: {
-    backgroundColor: DARK_NAVY, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: -18,
+    marginBottom: 16,
   },
+  tabScrollContent: { gap: 8, paddingHorizontal: 18 },
   tabButton: {
-    flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+    flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC",
+    borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8, borderWidth: 1, borderColor: "#E2E8F0",
   },
-  tabButtonActive: { backgroundColor: PURPLE, borderColor: "#ffffff" },
+  tabButtonActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   tabIcon: { fontSize: 14 },
-  tabText: { color: "rgba(255,255,255,0.8)", fontSize: 12.5, fontWeight: "700" },
+  tabText: { color: "#64748B", fontSize: 12.5, fontWeight: "800" },
   tabTextActive: { color: "#ffffff", fontWeight: "900" },
   tabBadge: { backgroundColor: MANGO, borderRadius: 10, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   tabBadgeActive: { backgroundColor: "#ffffff" },
   tabBadgeText: { color: "#ffffff", fontSize: 10.5, fontWeight: "900" },
   tabBadgeTextActive: { color: PURPLE, fontWeight: "900" },
 
+  pageContent: { gap: 12 },
   pageWrap: { gap: 12 },
   pageHeaderTitle: { fontSize: 20, fontWeight: "900", color: DARK_NAVY },
   pageHeaderSub: { fontSize: 13, color: "#64748B", marginBottom: 8 },
@@ -878,6 +958,8 @@ const styles = StyleSheet.create({
   pendingTitle: { fontSize: 14.5, fontWeight: "900", color: DARK_NAVY },
   pendingMeta: { fontSize: 12, color: "#92400E", marginTop: 2 },
   approveBtn: { backgroundColor: EMERALD, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
+  approveBtnPressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
+  approveBtnDisabled: { opacity: 0.65 },
   approveBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 12.5 },
 
   disputeCard: { backgroundColor: "#FEF2F2", borderWidth: 1.5, borderColor: CHILI, borderRadius: 18, padding: 14 },

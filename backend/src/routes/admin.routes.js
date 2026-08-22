@@ -45,7 +45,7 @@ router.get("/stats/overview", async (req, res) => {
       prisma.user.count({ where: { role: "CUSTOMER", approved: true, suspendedAt: null } }),
       prisma.vendor.count(),
       prisma.vendor.count({ where: { isOpen: true } }),
-      prisma.user.count({ where: { role: "VENDOR", approved: false } }),
+      prisma.user.count({ where: { role: "VENDOR", approved: false, suspendedAt: null } }),
       prisma.rider.count(),
       prisma.rider.count({ where: { isOnline: true } }),
       prisma.user.count({ where: { role: "MANAGER" } }),
