@@ -7,7 +7,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { logAction } = require("../lib/auditLog");
 const { broadcastProviderStatus, broadcastAdminAlert } = require("../sockets/orderSocket");
 const { appUrl, escapeHtml, sendMail } = require("../lib/mailer");
-const { initializeTransaction } = require("../lib/paystack");
+const { initializeHostedPayment } = require("../lib/paymentGateway");
 
 const router = express.Router();
 const confirmationMailTray = [];
@@ -171,8 +171,10 @@ async function createVendorOnboardingPayment({ user, vendor }) {
   });
 
   try {
-    const txn = await initializeTransaction({
+    const txn = await initializeHostedPayment({
       email: user.email,
+      name: user.name,
+      phone: user.phone,
       amountNaira: feeAmount,
       reference,
       callbackUrl: `${process.env.APP_BASE_URL}/payments/vendor-onboarding/callback`,
@@ -188,6 +190,7 @@ async function createVendorOnboardingPayment({ user, vendor }) {
       amount: feeAmount,
       reference,
       authorizationUrl: txn.authorization_url,
+      gateway: txn.gateway || "paystack",
       status: "PENDING",
     };
   } catch (err) {

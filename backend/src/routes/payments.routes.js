@@ -2,7 +2,8 @@ const express = require("express");
 const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
-const { getPaystackSecretKey, initializeTransaction } = require("../lib/paystack");
+const { getPaystackSecretKey } = require("../lib/paystack");
+const { initializeHostedPayment } = require("../lib/paymentGateway");
 const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
@@ -198,20 +199,32 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
   const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm);
   const reference = `needly_${order.id}_${Date.now()}`;
 
-  const txn = await initializeTransaction({
-    email: order.customer.email,
-    amountNaira: split.customerAmount,
-    reference,
-    callbackUrl: `${process.env.APP_BASE_URL}/payments/callback`,
-    metadata: {
-      orderId: order.id,
-      vendorAmount: split.vendorAmount,
-      platformFeeAmount: split.platformFeeAmount,
-      platformFeePercent: split.platformFeePercent,
-      deliveryFeeAmount: split.deliveryFeeAmount,
-      deliveryDistanceKm: split.deliveryDistanceKm,
-    },
-  });
+  let txn;
+  try {
+    txn = await initializeHostedPayment({
+      email: order.customer.email,
+      name: order.customer.name,
+      phone: order.customer.phone,
+      amountNaira: split.customerAmount,
+      reference,
+      callbackUrl: `${process.env.APP_BASE_URL}/payments/callback`,
+      metadata: {
+        type: "order_payment",
+        orderId: order.id,
+        vendorId: order.vendorId,
+        vendorAmount: split.vendorAmount,
+        platformFeeAmount: split.platformFeeAmount,
+        platformFeePercent: split.platformFeePercent,
+        deliveryFeeAmount: split.deliveryFeeAmount,
+        deliveryDistanceKm: split.deliveryDistanceKm,
+      },
+    });
+  } catch (err) {
+    console.error("Payment checkout initialization failed", err.response?.data || err.message);
+    return res.status(502).json({
+      error: err.response?.data?.message || err.message || "Payment checkout could not be created. Please try again.",
+    });
+  }
 
   await prisma.payment.create({
     data: {
@@ -227,7 +240,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
     },
   });
 
-  res.json({ authorizationUrl: txn.authorization_url, reference, ...split });
+  res.json({ authorizationUrl: txn.authorization_url, gateway: txn.gateway || "paystack", reference, ...split });
 });
 
 /**
