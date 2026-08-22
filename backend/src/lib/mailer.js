@@ -34,9 +34,16 @@ async function sendMail({ to, subject, text, html }) {
     host: config.host,
     port: Number(config.port || 587),
     secure: String(config.secure || "").toLowerCase() === "true",
+    requireTLS: String(config.secure || "").toLowerCase() !== "true",
+    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 15000),
+    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 20000),
     auth: {
       user: config.user,
       pass: config.pass,
+    },
+    tls: {
+      servername: config.host,
     },
   });
   const from = config.from || config.user;
