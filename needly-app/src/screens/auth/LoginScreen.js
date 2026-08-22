@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import NeedlyLogo from "../../components/NeedlyLogo";
-import { LOGIN_HERO_MARKET } from "../../data/customerAssets";
+import { LOGIN_HERO_MARKET, LOGIN_HERO_SLIDES } from "../../data/customerAssets";
 import { useAuth } from "../../context/AuthContext";
 
 const PURPLE = "#6F45E9";
@@ -72,6 +72,18 @@ export default function LoginScreen({ navigation }) {
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  const heroSlides = LOGIN_HERO_SLIDES?.length ? LOGIN_HERO_SLIDES : [{ key: "market", image: LOGIN_HERO_MARKET, location: "Abeokuta, Nigeria", title: "Support Local, Grow Local", text: "Shop quality products and services from trusted local sellers in Abeokuta." }];
+  const heroSlide = heroSlides[heroIndex % heroSlides.length];
+
+  useEffect(() => {
+    if (heroSlides.length < 2) return undefined;
+    const timer = setInterval(() => {
+      setHeroIndex((current) => (current + 1) % heroSlides.length);
+    }, 5200);
+    return () => clearInterval(timer);
+  }, [heroSlides.length]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -141,7 +153,7 @@ export default function LoginScreen({ navigation }) {
     >
       {!isDesktop && (
         <>
-          <Image source={LOGIN_HERO_MARKET} style={styles.mobilePageImage} resizeMode="cover" />
+          <Image source={heroSlide.image} style={styles.mobilePageImage} resizeMode="cover" />
           <View style={styles.mobilePageOverlay} />
         </>
       )}
@@ -159,12 +171,12 @@ export default function LoginScreen({ navigation }) {
         <View style={[styles.layout, isDesktop ? styles.layoutDesktop : styles.layoutMobile]}>
           {isDesktop ? (
             <ImageBackground
-              source={LOGIN_HERO_MARKET}
+              source={heroSlide.image}
               style={[styles.hero, styles.heroDesktop]}
               imageStyle={[styles.heroImage, styles.heroImageDesktop]}
               resizeMode="cover"
             >
-              <Image source={LOGIN_HERO_MARKET} style={styles.heroPhoto} resizeMode="cover" />
+              <Image source={heroSlide.image} style={styles.heroPhoto} resizeMode="cover" />
               <View style={styles.heroTopFade} />
               <View style={styles.heroBottomFade} />
               <View style={styles.heroBrand}>
@@ -174,14 +186,19 @@ export default function LoginScreen({ navigation }) {
               <View style={styles.heroStory}>
                 <View style={styles.locationChip}>
                   <Ionicons name="location" size={20} color="#fff" />
-                  <Text style={styles.locationChipText}>Abeokuta, Nigeria</Text>
+                  <Text style={styles.locationChipText}>{heroSlide.location}</Text>
                 </View>
-                <Text style={styles.storyTitle}>Support Local, Grow Local</Text>
-                <Text style={styles.storyText}>Shop quality products and services from trusted local sellers in Abeokuta.</Text>
+                <Text style={styles.storyTitle}>{heroSlide.title}</Text>
+                <Text style={styles.storyText}>{heroSlide.text}</Text>
                 <View style={styles.heroDots}>
-                  <View style={styles.heroDotActive} />
-                  <View style={styles.heroDot} />
-                  <View style={styles.heroDot} />
+                  {heroSlides.map((slide, index) => (
+                    <Pressable
+                      key={slide.key}
+                      accessibilityLabel={`Show ${slide.title}`}
+                      onPress={() => setHeroIndex(index)}
+                      style={index === heroIndex ? styles.heroDotActive : styles.heroDot}
+                    />
+                  ))}
                 </View>
               </View>
             </ImageBackground>
@@ -192,9 +209,19 @@ export default function LoginScreen({ navigation }) {
               </View>
               <View style={styles.mobileLocationChip}>
                 <Ionicons name="location" size={16} color="#fff" />
-                <Text style={styles.mobileLocationText}>Abeokuta, Nigeria</Text>
+                <Text style={styles.mobileLocationText}>{heroSlide.location}</Text>
               </View>
-              <Text style={styles.mobileStoryTitle}>Support Local, Grow Local</Text>
+              <Text style={styles.mobileStoryTitle}>{heroSlide.title}</Text>
+              <View style={styles.mobileHeroDots}>
+                {heroSlides.map((slide, index) => (
+                  <Pressable
+                    key={slide.key}
+                    accessibilityLabel={`Show ${slide.title}`}
+                    onPress={() => setHeroIndex(index)}
+                    style={index === heroIndex ? styles.mobileHeroDotActive : styles.mobileHeroDot}
+                  />
+                ))}
+              </View>
             </View>
           )}
 
@@ -417,6 +444,9 @@ const styles = StyleSheet.create({
   mobileLocationChip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, marginTop: 12 },
   mobileLocationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
   mobileStoryTitle: { color: "#fff", fontSize: 16, lineHeight: 21, fontWeight: "900", marginTop: 10 },
+  mobileHeroDots: { flexDirection: "row", gap: 7, marginTop: 10 },
+  mobileHeroDotActive: { width: 17, height: 6, borderRadius: 6, backgroundColor: "#FFFFFF" },
+  mobileHeroDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
   hero: { overflow: "hidden", backgroundColor: PURPLE_DARK },
   heroDesktop: { width: "42%", minHeight: 760, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 },
   heroMobile: { height: 300, borderRadius: 24 },
