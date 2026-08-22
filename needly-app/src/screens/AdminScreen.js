@@ -394,6 +394,7 @@ export default function AdminScreen() {
               <View style={{ gap: 12 }}>
                 {pending.map((u) => {
                   const isApproving = approvingId === u.id;
+                  const vendorPaymentPending = u.role === "VENDOR" && u.vendor?.onboardingFeeStatus !== "PAID";
                   return (
                   <View key={u.id} style={styles.pendingCard}>
                     <View style={{ flex: 1, paddingRight: 10 }}>
@@ -401,21 +402,26 @@ export default function AdminScreen() {
                       <Text style={styles.pendingMeta}>{u.email} · {u.phone || "No phone registered"}</Text>
                       {u.role === "VENDOR" && (
                         <Text style={styles.pendingMeta}>
-                          Onboarding: {u.vendor?.onboardingFeeStatus || "PENDING"}
+                          Onboarding: {u.vendor?.onboardingFeeStatus || "PENDING"} · Fee {fmtNaira(u.vendor?.onboardingFeeAmount || 2500)}
+                        </Text>
+                      )}
+                      {vendorPaymentPending && (
+                        <Text style={styles.pendingHelpText}>
+                          Approval unlocks after Flutterwave confirms the vendor onboarding payment.
                         </Text>
                       )}
                     </View>
                     <Pressable
-                      disabled={isApproving}
+                      disabled={isApproving || vendorPaymentPending}
                       onPress={() => approve(u)}
                       style={({ pressed }) => [
                         styles.approveBtn,
                         pressed && styles.approveBtnPressed,
-                        isApproving && styles.approveBtnDisabled,
+                        (isApproving || vendorPaymentPending) && styles.approveBtnDisabled,
                       ]}
                     >
                       <Text style={styles.approveBtnText}>
-                        {isApproving ? "Approving..." : "Approve Account"}
+                        {isApproving ? "Approving..." : vendorPaymentPending ? "Waiting for Payment" : "Approve Account"}
                       </Text>
                     </Pressable>
                   </View>
@@ -957,6 +963,7 @@ const styles = StyleSheet.create({
   },
   pendingTitle: { fontSize: 14.5, fontWeight: "900", color: DARK_NAVY },
   pendingMeta: { fontSize: 12, color: "#92400E", marginTop: 2 },
+  pendingHelpText: { fontSize: 11.5, color: "#7C2D12", fontWeight: "800", marginTop: 4, lineHeight: 16 },
   approveBtn: { backgroundColor: EMERALD, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   approveBtnPressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
   approveBtnDisabled: { opacity: 0.65 },

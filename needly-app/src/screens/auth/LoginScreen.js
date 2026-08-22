@@ -71,6 +71,7 @@ export default function LoginScreen({ navigation }) {
   const [forgotInput, setForgotInput] = useState("");
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState(null);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -82,6 +83,12 @@ export default function LoginScreen({ navigation }) {
       setAccountType(roleParam);
     } else if (roleParam === "MANAGER" || roleParam === "ADMIN") {
       setAccountType("PROVIDER");
+    }
+    if (params.get("onboarding") === "paid") {
+      setAccountType("VENDOR");
+      setNoticeMessage("Onboarding payment received. Your vendor account is waiting for Admin approval. We will email you when it is active.");
+    } else if (params.get("pendingApproval") === "1") {
+      setNoticeMessage("Your account is waiting for Admin approval. Please check your email for updates.");
     }
   }, []);
 
@@ -232,6 +239,12 @@ export default function LoginScreen({ navigation }) {
               {!!errorMessage && (
                 <Pressable style={styles.errorBox} onPress={clearSuspensionMessage}>
                   <Text style={styles.errorText}>{errorMessage}</Text>
+                </Pressable>
+              )}
+
+              {!!noticeMessage && (
+                <Pressable style={styles.noticeBox} onPress={() => setNoticeMessage(null)}>
+                  <Text style={styles.noticeText}>{noticeMessage}</Text>
                 </Pressable>
               )}
 
@@ -455,6 +468,8 @@ const styles = StyleSheet.create({
   roleTextActive: { color: "#fff" },
   errorBox: { backgroundColor: "#FFF1F2", borderWidth: 1, borderColor: "#FFCDD5", borderRadius: 16, padding: 12, marginBottom: 18 },
   errorText: { color: "#B4233C", fontSize: 13.5, fontWeight: "800", lineHeight: 19 },
+  noticeBox: { backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0", borderRadius: 16, padding: 12, marginBottom: 18 },
+  noticeText: { color: "#047857", fontSize: 13.5, fontWeight: "800", lineHeight: 19 },
   formBlock: { gap: 9 },
   label: { color: INK, fontSize: 16, fontWeight: "900", marginTop: 4 },
   labelMobile: { fontSize: 12.5 },

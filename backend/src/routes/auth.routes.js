@@ -907,7 +907,8 @@ router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req
       user = { ...removed, approved: true };
       DEMO_USERS.push(user);
     } else {
-      user = { id: req.params.id, name: "Approved User", role: "VENDOR", approved: true };
+      console.error("Approve account failed", err);
+      return res.status(500).json({ error: "Could not approve this account. Please refresh and try again." });
     }
   }
 
