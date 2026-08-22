@@ -9,6 +9,20 @@ const { INTEGRATION_CATALOG, listIntegrationSettings, upsertIntegrationSetting }
 
 const router = express.Router();
 
+const isMissingTableError = (err) => {
+  const message = String(err?.message || "");
+  return err?.code === "P2021" || /table .* does not exist|does not exist in the current database/i.test(message);
+};
+
+const emptyIfMissingTable = async (query, fallback) => {
+  try {
+    return await query;
+  } catch (err) {
+    if (isMissingTableError(err)) return fallback;
+    throw err;
+  }
+};
+
 // Enforce authentication & Super Admin/Admin permission on all /admin routes
 router.use(requireAuth);
 router.use(requireRole("SUPER_ADMIN", "ADMIN"));
@@ -53,11 +67,11 @@ router.get("/stats/overview", async (req, res) => {
       prisma.order.count({ where: { status: { in: ["PLACED", "ACCEPTED", "READY", "PICKED_UP"] } } }),
       prisma.order.count({ where: { status: "DELIVERED" } }),
       prisma.order.count({ where: { status: "CANCELLED" } }),
-      prisma.booking.count({ where: { status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } } }),
+      emptyIfMissingTable(prisma.booking.count({ where: { status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } } }), 0),
       prisma.order.findMany({ select: { total: true, status: true } }),
       prisma.payout.findMany({ select: { amount: true, status: true, riderId: true } }),
-      prisma.supportTicket ? prisma.supportTicket.count({ where: { status: { in: ["OPEN", "ASSIGNED", "WAITING"] } } }) : Promise.resolve(0),
-      prisma.refund ? prisma.refund.count({ where: { status: "REQUESTED" } }) : Promise.resolve(0),
+      prisma.supportTicket ? emptyIfMissingTable(prisma.supportTicket.count({ where: { status: { in: ["OPEN", "ASSIGNED", "WAITING"] } } }), 0) : Promise.resolve(0),
+      prisma.refund ? emptyIfMissingTable(prisma.refund.count({ where: { status: "REQUESTED" } }), 0) : Promise.resolve(0),
     ]);
 
     const grossRevenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -125,11 +139,11 @@ router.get("/live-operations", async (req, res) => {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
-      prisma.booking.findMany({
+      emptyIfMissingTable(prisma.booking.findMany({
         where: { status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } },
         include: { service: true, customer: true },
         take: 10,
-      }),
+      }), []),
       prisma.rider.findMany({
         where: { isOnline: true },
         include: { user: true },
@@ -141,7 +155,7 @@ router.get("/live-operations", async (req, res) => {
       prisma.vendor.count({ where: { isOpen: false } }),
       prisma.order.count({ where: { status: "READY", riderId: null } }),
       prisma.dispute.count({ where: { status: "OPEN" } }),
-      prisma.operationalIssue.count({ where: { status: "OPEN" } }),
+      emptyIfMissingTable(prisma.operationalIssue.count({ where: { status: "OPEN" } }), 0),
     ]);
 
     res.json({
@@ -239,6 +253,7 @@ router.get("/roles", async (req, res) => {
     });
     res.json(roles);
   } catch (err) {
+    if (isMissingTableError(err)) return res.json([]);
     res.status(500).json({ error: err.message || "Failed to load roles" });
   }
 });
@@ -478,14 +493,14 @@ router.get("/orders", async (_req, res) => {
 
 router.get("/bookings", async (_req, res) => {
   try {
-    const bookings = await prisma.booking.findMany({
+    const bookings = await emptyIfMissingTable(prisma.booking.findMany({
       include: {
         customer: { select: { id: true, name: true, email: true, phone: true } },
         service: true,
       },
       orderBy: { createdAt: "desc" },
       take: 200,
-    });
+    }), []);
     res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to load bookings" });
@@ -507,11 +522,11 @@ router.get("/products", async (_req, res) => {
 
 router.get("/services", async (_req, res) => {
   try {
-    const services = await prisma.service.findMany({
+    const services = await emptyIfMissingTable(prisma.service.findMany({
       include: { _count: { select: { bookings: true } } },
       orderBy: { createdAt: "desc" },
       take: 300,
-    });
+    }), []);
     res.json(services);
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to load services" });
@@ -523,7 +538,7 @@ router.get("/categories", async (_req, res) => {
     const [vendorGroups, productGroups, serviceGroups] = await Promise.all([
       prisma.vendor.groupBy({ by: ["category"], _count: { _all: true } }),
       prisma.product.groupBy({ by: ["subcategory"], _count: { _all: true } }),
-      prisma.service.groupBy({ by: ["category"], _count: { _all: true } }),
+      emptyIfMissingTable(prisma.service.groupBy({ by: ["category"], _count: { _all: true } }), []),
     ]);
     const byName = new Map();
     vendorGroups.forEach((row) => {
