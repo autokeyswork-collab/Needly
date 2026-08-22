@@ -28,7 +28,7 @@ const ADMIN_TABS = [
 
 export default function AdminScreen() {
   const { orders, disputes, resolveDispute, vendors, refreshVendors, cancelOrder, unassignRider } = useOrders();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
   const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -283,8 +283,13 @@ export default function AdminScreen() {
             <Text style={styles.headerTitle} numberOfLines={1}>Admin Center</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>Abeokuta marketplace control</Text>
           </View>
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>LIVE</Text>
+          <View style={styles.headerActionGroup}>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>LIVE</Text>
+            </View>
+            <Pressable onPress={logout} style={styles.headerLogoutButton}>
+              <Text style={styles.headerLogoutText}>Log out</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -916,8 +921,11 @@ const styles = StyleSheet.create({
   headerEyebrow: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "900", textTransform: "uppercase", marginBottom: 4 },
   headerTitle: { fontSize: 23, fontWeight: "900", color: "#ffffff" },
   headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.82)", marginTop: 2, fontWeight: "700" },
+  headerActionGroup: { alignItems: "flex-end", gap: 8, flexShrink: 0 },
   headerBadge: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", flexShrink: 0 },
   headerBadgeText: { color: "#ffffff", fontSize: 10.5, fontWeight: "900" },
+  headerLogoutButton: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  headerLogoutText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
   headerSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 16, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 11 },
   headerSummaryItem: { flex: 1, alignItems: "center" },
   headerSummaryValue: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
