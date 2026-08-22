@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, Modal, ActivityIndicator } from "react-native";
 import { SuperAdminAPI, AuthAPI, VendorAPI, RiderAPI, PayoutAPI, DisputeAPI, AuditAPI, BookingAPI, NotificationAPI } from "../api/client";
 import { connectSocket, getSocket, subscribeToRealtimeEvents } from "../api/socket";
+import AdminScreen from "./AdminScreen";
 
 const SIDEBAR_BG = "#0B0E17", SIDEBAR_W = 230, TOPBAR_H = 58;
 const PURPLE = "#6F45E9", PURPLE_LIGHT = "#7E57C2", PURPLE_SOFT = "#F3E8FF";
@@ -15,6 +16,7 @@ const PINK = "#EC4899", PINK_BG = "#FCE7F3";
 
 const NAV = [
   { id: "overview", label: "Dashboard", icon: "📊" },
+  { id: "adminOps", label: "Admin Approvals", icon: "⚡" },
   { section: "OPERATIONS" },
   { id: "liveOps", label: "Live Operations", icon: "📡" },
   { id: "orders", label: "Orders", icon: "📦" },
@@ -809,6 +811,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
   );
 
   const renderContent = () => {
+    if (activeTab === "adminOps") return <AdminScreen />;
+
     if (loading && activeTab === "overview") return <ActivityIndicator color={PURPLE} style={{ marginTop: 60 }} />;
 
     if (activeTab === "overview") return (
@@ -2151,7 +2155,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
     <View style={s.root}>
       <Sidebar />
       <View style={{ flex: 1 }}>
-        <TopBar />
+        {activeTab !== "adminOps" && <TopBar />}
         <View style={{ flex: 1, backgroundColor: BG }}>{renderContent()}</View>
       </View>
       <EditModal />
