@@ -30,7 +30,7 @@ export default function CustomerStack() {
       <Stack.Screen name="CustomerBookings" component={CustomerBookingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerAccount" component={CustomerAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AutoBooking" component={AutoBookingScreen} options={{ title: "Book auto service" }} />
-      <Stack.Screen name="VendorMenu" component={VendorMenuScreen} options={{ title: "Menu" }} />
+      <Stack.Screen name="VendorMenu" component={VendorMenuScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Cart" component={CartScreen} options={{ title: "Your order" }} />
       <Stack.Screen name="Tracking" component={TrackingScreen} options={{ title: "Track order", headerBackVisible: false }} />
     </Stack.Navigator>
