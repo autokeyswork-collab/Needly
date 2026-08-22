@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Animated, Easing, Image, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -25,6 +25,15 @@ Notifications.setNotificationHandler({
 });
 
 import NeedlyLogo from "./src/components/NeedlyLogo";
+import { CATEGORY_IMAGES } from "./src/data/customerAssets";
+
+const PRELOAD_PRODUCTS = [
+  { key: "market", image: CATEGORY_IMAGES["Local Market"], style: { top: -108, left: -126 }, size: 62 },
+  { key: "food", image: CATEGORY_IMAGES.Restaurant, style: { top: -92, right: -118 }, size: 58 },
+  { key: "pharmacy", image: CATEGORY_IMAGES.Pharmacy, style: { bottom: -96, left: -104 }, size: 54 },
+  { key: "auto", image: CATEGORY_IMAGES.Auto, style: { bottom: -104, right: -108 }, size: 56 },
+  { key: "shop", image: CATEGORY_IMAGES.Supermarket, style: { top: 18, right: -152 }, size: 50 },
+];
 
 function PreloadScreen() {
   const pulse = useRef(new Animated.Value(0)).current;
@@ -66,12 +75,37 @@ function PreloadScreen() {
   const ringOpacity = ring.interpolate({ inputRange: [0, 0.72, 1], outputRange: [0.42, 0.14, 0] });
   const secondRingScale = ring.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.2] });
   const secondRingOpacity = ring.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.26, 0.18, 0] });
+  const productFloat = float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+  const productPulse = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.04] });
 
   return (
     <View style={styles.preload}>
       <Animated.View style={[styles.preloadGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
       <Animated.View style={[styles.preloadRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
       <Animated.View style={[styles.preloadRingSmall, { opacity: secondRingOpacity, transform: [{ scale: secondRingScale }] }]} />
+      <View style={styles.productOrbit} pointerEvents="none">
+        {PRELOAD_PRODUCTS.map((item) => {
+          const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] });
+          return (
+            <Animated.View
+              key={item.key}
+              style={[
+                styles.productBubble,
+                item.style,
+                {
+                  width: item.size,
+                  height: item.size,
+                  borderRadius: item.size / 2,
+                  opacity,
+                  transform: [{ translateY: productFloat }, { scale: productPulse }],
+                },
+              ]}
+            >
+              <Image source={item.image} style={styles.productImage} resizeMode="cover" />
+            </Animated.View>
+          );
+        })}
+      </View>
       <Animated.View style={[styles.preloadLogo, { transform: [{ translateY: logoY }, { scale: logoScale }] }]}>
         <NeedlyLogo size="hero" theme="dark" variant="icon" showBadges={false} />
       </Animated.View>
@@ -163,5 +197,27 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
+  },
+  productOrbit: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  productBubble: {
+    position: "absolute",
+    backgroundColor: "#FFFFFF",
+    padding: 4,
+    shadowColor: "#6F45E9",
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
   },
 });
