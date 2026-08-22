@@ -283,6 +283,7 @@ export const VendorAPI = {
   },
   adminEditProfile: (vendorId, fields) => request(`/vendors/${vendorId}/admin-edit`, { method: "PATCH", body: fields }),
   setVerification: (vendorId, fields) => request(`/vendors/${vendorId}/verification`, { method: "PATCH", body: fields }),
+  verify: (vendorId, fields) => request(`/vendors/${vendorId}/verification`, { method: "PATCH", body: fields }),
   stats: () => request("/vendors/me/stats").catch(() => null),
   setBankAccount: (vendorId, bank) => request(`/vendors/${vendorId}/bank-account`, { method: "PATCH", body: bank }),
   toggleOpen: (vendorId) => request(`/vendors/${vendorId}/open`, { method: "PATCH" }).catch(() => ({ isOpen: true })),
