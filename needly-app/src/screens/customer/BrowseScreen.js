@@ -138,6 +138,7 @@ export default function BrowseScreen({ navigation }) {
   const [installHidden, setInstallHidden] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
+  const customerName = user?.name || "Customer";
   const customerCity = user?.locationCity || "Abeokuta";
   const customerState = user?.locationState || "Ogun";
   const customerAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
@@ -331,13 +332,12 @@ export default function BrowseScreen({ navigation }) {
               <View style={styles.leftCluster}>
                 <Image source={customerAvatarSource} style={styles.avatar} />
                 <Pressable
-                  style={styles.locationPill}
+                  style={styles.personPill}
                   onPress={() => navigation.navigate("CustomerAccount")}
-                  accessibilityLabel={`Change location. Current location is ${customerCity}, ${customerState}`}
+                  accessibilityLabel={`Open account profile for ${customerName}`}
                 >
-                  <Ionicons name="location" size={17} color="#fff" />
-                  <Text numberOfLines={1} style={styles.locationText}>{customerCity}</Text>
-                  <Ionicons name="chevron-down" size={15} color="#fff" />
+                  <Ionicons name="person" size={17} color="#fff" />
+                  <Text numberOfLines={1} style={styles.personText}>{customerName}</Text>
                 </Pressable>
               </View>
 
@@ -350,6 +350,16 @@ export default function BrowseScreen({ navigation }) {
                 <IconButton name="bell-outline" family="Ionicons" badge={unreadNotifications} onPress={() => navigation.navigate("CustomerAccount")} />
               </View>
             </View>
+
+            <Pressable
+              style={styles.locationContextPill}
+              onPress={() => navigation.navigate("CustomerAccount")}
+              accessibilityLabel={`Change location. Current location is ${customerCity}, ${customerState}`}
+            >
+              <Ionicons name="location" size={16} color="#fff" />
+              <Text numberOfLines={1} style={styles.locationContextText}>Delivering to {customerCity}, {customerState}</Text>
+              <Ionicons name="chevron-down" size={14} color="#fff" />
+            </Pressable>
 
             <View style={styles.searchWrap}>
               <FontAwesome name="search" size={23} color="#7E8197" />
@@ -592,8 +602,10 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   leftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
-  locationPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 142 },
-  locationText: { color: "#fff", fontSize: 13.5, fontWeight: "900" },
+  personPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 156 },
+  personText: { color: "#fff", fontSize: 13.5, fontWeight: "900", flexShrink: 1 },
+  locationContextPill: { alignSelf: "flex-start", maxWidth: "100%", marginTop: 12, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10 },
+  locationContextText: { color: "#fff", fontSize: 12, fontWeight: "900", flexShrink: 1 },
   rightCluster: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 0.48 },
   headerIconButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: -5, right: -4, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
