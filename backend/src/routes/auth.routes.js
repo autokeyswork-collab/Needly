@@ -848,6 +848,31 @@ router.get("/mail-tray", requireAuth, requireRole("ADMIN"), async (req, res) => 
   res.json(confirmationMailTray);
 });
 
+/** POST /auth/test-mail — admin-only SMTP smoke test using the live mailer config. */
+router.post("/test-mail", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const to = String(req.body?.to || req.user.email || "").trim().toLowerCase();
+  if (!to || !to.includes("@")) return res.status(400).json({ error: "Provide a valid recipient email in 'to'" });
+
+  const mailResult = await queueConfirmationMail({
+    to,
+    type: "smtp_test",
+    subject: "Needly email test",
+    body: `Hello, this is a Needly SMTP test sent at ${new Date().toISOString()}. If you received this, Brevo SMTP is working end to end.`,
+    actionUrl: appUrl("/"),
+    actionLabel: "Open Needly",
+  });
+
+  res.json({
+    sent: mailResult.status === "sent",
+    status: mailResult.status,
+    to: mailResult.to,
+    providerMessageId: mailResult.providerMessageId || null,
+    note: mailResult.note || null,
+    error: mailResult.error || null,
+    createdAt: mailResult.createdAt,
+  });
+});
+
 /** PATCH /auth/users/:id/approve — admin approves a pending vendor/rider account. */
 router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req, res) => {
   let user = null;
