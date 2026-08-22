@@ -2,9 +2,11 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 // Point this at your deployed backend. For local dev against an Expo Go
-// device/simulator on the same network, use your machine's LAN IP, not
-// "localhost" (the phone can't resolve your laptop's localhost).
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:4000";
+// device/simulator on the same network, set EXPO_PUBLIC_API_BASE_URL to
+// your machine's LAN IP. The default must be the live API so mobile/PWA
+// builds never try to call a phone's own localhost.
+const LIVE_API_BASE_URL = "https://needly-backend-7tap.onrender.com";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LIVE_API_BASE_URL;
 
 const TOKEN_KEY = "needly_auth_token";
 
@@ -48,12 +50,20 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   }
 
   let res;
+  const urls = Array.from(new Set([API_BASE_URL, LIVE_API_BASE_URL]));
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    for (let idx = 0; idx < urls.length; idx += 1) {
+      try {
+        res = await fetch(`${urls[idx]}${path}`, {
+          method,
+          headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        break;
+      } catch (err) {
+        if (idx === urls.length - 1) throw err;
+      }
+    }
   } catch (err) {
     throw new Error("Can't reach the server. Check your connection and try again.");
   }

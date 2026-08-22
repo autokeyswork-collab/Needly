@@ -1,6 +1,6 @@
 {
   "installCommand": "cd needly-app && npm install",
-  "buildCommand": "cd needly-app && EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-https://needly-backend.onrender.com} npm run build",
+  "buildCommand": "cd needly-app && EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-https://needly-backend-7tap.onrender.com} npm run build",
   "outputDirectory": "needly-app/dist",
   "rewrites": [
     {
