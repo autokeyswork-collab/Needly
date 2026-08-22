@@ -77,6 +77,10 @@ export default function VendorScreen() {
     toggleProductAvailable,
     toggleVendorOpen,
     disputes,
+    notifications,
+    refreshNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
   } = useOrders();
   const { user, logout } = useAuth();
   const { width } = useWindowDimensions();
@@ -168,6 +172,7 @@ export default function VendorScreen() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [bankDraft, setBankDraft] = useState({ bankName: "", bankAccountNumber: "", bankAccountName: "" });
   const [savingBank, setSavingBank] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [decliningOrderId, setDecliningOrderId] = useState(null);
   const [declineOtherNote, setDeclineOtherNote] = useState(null);
@@ -244,6 +249,8 @@ export default function VendorScreen() {
   const vendorAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
   const bankLocked = !!activeVendor.bankAccountLocked;
   const hasBankAccount = !!(activeVendor.bankName && activeVendor.bankAccountNumber && activeVendor.bankAccountName);
+  const vendorNotifications = (notifications || []).slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const unreadVendorNotifications = vendorNotifications.filter((item) => !item.read).length;
 
   const installApp = async () => {
     if (Platform.OS !== "web") return;
@@ -430,14 +437,19 @@ export default function VendorScreen() {
                 </View>
               )}
             </View>
-            <View style={styles.vendorHeaderIconButton}>
+            <Pressable
+              style={styles.vendorHeaderIconButton}
+              onPress={() => setShowNotifications((value) => !value)}
+            >
               <Ionicons name="notifications-outline" size={22} color={PURPLE} />
-              {!!openDisputes.length && (
+              {!!(unreadVendorNotifications || openDisputes.length) && (
                 <View style={styles.vendorBadge}>
-                  <Text style={styles.vendorBadgeText}>{openDisputes.length > 99 ? "99+" : openDisputes.length}</Text>
+                  <Text style={styles.vendorBadgeText}>
+                    {(unreadVendorNotifications || openDisputes.length) > 99 ? "99+" : (unreadVendorNotifications || openDisputes.length)}
+                  </Text>
                 </View>
               )}
-            </View>
+            </Pressable>
             <Pressable style={styles.vendorHeaderIconButton} onPress={logout}>
               <Ionicons name="log-out-outline" size={22} color={PURPLE} />
             </Pressable>
@@ -501,6 +513,51 @@ export default function VendorScreen() {
       {actionError && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>❌ {actionError}</Text>
+        </View>
+      )}
+
+      {showNotifications && (
+        <View style={styles.vendorNotificationPanel}>
+          <View style={styles.vendorNotificationHeader}>
+            <View>
+              <Text style={styles.vendorNotificationTitle}>Notifications</Text>
+              <Text style={styles.vendorNotificationSub}>{unreadVendorNotifications} unread · {vendorNotifications.length} total</Text>
+            </View>
+            <View style={styles.vendorNotificationActions}>
+              <Pressable style={styles.vendorNotificationMiniBtn} onPress={refreshNotifications}>
+                <Ionicons name="refresh" size={15} color={PURPLE} />
+              </Pressable>
+              <Pressable style={styles.vendorNotificationMiniBtn} onPress={markAllNotificationsRead}>
+                <Ionicons name="checkmark-done" size={16} color={PURPLE} />
+              </Pressable>
+            </View>
+          </View>
+          {vendorNotifications.length === 0 ? (
+            <View style={styles.vendorNotificationEmpty}>
+              <Ionicons name="notifications-outline" size={30} color={PURPLE} />
+              <Text style={styles.vendorNotificationEmptyTitle}>No notifications yet</Text>
+              <Text style={styles.vendorNotificationEmptyText}>Order, payment, issue and support updates will appear here.</Text>
+            </View>
+          ) : (
+            <View style={styles.vendorNotificationList}>
+              {vendorNotifications.slice(0, 8).map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={[styles.vendorNotificationRow, !item.read && styles.vendorNotificationRowUnread]}
+                  onPress={() => markNotificationRead?.(item.id)}
+                >
+                  <View style={styles.vendorNotificationIcon}>
+                    <Ionicons name={!item.read ? "notifications" : "notifications-outline"} size={18} color={PURPLE} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={styles.vendorNotificationRowTitle}>{item.title || "Needly update"}</Text>
+                    <Text numberOfLines={2} style={styles.vendorNotificationRowText}>{item.body || item.message || "You have a new update."}</Text>
+                  </View>
+                  {!item.read && <View style={styles.vendorNotificationDot} />}
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -1038,6 +1095,22 @@ const styles = StyleSheet.create({
   alertText: { color: "#991B1B", fontSize: 13 },
   errorBox: { backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FCA5A5", borderRadius: 18, padding: 13, marginBottom: 14 },
   errorText: { color: "#991B1B", fontSize: 13 },
+  vendorNotificationPanel: { backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 14, marginBottom: 14, shadowColor: PURPLE, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  vendorNotificationHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
+  vendorNotificationTitle: { color: INK, fontSize: 16, fontWeight: "900" },
+  vendorNotificationSub: { color: MUTED, fontSize: 11.5, fontWeight: "800", marginTop: 2 },
+  vendorNotificationActions: { flexDirection: "row", alignItems: "center", gap: 7 },
+  vendorNotificationMiniBtn: { width: 34, height: 34, borderRadius: 13, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center" },
+  vendorNotificationEmpty: { alignItems: "center", borderRadius: 18, backgroundColor: "#FBFAFF", borderWidth: 1, borderColor: "#EEEAF8", padding: 16 },
+  vendorNotificationEmptyTitle: { color: INK, fontSize: 14.5, fontWeight: "900", marginTop: 8 },
+  vendorNotificationEmptyText: { color: MUTED, fontSize: 12, textAlign: "center", lineHeight: 17, marginTop: 4 },
+  vendorNotificationList: { gap: 8 },
+  vendorNotificationRow: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 18, borderWidth: 1, borderColor: "#F1ECFB", backgroundColor: "#FFFFFF", padding: 11 },
+  vendorNotificationRowUnread: { backgroundColor: "#FBFAFF", borderColor: "#DDD2FF" },
+  vendorNotificationIcon: { width: 38, height: 38, borderRadius: 14, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center" },
+  vendorNotificationRowTitle: { color: INK, fontSize: 13.2, fontWeight: "900" },
+  vendorNotificationRowText: { color: MUTED, fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
+  vendorNotificationDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: "#FF3657" },
   bankCard: { backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 14, marginBottom: 14, shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   bankCardLocked: { backgroundColor: "#FBFAFF", borderColor: "#DED2FF" },
   bankHeaderRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 12 },
