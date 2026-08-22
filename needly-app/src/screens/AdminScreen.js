@@ -264,6 +264,14 @@ export default function AdminScreen() {
     : (vendors || []);
   const activeRidersCount = riderRoster.filter((r) => r.isOnline && r.user?.approved).length;
   const activeVendorsCount = effectiveVendors.filter((v) => v.isOpen).length;
+  const adminName = currentUser?.name || (isSuperAdmin ? "Super Admin" : "Admin");
+  const adminRoleLabel = isSuperAdmin ? "Super Admin" : "Admin";
+  const adminInitials = adminName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "A";
 
   const getBadgeCount = (tabId) => {
     if (tabId === "approvals") return pending.length;
@@ -278,14 +286,29 @@ export default function AdminScreen() {
       <View style={styles.shell}>
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow} numberOfLines={1}>Needly Operations</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>Admin Center</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>Abeokuta marketplace control</Text>
+          <View style={styles.headerProfileCluster}>
+            <View style={styles.headerAvatar}>
+              <Text style={styles.headerAvatarText}>{adminInitials}</Text>
+            </View>
+            <View style={styles.headerTitleBlock}>
+              <Pressable style={styles.headerPersonPill}>
+                <Text style={styles.headerPersonIcon}>👤</Text>
+                <Text style={styles.headerPersonText} numberOfLines={1}>{adminName}</Text>
+              </Pressable>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>{adminRoleLabel} · Abeokuta operations</Text>
+            </View>
           </View>
           <View style={styles.headerActionGroup}>
             <View style={styles.headerBadge}>
               <Text style={styles.headerBadgeText}>LIVE</Text>
+            </View>
+            <View style={styles.headerNotifyButton}>
+              <Text style={styles.headerNotifyIcon}>🔔</Text>
+              {!!pending.length && (
+                <View style={styles.headerNotifyBadge}>
+                  <Text style={styles.headerNotifyBadgeText}>{pending.length > 99 ? "99+" : pending.length}</Text>
+                </View>
+              )}
             </View>
             <Pressable onPress={logout} style={styles.headerLogoutButton}>
               <Text style={styles.headerLogoutText}>Log out</Text>
@@ -916,15 +939,32 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 7,
   },
-  headerTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  headerTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  headerProfileCluster: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
+  headerAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerAvatarText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   headerTitleBlock: { flex: 1, minWidth: 0 },
-  headerEyebrow: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "900", textTransform: "uppercase", marginBottom: 4 },
-  headerTitle: { fontSize: 23, fontWeight: "900", color: "#ffffff" },
+  headerPersonPill: { alignSelf: "flex-start", maxWidth: "100%", height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9 },
+  headerPersonIcon: { fontSize: 12 },
+  headerPersonText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900", flexShrink: 1 },
   headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.82)", marginTop: 2, fontWeight: "700" },
-  headerActionGroup: { alignItems: "flex-end", gap: 8, flexShrink: 0 },
+  headerActionGroup: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 7, flexShrink: 0 },
   headerBadge: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", flexShrink: 0 },
   headerBadgeText: { color: "#ffffff", fontSize: 10.5, fontWeight: "900" },
-  headerLogoutButton: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  headerNotifyButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center", position: "relative" },
+  headerNotifyIcon: { fontSize: 14 },
+  headerNotifyBadge: { position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  headerNotifyBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
+  headerLogoutButton: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   headerLogoutText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
   headerSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 16, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 11 },
   headerSummaryItem: { flex: 1, alignItems: "center" },
