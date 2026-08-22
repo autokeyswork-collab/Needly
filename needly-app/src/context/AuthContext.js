@@ -64,7 +64,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await AuthAPI.socialLogin(payload);
       if (res && res.pendingApproval) {
-        return { pendingApproval: true, message: res.message };
+        return { pendingApproval: true, message: res.message, onboardingPayment: res.onboardingPayment || null };
       }
       if (res && res.token) {
         await setToken(res.token);
@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
     try {
       const result = await AuthAPI.register(payload);
       if (result.pendingApproval) {
-        return { pendingApproval: true, message: result.message };
+        return { pendingApproval: true, message: result.message, onboardingPayment: result.onboardingPayment || null };
       }
       await setToken(result.token);
       await loadMe();

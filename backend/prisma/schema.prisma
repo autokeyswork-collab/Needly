@@ -115,6 +115,10 @@ model Vendor {
   bankAccountName   String?
   bankAccountLocked Boolean            @default(false)
   bankAccountLockedAt DateTime?
+  onboardingFeeAmount Int              @default(2500)
+  onboardingFeeStatus String           @default("PENDING")
+  onboardingPaymentReference String?   @unique
+  onboardingPaidAt   DateTime?
   verified          Boolean            @default(false)
   verifiedAt        DateTime?
   verificationNotes String?

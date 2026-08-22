@@ -4,7 +4,7 @@ const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { getPaystackSecretKey, initializeTransaction } = require("../lib/paystack");
 const { sendPushNotification } = require("../lib/pushNotifications");
-const { broadcastNotification } = require("../sockets/orderSocket");
+const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
 
 const router = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
@@ -176,6 +176,37 @@ router.post("/webhook", async (req, res) => {
 
   if (event.event === "charge.success") {
     const { reference } = event.data;
+    if (String(reference || "").startsWith("needly_vendor_onboarding_")) {
+      const vendor = await prisma.vendor.findUnique({
+        where: { onboardingPaymentReference: reference },
+        include: { owner: true },
+      });
+
+      if (vendor && vendor.onboardingFeeStatus !== "PAID") {
+        await prisma.vendor.update({
+          where: { id: vendor.id },
+          data: { onboardingFeeStatus: "PAID", onboardingPaidAt: new Date() },
+        });
+
+        if (vendor.ownerId) {
+          await broadcastNotification(vendor.ownerId, {
+            title: "Onboarding payment received",
+            body: `Your ₦${Number(vendor.onboardingFeeAmount || 2500).toLocaleString()} vendor onboarding fee was received. Admin review is next.`,
+            type: "PAYMENT",
+          });
+        }
+
+        broadcastAdminAlert({
+          type: "vendor_onboarding_paid",
+          title: "Vendor onboarding fee paid",
+          message: `${vendor.name} paid ₦${Number(vendor.onboardingFeeAmount || 2500).toLocaleString()} onboarding fee.`,
+          vendorId: vendor.id,
+        });
+      }
+
+      return res.sendStatus(200);
+    }
+
     const payment = await prisma.payment.findUnique({
       where: { reference },
       include: { order: { include: { customer: true, vendor: { include: { owner: true, manager: true } } } } },
@@ -247,6 +278,15 @@ router.get("/callback", (req, res) => {
     <style>body{font-family:-apple-system,sans-serif;background:#F5F4F0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box;}
     div{max-width:320px}h1{font-size:20px;color:#14171F}p{color:#6B6F76;font-size:14px}</style></head>
     <body><div><h1>Thanks!</h1><p>You can close this window and return to the Needly app — your order will update automatically once payment is confirmed.</p></div></body></html>
+  `);
+});
+
+router.get("/vendor-onboarding/callback", (req, res) => {
+  res.set("Content-Type", "text/html").send(`
+    <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>body{font-family:-apple-system,sans-serif;background:#F8F5FF;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box;}
+    div{max-width:340px;background:#fff;border-radius:22px;padding:24px;box-shadow:0 18px 50px rgba(100,43,228,.16)}h1{font-size:22px;color:#11123A}p{color:#6B6F76;font-size:14px;line-height:1.5}</style></head>
+    <body><div><h1>Onboarding payment received</h1><p>You can close this page and return to Needly. Admin will review and activate your vendor account after confirming your registration.</p></div></body></html>
   `);
 });
 

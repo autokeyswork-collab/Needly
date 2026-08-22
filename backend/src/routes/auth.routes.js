@@ -7,9 +7,11 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { logAction } = require("../lib/auditLog");
 const { broadcastProviderStatus, broadcastAdminAlert } = require("../sockets/orderSocket");
 const { appUrl, escapeHtml, sendMail } = require("../lib/mailer");
+const { initializeTransaction } = require("../lib/paystack");
 
 const router = express.Router();
 const confirmationMailTray = [];
+const VENDOR_ONBOARDING_FEE_NAIRA = Number(process.env.VENDOR_ONBOARDING_FEE_NAIRA || 2500);
 
 async function queueConfirmationMail({ to, subject, body, type, actionUrl, actionLabel }) {
   const item = {
@@ -154,6 +156,52 @@ async function queuePendingApprovalMail({ user, vendor, rider, provider }) {
   });
 }
 
+async function createVendorOnboardingPayment({ user, vendor }) {
+  if (!user || !vendor) return null;
+  const feeAmount = VENDOR_ONBOARDING_FEE_NAIRA;
+  const reference = `needly_vendor_onboarding_${vendor.id}_${Date.now()}`;
+
+  await prisma.vendor.update({
+    where: { id: vendor.id },
+    data: {
+      onboardingFeeAmount: feeAmount,
+      onboardingFeeStatus: "PENDING",
+      onboardingPaymentReference: reference,
+    },
+  });
+
+  try {
+    const txn = await initializeTransaction({
+      email: user.email,
+      amountNaira: feeAmount,
+      reference,
+      callbackUrl: `${process.env.APP_BASE_URL}/payments/vendor-onboarding/callback`,
+      metadata: {
+        type: "vendor_onboarding",
+        vendorId: vendor.id,
+        userId: user.id,
+        feeAmount,
+      },
+    });
+
+    return {
+      amount: feeAmount,
+      reference,
+      authorizationUrl: txn.authorization_url,
+      status: "PENDING",
+    };
+  } catch (err) {
+    console.error("Vendor onboarding checkout failed", err.response?.data || err.message);
+    return {
+      amount: feeAmount,
+      reference,
+      authorizationUrl: null,
+      status: "PENDING",
+      error: "Payment link could not be created yet. Admin can retry after payment settings are configured.",
+    };
+  }
+}
+
 // Closes the "no rate limiting on auth endpoints" gap the README flagged
 // as a pre-launch requirement. 10 attempts per 15 minutes per IP is
 // generous for a real user, tight enough to blunt brute-forcing.
@@ -290,9 +338,15 @@ router.post("/register", authLimiter, async (req, res) => {
     if (requiresApproval) {
       rememberPendingUser(user, { vendor, rider });
       await queuePendingApprovalMail({ user, vendor, rider });
+      const onboardingPayment = targetRole === "VENDOR"
+        ? await createVendorOnboardingPayment({ user, vendor })
+        : null;
       return res.json({
         pendingApproval: true,
-        message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted. We sent a notification email to ${identity.cleanEmail}. Needly Admin will review and activate your account shortly.`,
+        onboardingPayment,
+        message: targetRole === "VENDOR"
+          ? `Your Store Profile registration has been submitted. Vendors pay a one-time ${VENDOR_ONBOARDING_FEE_NAIRA.toLocaleString("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 })} onboarding fee. Complete payment, then Needly Admin will review and activate your store.`
+          : `Your Rider Account registration has been submitted. We sent a notification email to ${identity.cleanEmail}. Needly Admin will review and activate your account shortly.`,
       });
     }
 
@@ -415,9 +469,15 @@ router.post("/social", authLimiter, async (req, res) => {
       if (requiresApproval) {
         rememberPendingUser(user, { vendor: result.vendor, rider: result.rider });
         await queuePendingApprovalMail({ user, vendor: result.vendor, rider: result.rider, provider: providerName });
+        const onboardingPayment = targetRole === "VENDOR"
+          ? await createVendorOnboardingPayment({ user, vendor: result.vendor })
+          : null;
         return res.json({
           pendingApproval: true,
-          message: `Your ${targetRole === "VENDOR" ? "Store Profile" : "Rider Account"} registration via ${providerName} has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
+          onboardingPayment,
+          message: targetRole === "VENDOR"
+            ? `Your Store Profile registration via ${providerName} has been submitted. Vendors pay a one-time ${VENDOR_ONBOARDING_FEE_NAIRA.toLocaleString("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 })} onboarding fee. Complete payment, then Needly Admin will review and activate your store.`
+            : `Your Rider Account registration via ${providerName} has been submitted. We sent a notification email to ${cleanEmail}. Needly Admin will review and activate your account shortly.`,
         });
       }
 
@@ -632,7 +692,7 @@ router.get("/pending", requireAuth, requireRole("ADMIN"), async (req, res) => {
       phone: true,
       role: true,
       createdAt: true,
-      vendor: { select: { id: true, name: true, category: true, area: true, address: true } },
+      vendor: { select: { id: true, name: true, category: true, area: true, address: true, onboardingFeeAmount: true, onboardingFeeStatus: true, onboardingPaidAt: true } },
       rider: { select: { id: true, zone: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -785,6 +845,17 @@ router.get("/mail-tray", requireAuth, requireRole("ADMIN"), async (req, res) => 
 router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req, res) => {
   let user = null;
   try {
+    const existing = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: { vendor: true },
+    });
+    if (!existing) return res.status(404).json({ error: "User not found" });
+    if (existing.role === "VENDOR" && existing.vendor?.onboardingFeeStatus !== "PAID") {
+      return res.status(400).json({
+        error: `Vendor must pay the ₦${Number(existing.vendor?.onboardingFeeAmount || VENDOR_ONBOARDING_FEE_NAIRA).toLocaleString()} onboarding fee before approval.`,
+      });
+    }
+
     user = await prisma.user.update({
       where: { id: req.params.id },
       data: { approved: true, suspendedAt: null },

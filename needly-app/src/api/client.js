@@ -105,6 +105,9 @@ export function normalizeVendor(v) {
     bankAccountName: v.bankAccountName || null,
     bankAccountLocked: !!v.bankAccountLocked,
     bankAccountLockedAt: v.bankAccountLockedAt || null,
+    onboardingFeeAmount: v.onboardingFeeAmount ?? 2500,
+    onboardingFeeStatus: v.onboardingFeeStatus || "PENDING",
+    onboardingPaidAt: v.onboardingPaidAt || null,
     isOpen: v.isOpen,
     ownerId: v.ownerId,
     managerId: v.managerId,
@@ -233,6 +236,7 @@ export const AuthAPI = {
     if (res.pendingApproval || isPendingRole) {
       return {
         pendingApproval: true,
+        onboardingPayment: res.onboardingPayment || null,
         message: res.message || `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} registration has been submitted! Needly Admin will review and activate your account shortly.`,
       };
     }

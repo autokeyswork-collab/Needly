@@ -4,6 +4,7 @@ import {
   Image,
   ImageBackground,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -57,6 +58,7 @@ const ORANGE = "#F47C00";
 const INK = "#10113D";
 const MUTED = "#7E80A0";
 const LINE = "#DDDDEA";
+const VENDOR_ONBOARDING_FEE = 2500;
 
 function RoleIcon({ item, color, size = 20 }) {
   if (item.family === "Ionicons") return <Ionicons name={item.icon} size={size} color={color} />;
@@ -98,6 +100,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [validationError, setValidationError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingMessage, setPendingMessage] = useState(null);
+  const [onboardingPayment, setOnboardingPayment] = useState(null);
 
   const submit = async () => {
     setValidationError(null);
@@ -139,6 +142,7 @@ export default function RegisterScreen({ navigation, route }) {
       const result = await register(payload);
 
       if (result?.pendingApproval) {
+        setOnboardingPayment(result.onboardingPayment || null);
         setPendingMessage(
           result.message ||
           `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted! Needly Admin will review and activate your account shortly.`
@@ -205,6 +209,7 @@ export default function RegisterScreen({ navigation, route }) {
       const result = await socialLogin(payload);
 
       if (result && result.pendingApproval) {
+        setOnboardingPayment(result.onboardingPayment || null);
         setPendingMessage(
           result.message ||
           `Your ${role === "VENDOR" ? "Store Profile" : "Rider Account"} has been submitted via ${providerKey}! Needly Admin will review and activate your account shortly.`
@@ -229,6 +234,30 @@ export default function RegisterScreen({ navigation, route }) {
           <Text style={styles.pendingIcon}>{role === "VENDOR" ? "🏪" : "🛵"}</Text>
           <Text style={styles.pendingTitle}>Registration Submitted</Text>
           <Text style={styles.pendingText}>{pendingMessage}</Text>
+          {role === "VENDOR" && (
+            <View style={styles.onboardingFeeCard}>
+              <Text style={styles.onboardingFeeLabel}>Vendor onboarding fee</Text>
+              <Text style={styles.onboardingFeeAmount}>
+                ₦{Number(onboardingPayment?.amount || VENDOR_ONBOARDING_FEE).toLocaleString()}
+              </Text>
+              <Text style={styles.onboardingFeeText}>
+                This one-time fee is required before Admin activates your vendor store.
+              </Text>
+              {onboardingPayment?.authorizationUrl ? (
+                <Pressable
+                  style={styles.payOnboardingBtn}
+                  onPress={() => Linking.openURL(onboardingPayment.authorizationUrl)}
+                >
+                  <Text style={styles.payOnboardingBtnText}>Pay Onboarding Fee</Text>
+                  <FontAwesome name="arrow-right" size={13} color="#fff" />
+                </Pressable>
+              ) : (
+                <Text style={styles.onboardingFeeWarning}>
+                  Payment link is not ready yet. Contact Needly Admin if this remains unavailable.
+                </Text>
+              )}
+            </View>
+          )}
           <View style={styles.pendingBadge}>
             <Text style={styles.pendingBadgeText}>Status: Pending Admin Review</Text>
           </View>
@@ -704,6 +733,13 @@ const styles = StyleSheet.create({
   pendingIcon: { fontSize: 48, marginBottom: 12 },
   pendingTitle: { fontSize: 20, fontWeight: "900", color: "#15183F", marginBottom: 8 },
   pendingText: { fontSize: 13.5, color: "#64748B", textAlign: "center", lineHeight: 20, marginBottom: 16 },
+  onboardingFeeCard: { width: "100%", borderRadius: 18, backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#DDD6FE", padding: 14, marginBottom: 14 },
+  onboardingFeeLabel: { color: "#747792", fontSize: 11.5, fontWeight: "900", textAlign: "center", textTransform: "uppercase" },
+  onboardingFeeAmount: { color: "#6F45E9", fontSize: 25, fontWeight: "900", textAlign: "center", marginTop: 4 },
+  onboardingFeeText: { color: "#10113D", fontSize: 12.5, fontWeight: "700", textAlign: "center", lineHeight: 18, marginTop: 4 },
+  payOnboardingBtn: { marginTop: 12, backgroundColor: "#6F45E9", borderRadius: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  payOnboardingBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  onboardingFeeWarning: { color: "#B45309", fontSize: 11.5, fontWeight: "800", textAlign: "center", marginTop: 10, lineHeight: 16 },
   pendingBadge: { backgroundColor: "#FEF3C7", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: "#FDE68A", marginBottom: 20 },
   pendingBadgeText: { color: "#92400E", fontSize: 12, fontWeight: "800" },
   pendingHint: { color: "#64748B", fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: -8, marginBottom: 18 },
