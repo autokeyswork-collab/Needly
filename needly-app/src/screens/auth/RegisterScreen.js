@@ -50,7 +50,38 @@ const VENDOR_CATEGORIES = [
   "Events & Rentals",
   "Repairs",
 ];
-const ABEOKUTA_AREAS = ["Oke-Ilewo", "Ibara", "Panseke", "Adigbe", "Kuto", "Ita Eko", "Lafenwa", "Hilltop"];
+const ABEOKUTA_AREAS = [
+  "Oke-Ilewo",
+  "Ibara",
+  "Panseke",
+  "Adigbe",
+  "Kuto",
+  "Ita Eko",
+  "Lafenwa",
+  "Hilltop",
+  "Omida",
+  "Asero",
+  "Obantoko",
+  "Camp",
+  "Isale Ake",
+  "Sapon",
+  "Lantoro",
+  "Totoro",
+  "Onikolobo",
+  "Olomore",
+  "Elega",
+  "Mawuko",
+  "Oke-Sokori",
+  "Ago Ika",
+  "Ijeun Titun",
+  "Idi Aba",
+  "Elite",
+  "Fajol",
+  "Olorunsogo",
+  "Kobape",
+  "Osiele",
+  "Odeda",
+];
 const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
 const PURPLE = "#6F45E9";
 const PURPLE_DARK = "#24105F";
@@ -92,6 +123,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [vendorCategory, setVendorCategory] = useState("Local Market");
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [vendorArea, setVendorArea] = useState("Oke-Ilewo");
+  const [areaOpen, setAreaOpen] = useState(false);
   const [vendorAddress, setVendorAddress] = useState("");
 
   // Rider Fields
@@ -481,16 +513,37 @@ export default function RegisterScreen({ navigation, route }) {
             </View>
 
             <Text style={styles.subLabel}>Abeokuta area location</Text>
-            <View style={styles.chipRow}>
-              {ABEOKUTA_AREAS.map((area) => (
-                <Pressable
-                  key={area}
-                  onPress={() => setVendorArea(area)}
-                  style={[styles.chip, vendorArea === area && styles.chipActive]}
-                >
-                  <Text style={[styles.chipText, vendorArea === area && styles.chipTextActive]}>{area}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.dropdownWrap}>
+              <Pressable
+                style={[styles.dropdownButton, areaOpen && styles.dropdownButtonOpen]}
+                onPress={() => setAreaOpen((open) => !open)}
+              >
+                <View style={styles.dropdownValueRow}>
+                  <Ionicons name="location" size={18} color={PURPLE} />
+                  <Text numberOfLines={1} style={styles.dropdownValue}>{vendorArea}</Text>
+                </View>
+                <Ionicons name={areaOpen ? "chevron-up" : "chevron-down"} size={18} color={MUTED} />
+              </Pressable>
+
+              {areaOpen && (
+                <View style={styles.dropdownMenu}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                    {ABEOKUTA_AREAS.map((area) => (
+                      <Pressable
+                        key={area}
+                        onPress={() => {
+                          setVendorArea(area);
+                          setAreaOpen(false);
+                        }}
+                        style={[styles.dropdownOption, vendorArea === area && styles.dropdownOptionActive]}
+                      >
+                        <Text style={[styles.dropdownOptionText, vendorArea === area && styles.dropdownOptionTextActive]}>{area}</Text>
+                        {vendorArea === area && <Ionicons name="checkmark" size={16} color={PURPLE} />}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             <LocationAutocomplete
