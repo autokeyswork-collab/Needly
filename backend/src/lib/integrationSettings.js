@@ -11,6 +11,7 @@ const INTEGRATION_CATALOG = [
       { key: "SMTP_SECURE", label: "Use Secure SMTP", envKey: "SMTP_SECURE", secret: false, placeholder: "false" },
       { key: "SMTP_USER", label: "SMTP Login", envKey: "SMTP_USER", secret: true, placeholder: "login@smtp-brevo.com" },
       { key: "SMTP_PASS", label: "SMTP Key", envKey: "SMTP_PASS", secret: true, placeholder: "Paste Brevo SMTP key" },
+      { key: "BREVO_API_KEY", label: "Brevo API Key", envKey: "BREVO_API_KEY", secret: true, placeholder: "xkeysib-..." },
       { key: "MAIL_FROM", label: "From Email", envKey: "MAIL_FROM", secret: false, placeholder: "Needly <hello@example.com>" },
     ],
   },
