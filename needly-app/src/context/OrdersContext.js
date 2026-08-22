@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, normalizeOrder } from "../api/client";
+import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, normalizeOrder } from "../api/client";
 import { connectSocket, subscribeToRealtimeEvents } from "../api/socket";
 import { useAuth } from "./AuthContext";
 
@@ -165,6 +165,11 @@ export function OrdersProvider({ children }) {
     await refreshOrders();
   }, [refreshOrders]);
 
+  const confirmVendorPaymentReceived = useCallback(async (orderId) => {
+    await PaymentAPI.confirmVendorReceived(orderId);
+    await Promise.all([refreshOrders(), refreshNotifications()]);
+  }, [refreshOrders, refreshNotifications]);
+
   /* --- Booking Mutations --- */
 
   const createBooking = useCallback(async (bookingData) => {
@@ -259,7 +264,7 @@ export function OrdersProvider({ children }) {
       bookings, refreshBookings, createBooking, advanceBookingStatus, cancelBooking,
       notifications, refreshNotifications, markNotificationRead, markAllNotificationsRead,
       disputes, refreshDisputes,
-      placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider,
+      placeOrder, advanceOrder, claimOrder, cancelOrder, unassignRider, confirmVendorPaymentReceived,
       raiseDispute, resolveDispute,
       updatePrice, updateProductDetails, addProduct, updateVendorBankAccount, addAddOn, removeAddOn, toggleProductAvailable, toggleVendorOpen,
       refresh,

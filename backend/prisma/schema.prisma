@@ -252,15 +252,23 @@ model AuditLog {
 }
 
 model Payment {
-  id         String    @id @default(cuid())
-  orderId    String    @unique
-  order      Order     @relation(fields: [orderId], references: [id])
-  reference  String    @unique
-  amount     Int
-  status     PaymentStatus @default(PENDING)
-  createdAt  DateTime  @default(now())
-  paidAt     DateTime?
-  refundedAt DateTime?
+  id                 String    @id @default(cuid())
+  orderId            String    @unique
+  order              Order     @relation(fields: [orderId], references: [id])
+  reference          String    @unique
+  amount             Int
+  vendorAmount       Int       @default(0)
+  platformFeeAmount  Int       @default(0)
+  platformFeePercent Float     @default(0)
+  deliveryFeeAmount  Int       @default(0)
+  deliveryDistanceKm Float?
+  vendorReceived     Boolean   @default(false)
+  vendorReceivedAt   DateTime?
+  vendorReceivedById String?
+  status             PaymentStatus @default(PENDING)
+  createdAt          DateTime  @default(now())
+  paidAt             DateTime?
+  refundedAt         DateTime?
 }
 
 model Service {

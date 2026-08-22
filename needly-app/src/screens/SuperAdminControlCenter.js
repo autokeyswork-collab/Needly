@@ -36,7 +36,7 @@ const NAV = [
   { id: "invoices", label: "Invoices", icon: "📄" },
   { id: "receipts", label: "Receipts", icon: "🧾" },
   { id: "refunds", label: "Refunds", icon: "🔄" },
-  { id: "commissions", label: "Commissions", icon: "📈" },
+  { id: "commissions", label: "Platform Fee", icon: "📈" },
   { section: "ADMINISTRATION" },
   { id: "admins", label: "Admins", icon: "👤" },
   { id: "roles", label: "Roles & Permissions", icon: "🛡️" },
@@ -90,7 +90,7 @@ const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
   vendor: [["Store Name", "name"], ["Category", "category"], ["Area", "area"], ["ETA", "eta"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
-  commission: [["Target Name", "targetName"], ["Rate %", "ratePercent", true]],
+  commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [["Promo Code", "code"], ["Title", "title"], ["Discount Value", "discountValue", true]],
   ticket: [["Subject", "subject"], ["Status", "status"], ["Priority", "priority"]],
   refund: [["Status", "status"], ["Reason", "reason"]],
@@ -1845,8 +1845,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
 
     if (activeTab === "commissions") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
-        <Text style={[s.pageH, { marginBottom: 16 }]}>Platform Commission Rules</Text>
-        <GenericList items={commissions.length > 0 ? commissions : [{ id: 1, targetName: "Restaurant Category", targetType: "Vendor Commission", ratePercent: 12 }]} type="commission" fields={[{ key: "targetName", bold: true }, { key: "targetType", label: "Target" }, { key: "ratePercent", label: "Commission %" }]} />
+        <Text style={[s.pageH, { marginBottom: 6 }]}>Checkout Platform Fee</Text>
+        <Text style={{ color: TEXT_SUB, fontSize: 12, marginBottom: 16 }}>
+          The active GLOBAL fee is added to every future customer checkout. Product subtotal stays as the vendor amount.
+        </Text>
+        <GenericList items={commissions.length > 0 ? commissions : [{ id: 1, targetName: "Needly Platform Fee", targetType: "GLOBAL", ratePercent: 2.5, active: true }]} type="commission" fields={[{ key: "targetName", bold: true }, { key: "targetType", label: "Target" }, { key: "ratePercent", label: "Platform Fee %" }]} />
       </ScrollView>
     );
 

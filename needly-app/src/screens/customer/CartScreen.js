@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { fmtNaira } from "../../theme/colors";
@@ -16,6 +16,39 @@ const LINE = "#EEEAF8";
 const SOFT = "#F8F5FF";
 const GREEN = "#059669";
 const RED = "#DC2626";
+const DEFAULT_DELIVERY_BASE_FEE = 500;
+const DEFAULT_DELIVERY_PER_KM = 120;
+const DEFAULT_DELIVERY_MIN_FEE = 500;
+const DEFAULT_DELIVERY_MAX_FEE = 3500;
+
+function toRad(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function distanceKm(fromLat, fromLng, toLat, toLng) {
+  const coords = [fromLat, fromLng, toLat, toLng].map(Number);
+  if (coords.some((value) => !Number.isFinite(value))) return null;
+  const [lat1, lng1, lat2, lng2] = coords;
+  const earthKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function estimateDeliveryFee(vendor, deliveryLocation, config) {
+  const km = deliveryLocation
+    ? distanceKm(vendor?.latitude, vendor?.longitude, deliveryLocation.latitude, deliveryLocation.longitude)
+    : null;
+  const minFee = Number(config.deliveryMinFee || DEFAULT_DELIVERY_MIN_FEE);
+  if (!km) return { fee: minFee, km: null };
+  const baseFee = Number(config.deliveryBaseFee || DEFAULT_DELIVERY_BASE_FEE);
+  const perKm = Number(config.deliveryPerKm || DEFAULT_DELIVERY_PER_KM);
+  const maxFee = Number(config.deliveryMaxFee || DEFAULT_DELIVERY_MAX_FEE);
+  const fee = Math.min(maxFee, Math.max(minFee, baseFee + Math.ceil(km * perKm)));
+  return { fee, km: Number(km.toFixed(2)) };
+}
 
 async function reverseGeocode(latitude, longitude) {
   try {
@@ -46,6 +79,13 @@ export default function CartScreen({ route, navigation }) {
   const [geoError, setGeoError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
+  const [deliveryFeeConfig, setDeliveryFeeConfig] = useState({
+    deliveryBaseFee: DEFAULT_DELIVERY_BASE_FEE,
+    deliveryPerKm: DEFAULT_DELIVERY_PER_KM,
+    deliveryMinFee: DEFAULT_DELIVERY_MIN_FEE,
+    deliveryMaxFee: DEFAULT_DELIVERY_MAX_FEE,
+  });
 
   const items = useMemo(() => {
     if (!vendor) return [];
@@ -55,8 +95,23 @@ export default function CartScreen({ route, navigation }) {
   }, [cart, vendor]);
 
   const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const platformFeeAmount = Math.round(total * (Number(platformFeePercent || 0) / 100));
+  const deliveryEstimate = estimateDeliveryFee(vendor, deliveryLocation, deliveryFeeConfig);
+  const deliveryFeeAmount = deliveryEstimate.fee;
+  const customerTotal = total + platformFeeAmount + deliveryFeeAmount;
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
   const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && itemCount > 0 && !submitting;
+
+  useEffect(() => {
+    let mounted = true;
+    PaymentAPI.platformFee().then((res) => {
+      if (mounted && Number.isFinite(Number(res?.platformFeePercent))) {
+        setPlatformFeePercent(Number(res.platformFeePercent));
+        setDeliveryFeeConfig((prev) => ({ ...prev, ...res }));
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const useCurrentLocation = () => {
     setGeoLoading(true);
@@ -173,9 +228,23 @@ export default function CartScreen({ route, navigation }) {
               <Text style={styles.emptyBasket}>No products in this order yet.</Text>
             )}
 
+            <View style={styles.splitRow}>
+              <Text style={styles.splitLabel}>Vendor subtotal</Text>
+              <Text style={styles.splitValue}>{fmtNaira(total)}</Text>
+            </View>
+            <View style={styles.splitRow}>
+              <Text style={styles.splitLabel}>Needly platform fee ({platformFeePercent}%)</Text>
+              <Text style={styles.splitValue}>{fmtNaira(platformFeeAmount)}</Text>
+            </View>
+            <View style={styles.splitRow}>
+              <Text style={styles.splitLabel}>
+                Rider delivery{deliveryEstimate.km ? ` (${deliveryEstimate.km}km)` : ""}
+              </Text>
+              <Text style={styles.splitValue}>{fmtNaira(deliveryFeeAmount)}</Text>
+            </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>{fmtNaira(total)}</Text>
+              <Text style={styles.totalLabel}>Customer pays</Text>
+              <Text style={styles.totalValue}>{fmtNaira(customerTotal)}</Text>
             </View>
           </View>
 
@@ -247,7 +316,7 @@ export default function CartScreen({ route, navigation }) {
                   <Text style={styles.checkoutSub}>{itemCount} item{itemCount === 1 ? "" : "s"} · GPS {deliveryLocation ? "attached" : "optional"}</Text>
                 </View>
                 <View style={styles.checkoutPrice}>
-                  <Text style={styles.checkoutPriceText}>{fmtNaira(total)}</Text>
+                  <Text style={styles.checkoutPriceText}>{fmtNaira(customerTotal)}</Text>
                   <FontAwesome name="arrow-right" size={13} color="#fff" />
                 </View>
               </>
@@ -286,6 +355,9 @@ const styles = StyleSheet.create({
   itemPrice: { color: INK, fontSize: 13.5, fontWeight: "900" },
   emptyBasket: { color: MUTED, fontSize: 13, fontWeight: "800", paddingVertical: 12 },
   totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 14 },
+  splitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10 },
+  splitLabel: { color: MUTED, fontSize: 12.2, fontWeight: "800" },
+  splitValue: { color: INK, fontSize: 12.8, fontWeight: "900" },
   totalLabel: { color: INK, fontSize: 15, fontWeight: "900" },
   totalValue: { color: GREEN, fontSize: 19, fontWeight: "900" },
   gpsCard: { backgroundColor: SOFT, borderRadius: 20, borderWidth: 1, borderColor: "#E6DDFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },

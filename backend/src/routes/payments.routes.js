@@ -4,8 +4,86 @@ const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { getPaystackSecretKey, initializeTransaction } = require("../lib/paystack");
 const { sendPushNotification } = require("../lib/pushNotifications");
+const { broadcastNotification } = require("../sockets/orderSocket");
 
 const router = express.Router();
+const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
+const DEFAULT_DELIVERY_BASE_FEE = Number(process.env.DELIVERY_BASE_FEE_NAIRA || 500);
+const DEFAULT_DELIVERY_PER_KM = Number(process.env.DELIVERY_PER_KM_NAIRA || 120);
+const DEFAULT_DELIVERY_MIN_FEE = Number(process.env.DELIVERY_MIN_FEE_NAIRA || 500);
+const DEFAULT_DELIVERY_MAX_FEE = Number(process.env.DELIVERY_MAX_FEE_NAIRA || 3500);
+
+async function getPlatformFeePercent() {
+  try {
+    const rule = await prisma.commissionRule.findFirst({
+      where: { active: true, targetType: "GLOBAL" },
+      orderBy: { createdAt: "desc" },
+    });
+    const value = Number(rule?.ratePercent);
+    return Number.isFinite(value) && value >= 0 ? value : DEFAULT_PLATFORM_FEE_PERCENT;
+  } catch (_) {
+    return DEFAULT_PLATFORM_FEE_PERCENT;
+  }
+}
+
+function toRad(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function distanceKm(fromLat, fromLng, toLat, toLng) {
+  const coords = [fromLat, fromLng, toLat, toLng].map(Number);
+  if (coords.some((value) => !Number.isFinite(value))) return null;
+  const [lat1, lng1, lat2, lng2] = coords;
+  const earthKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateDeliveryFee(order) {
+  const km = distanceKm(order.vendor?.latitude, order.vendor?.longitude, order.deliveryLatitude, order.deliveryLongitude);
+  if (!km) {
+    return {
+      deliveryFeeAmount: DEFAULT_DELIVERY_MIN_FEE,
+      deliveryDistanceKm: null,
+    };
+  }
+
+  const rawFee = DEFAULT_DELIVERY_BASE_FEE + Math.ceil(km * DEFAULT_DELIVERY_PER_KM);
+  const cappedFee = Math.min(DEFAULT_DELIVERY_MAX_FEE, Math.max(DEFAULT_DELIVERY_MIN_FEE, rawFee));
+  return {
+    deliveryFeeAmount: cappedFee,
+    deliveryDistanceKm: Number(km.toFixed(2)),
+  };
+}
+
+function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmount = 0, deliveryDistanceKm = null) {
+  const safeVendorAmount = Math.max(0, Math.round(Number(vendorAmount || 0)));
+  const safePercent = Math.max(0, Number(platformFeePercent || 0));
+  const safeDeliveryFee = Math.max(0, Math.round(Number(deliveryFeeAmount || 0)));
+  const platformFeeAmount = Math.round(safeVendorAmount * (safePercent / 100));
+  return {
+    vendorAmount: safeVendorAmount,
+    platformFeePercent: safePercent,
+    platformFeeAmount,
+    deliveryFeeAmount: safeDeliveryFee,
+    deliveryDistanceKm,
+    customerAmount: safeVendorAmount + platformFeeAmount + safeDeliveryFee,
+  };
+}
+
+router.get("/platform-fee", requireAuth, async (_req, res) => {
+  const platformFeePercent = await getPlatformFeePercent();
+  res.json({
+    platformFeePercent,
+    deliveryBaseFee: DEFAULT_DELIVERY_BASE_FEE,
+    deliveryPerKm: DEFAULT_DELIVERY_PER_KM,
+    deliveryMinFee: DEFAULT_DELIVERY_MIN_FEE,
+    deliveryMaxFee: DEFAULT_DELIVERY_MAX_FEE,
+  });
+});
 
 /**
  * POST /payments/initialize
@@ -16,7 +94,10 @@ const router = express.Router();
  */
 router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   const { orderId } = req.body;
-  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { customer: true, payment: true } });
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { customer: true, vendor: true, payment: true },
+  });
   if (!order) return res.status(404).json({ error: "Order not found" });
   if (order.customerId !== req.user.id) return res.status(403).json({ error: "Not your order" });
 
@@ -31,21 +112,41 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
     await prisma.payment.delete({ where: { id: order.payment.id } });
   }
 
+  const platformFeePercent = await getPlatformFeePercent();
+  const delivery = calculateDeliveryFee(order);
+  const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm);
   const reference = `needly_${order.id}_${Date.now()}`;
 
   const txn = await initializeTransaction({
     email: order.customer.email,
-    amountNaira: order.total,
+    amountNaira: split.customerAmount,
     reference,
     callbackUrl: `${process.env.APP_BASE_URL}/payments/callback`,
-    metadata: { orderId: order.id },
+    metadata: {
+      orderId: order.id,
+      vendorAmount: split.vendorAmount,
+      platformFeeAmount: split.platformFeeAmount,
+      platformFeePercent: split.platformFeePercent,
+      deliveryFeeAmount: split.deliveryFeeAmount,
+      deliveryDistanceKm: split.deliveryDistanceKm,
+    },
   });
 
   await prisma.payment.create({
-    data: { orderId: order.id, reference, amount: order.total, status: "PENDING" },
+    data: {
+      orderId: order.id,
+      reference,
+      amount: split.customerAmount,
+      vendorAmount: split.vendorAmount,
+      platformFeeAmount: split.platformFeeAmount,
+      platformFeePercent: split.platformFeePercent,
+      deliveryFeeAmount: split.deliveryFeeAmount,
+      deliveryDistanceKm: split.deliveryDistanceKm,
+      status: "PENDING",
+    },
   });
 
-  res.json({ authorizationUrl: txn.authorization_url, reference });
+  res.json({ authorizationUrl: txn.authorization_url, reference, ...split });
 });
 
 /**
@@ -74,7 +175,7 @@ router.post("/webhook", async (req, res) => {
   const event = JSON.parse(req.body.toString());
 
   if (event.event === "charge.success") {
-    const { reference, amount } = event.data;
+    const { reference } = event.data;
     const payment = await prisma.payment.findUnique({
       where: { reference },
       include: { order: { include: { customer: true, vendor: { include: { owner: true, manager: true } } } } },
@@ -101,8 +202,16 @@ router.post("/webhook", async (req, res) => {
       if (contact?.expoPushToken) {
         sendPushNotification(contact.expoPushToken, {
           title: "New order!",
-          body: `${payment.order.customer.name} just paid \u20A6${payment.order.total.toLocaleString()} \u2014 order #${payment.orderId.slice(-6)}`,
+          body: `${payment.order.customer.name} just paid \u20A6${payment.amount.toLocaleString()} \u2014 order #${payment.orderId.slice(-6)}`,
           data: { orderId: payment.orderId },
+        });
+      }
+
+      if (contact?.id) {
+        await broadcastNotification(contact.id, {
+          title: "New paid order",
+          body: `${payment.order.customer.name} paid \u20A6${payment.amount.toLocaleString()}. Confirm receipt when the money enters your account.`,
+          type: "PAYMENT",
         });
       }
 
@@ -139,6 +248,61 @@ router.get("/callback", (req, res) => {
     div{max-width:320px}h1{font-size:20px;color:#14171F}p{color:#6B6F76;font-size:14px}</style></head>
     <body><div><h1>Thanks!</h1><p>You can close this window and return to the Needly app — your order will update automatically once payment is confirmed.</p></div></body></html>
   `);
+});
+
+router.patch("/:orderId/vendor-received", requireAuth, async (req, res) => {
+  const order = await prisma.order.findUnique({
+    where: { id: req.params.orderId },
+    include: { payment: true, customer: true, vendor: true, items: true },
+  });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  const isVendor = req.user.role === "VENDOR" && order.vendor.ownerId === req.user.id;
+  const isManager = req.user.role === "MANAGER" && order.vendor.managerId === req.user.id;
+  const isAdmin = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
+  if (!isVendor && !isManager && !isAdmin) {
+    return res.status(403).json({ error: "Only this vendor or Admin can confirm money received" });
+  }
+  if (!order.payment || order.payment.status !== "PAID") {
+    return res.status(400).json({ error: "The customer payment is not marked paid yet" });
+  }
+  if (order.payment.vendorReceived) {
+    return res.json({ ...order, payment: order.payment });
+  }
+
+  const payment = await prisma.payment.update({
+    where: { orderId: order.id },
+    data: {
+      vendorReceived: true,
+      vendorReceivedAt: new Date(),
+      vendorReceivedById: req.user.id,
+    },
+  });
+  const updated = { ...order, payment };
+
+  await broadcastNotification(order.customerId, {
+    title: "Vendor confirmed payment",
+    body: `${order.vendor.name} confirmed receiving money for order #${order.id.slice(-6)}.`,
+    type: "PAYMENT",
+  });
+
+  if (order.customer.expoPushToken) {
+    sendPushNotification(order.customer.expoPushToken, {
+      title: "Vendor confirmed payment",
+      body: `${order.vendor.name} confirmed your payment.`,
+      data: { orderId: order.id, type: "vendor-payment-received" },
+    });
+  }
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`order:${order.id}`).emit("order:updated", updated);
+    io.to(`user:${order.customerId}`).emit("order:updated", updated);
+    io.to(`vendor:${order.vendorId}`).emit("order:updated", updated);
+    io.to("admin:dashboard").emit("dashboard:refresh", { reason: "payment_received", id: order.id, at: new Date().toISOString() });
+  }
+
+  res.json(updated);
 });
 
 module.exports = router;

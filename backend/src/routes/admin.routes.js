@@ -61,7 +61,12 @@ router.get("/stats/overview", async (req, res) => {
     ]);
 
     const grossRevenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const platformCommission = Math.round(grossRevenue * 0.10); // 10% platform commission
+    const globalFeeRule = await prisma.commissionRule.findFirst({
+      where: { active: true, targetType: "GLOBAL" },
+      orderBy: { createdAt: "desc" },
+    }).catch(() => null);
+    const platformFeePercent = Number(globalFeeRule?.ratePercent ?? 2.5);
+    const platformCommission = Math.round(grossRevenue * (platformFeePercent / 100));
     const vendorPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
     const riderPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
 
@@ -81,6 +86,7 @@ router.get("/stats/overview", async (req, res) => {
       activeBookings,
       grossRevenue,
       platformCommission,
+      platformFeePercent,
       vendorPayoutsTotal,
       riderPayoutsTotal,
       pendingRefundsCount,
@@ -340,11 +346,17 @@ router.post("/locations", async (req, res) => {
  */
 router.get("/commissions", async (req, res) => {
   try {
-    const rules = await prisma.commissionRule.findMany({ orderBy: { createdAt: "desc" } });
+    let rules = await prisma.commissionRule.findMany({ orderBy: { createdAt: "desc" } });
+    if (!rules.some((rule) => rule.targetType === "GLOBAL" && rule.active)) {
+      const defaultRule = await prisma.commissionRule.create({
+        data: { targetType: "GLOBAL", targetName: "Needly Platform Fee", ratePercent: 2.5, active: true },
+      });
+      rules = [defaultRule, ...rules];
+    }
     res.json(rules);
   } catch (err) {
     res.json([
-      { id: "comm-1", targetType: "GLOBAL", targetName: "Marketplace Standard", ratePercent: 10.0, active: true },
+      { id: "comm-1", targetType: "GLOBAL", targetName: "Needly Platform Fee", ratePercent: 2.5, active: true },
       { id: "comm-2", targetType: "CATEGORY", targetName: "Food & Bukas", ratePercent: 15.0, active: true },
       { id: "comm-3", targetType: "CATEGORY", targetName: "Auto Services", ratePercent: 12.0, active: true },
       { id: "comm-4", targetType: "VENDOR", targetName: "Mama Risi Kitchen", ratePercent: 8.0, active: true },
@@ -355,8 +367,12 @@ router.get("/commissions", async (req, res) => {
 router.post("/commissions", async (req, res) => {
   const { targetType = "GLOBAL", targetName, ratePercent } = req.body;
   try {
+    const parsedRate = Number(ratePercent);
+    if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+      return res.status(400).json({ error: "Enter a valid fee percentage" });
+    }
     const rule = await prisma.commissionRule.create({
-      data: { targetType, targetName: targetName ? targetName.trim() : "Default", ratePercent: Number(ratePercent || 10) },
+      data: { targetType, targetName: targetName ? targetName.trim() : "Needly Platform Fee", ratePercent: parsedRate },
     });
     await logAction(req, { action: "Set commission rule", targetType: "CommissionRule", targetId: rule.id, targetLabel: `${rule.ratePercent}%` });
     res.status(201).json(rule);
@@ -621,7 +637,15 @@ router.patch("/locations/:id", async (req, res) => {
 
 router.patch("/commissions/:id", async (req, res) => {
   try {
-    const updated = await prisma.commissionRule.update({ where: { id: req.params.id }, data: req.body });
+    const data = { ...req.body };
+    if (data.ratePercent !== undefined) {
+      const parsedRate = Number(data.ratePercent);
+      if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+        return res.status(400).json({ error: "Enter a valid fee percentage" });
+      }
+      data.ratePercent = parsedRate;
+    }
+    const updated = await prisma.commissionRule.update({ where: { id: req.params.id }, data });
     await logAction(req, { action: "Updated commission rule", targetType: "CommissionRule", targetId: updated.id, targetLabel: `${updated.ratePercent}%` });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }

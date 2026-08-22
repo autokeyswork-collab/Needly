@@ -76,6 +76,7 @@ export default function VendorScreen() {
     removeAddOn,
     toggleProductAvailable,
     toggleVendorOpen,
+    confirmVendorPaymentReceived,
     disputes,
     notifications,
     refreshNotifications,
@@ -206,6 +207,15 @@ export default function VendorScreen() {
       setDeclineOtherNote(null);
     } catch (err) {
       setActionError(err.message);
+    }
+  };
+
+  const confirmMoneyReceived = async (orderId) => {
+    setActionError(null);
+    try {
+      await confirmVendorPaymentReceived(orderId);
+    } catch (err) {
+      setActionError(err.message || "Could not confirm money received.");
     }
   };
 
@@ -713,8 +723,13 @@ export default function VendorScreen() {
 
               <View style={styles.orderCardFooter}>
                 <View>
-                  <Text style={styles.totalLabel}>TOTAL PAYMENT</Text>
-                  <Text style={styles.totalValue}>{fmtNaira(o.total)}</Text>
+                  <Text style={styles.totalLabel}>VENDOR AMOUNT</Text>
+                  <Text style={styles.totalValue}>{fmtNaira(o.vendorAmount || o.total)}</Text>
+                  <Text style={styles.paymentSplitNote}>
+                    Customer paid {fmtNaira(o.customerPaidAmount || o.total)}
+                    {!!o.platformFeeAmount && ` · Fee ${fmtNaira(o.platformFeeAmount)}`}
+                    {!!o.deliveryFeeAmount && ` · Rider ${fmtNaira(o.deliveryFeeAmount)}`}
+                  </Text>
                 </View>
 
                 {st === "placed" && !declining && (
@@ -738,6 +753,19 @@ export default function VendorScreen() {
                   <View style={styles.waitingRiderPill}>
                     <Text style={styles.waitingRiderText}>🛵 Waiting on Rider Pickup</Text>
                   </View>
+                )}
+
+                {o.paymentStatus === "paid" && (
+                  o.vendorReceived ? (
+                    <View style={styles.moneyReceivedPill}>
+                      <Ionicons name="checkmark-circle" size={15} color={EMERALD} />
+                      <Text style={styles.moneyReceivedText}>Money received</Text>
+                    </View>
+                  ) : (
+                    <Pressable style={styles.confirmMoneyBtn} onPress={() => confirmMoneyReceived(o.id)}>
+                      <Text style={styles.confirmMoneyBtnText}>Confirm Money Received</Text>
+                    </Pressable>
+                  )
                 )}
               </View>
 
@@ -806,6 +834,12 @@ export default function VendorScreen() {
                 <View style={styles.historyDetail}>
                   <Text style={styles.historyDetailTime}>
                     Completed at {new Date(o.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                  <Text style={styles.historyDetailItem}>
+                    Vendor amount: {fmtNaira(o.vendorAmount || o.total)} · Customer paid: {fmtNaira(o.customerPaidAmount || o.total)}
+                  </Text>
+                  <Text style={styles.historyDetailItem}>
+                    Money status: {o.vendorReceived ? "Vendor confirmed received" : "Not confirmed yet"}
                   </Text>
                   {(o.items || []).map((i) => (
                     <Text key={i.id || i.name} style={styles.historyDetailItem}>• {i.qty} × {i.name} ({fmtNaira(i.price * i.qty)})</Text>
@@ -1197,6 +1231,7 @@ const styles = StyleSheet.create({
   orderCardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", flexWrap: "wrap" },
   totalLabel: { fontSize: 9.5, fontWeight: "900", color: MUTED },
   totalValue: { fontSize: 16.5, fontWeight: "900", color: INK },
+  paymentSplitNote: { color: MUTED, fontSize: 10.5, fontWeight: "700", marginTop: 3, maxWidth: 190 },
   orderActionRow: { flexDirection: "row", gap: 8, flexShrink: 1 },
   orderActionRowCompact: { width: "100%", justifyContent: "flex-end" },
 
@@ -1208,6 +1243,10 @@ const styles = StyleSheet.create({
   markReadyBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
   waitingRiderPill: { backgroundColor: "#FEF3C7", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   waitingRiderText: { color: "#92400E", fontSize: 12, fontWeight: "800" },
+  confirmMoneyBtn: { backgroundColor: "#ECFDF5", borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9, borderWidth: 1, borderColor: "#BBF7D0" },
+  confirmMoneyBtnText: { color: EMERALD, fontSize: 12, fontWeight: "900" },
+  moneyReceivedPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#ECFDF5", borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8 },
+  moneyReceivedText: { color: EMERALD, fontSize: 12, fontWeight: "900" },
 
   declineBox: { backgroundColor: "#F8FAFC", borderRadius: 14, padding: 12, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
   declineReasonChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#CBD5E1" },

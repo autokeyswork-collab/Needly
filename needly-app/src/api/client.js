@@ -150,6 +150,14 @@ export function normalizeOrder(o) {
     deliveryLatitude: o.deliveryLatitude ?? null,
     deliveryLongitude: o.deliveryLongitude ?? null,
     paymentStatus: o.payment?.status ? o.payment.status.toLowerCase() : null,
+    customerPaidAmount: o.payment?.amount ?? null,
+    vendorAmount: o.payment?.vendorAmount ?? o.total,
+    platformFeeAmount: o.payment?.platformFeeAmount ?? 0,
+    platformFeePercent: o.payment?.platformFeePercent ?? 0,
+    deliveryFeeAmount: o.payment?.deliveryFeeAmount ?? 0,
+    deliveryDistanceKm: o.payment?.deliveryDistanceKm ?? null,
+    vendorReceived: !!o.payment?.vendorReceived,
+    vendorReceivedAt: o.payment?.vendorReceivedAt || null,
     dispute: o.dispute ? normalizeDispute(o.dispute) : null,
     review: o.review || null,
     cancelReason: o.cancelReason || null,
@@ -329,7 +337,9 @@ export const ReviewAPI = {
 
 /* --- Payments --- */
 export const PaymentAPI = {
+  platformFee: () => request("/payments/platform-fee").catch(() => ({ platformFeePercent: 2.5 })),
   initialize: (orderId) => request("/payments/initialize", { method: "POST", body: { orderId } }),
+  confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),
 };
 
 /* --- Audit log --- */

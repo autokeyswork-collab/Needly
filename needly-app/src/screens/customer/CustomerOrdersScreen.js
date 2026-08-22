@@ -37,6 +37,7 @@ function formatTime(value) {
 function OrderCard({ order, featured, onPress }) {
   const items = (order.items || []).map((i) => `${i.qty || 1}x ${i.name}`).slice(0, featured ? 4 : 2).join(", ");
   const paid = order.paymentStatus === "paid";
+  const customerPaid = order.customerPaidAmount ?? order.total ?? 0;
   return (
     <Pressable style={[styles.orderCard, featured && styles.featuredOrder]} onPress={onPress}>
       <View style={styles.orderHeader}>
@@ -63,8 +64,17 @@ function OrderCard({ order, featured, onPress }) {
           <Ionicons name={paid ? "checkmark-circle" : "time-outline"} size={14} color={paid ? GREEN : AMBER} />
           <Text style={[styles.paymentText, { color: paid ? GREEN : AMBER }]}>{paid ? "Paid" : "Payment pending"}</Text>
         </View>
-        <Text style={styles.total}>{fmtNaira(order.total || 0)}</Text>
+        <Text style={styles.total}>{fmtNaira(customerPaid)}</Text>
       </View>
+
+      {paid && (
+        <View style={[styles.receiptStatus, order.vendorReceived && styles.receiptStatusDone]}>
+          <Ionicons name={order.vendorReceived ? "shield-checkmark" : "hourglass-outline"} size={14} color={order.vendorReceived ? GREEN : AMBER} />
+          <Text style={[styles.receiptStatusText, { color: order.vendorReceived ? GREEN : AMBER }]}>
+            {order.vendorReceived ? "Vendor confirmed money received" : "Waiting for vendor money confirmation"}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -82,7 +92,7 @@ export default function CustomerOrdersScreen({ navigation }) {
   const pastOrders = sortedOrders.filter((order) => !ACTIVE_STATUSES.includes(order.status));
   const totalSpent = sortedOrders
     .filter((order) => order.paymentStatus === "paid")
-    .reduce((sum, order) => sum + Number(order.total || 0), 0);
+    .reduce((sum, order) => sum + Number(order.customerPaidAmount ?? order.total ?? 0), 0);
 
   return (
     <View style={styles.page}>
@@ -219,6 +229,9 @@ const styles = StyleSheet.create({
   progressFill: { height: "100%", borderRadius: 3 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#F0ECFA", paddingTop: 10, marginTop: 10 },
   total: { color: INK, fontSize: 14.5, fontWeight: "900" },
+  receiptStatus: { marginTop: 9, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 14, backgroundColor: "#FEF3C7", paddingHorizontal: 10, paddingVertical: 7 },
+  receiptStatusDone: { backgroundColor: "#DCFCE7" },
+  receiptStatusText: { fontSize: 11.5, fontWeight: "900", flex: 1 },
   paymentBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 5 },
   paymentPaid: { backgroundColor: "#DCFCE7" },
   paymentPending: { backgroundColor: "#FEF3C7" },
