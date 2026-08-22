@@ -24,11 +24,12 @@ const ADMIN_TABS = [
   { id: "orders", label: "Orders Feed", icon: "📦" },
   { id: "mailTray", label: "Mail Tray", icon: "✉️" },
   { id: "auditLog", label: "Audit Log", icon: "📜" },
+  { id: "profile", label: "Profile", icon: "👤" },
 ];
 
 export default function AdminScreen() {
   const { orders, disputes, resolveDispute, vendors, refreshVendors, cancelOrder, unassignRider } = useOrders();
-  const { user: currentUser, logout } = useAuth();
+  const { user: currentUser, logout, updateProfile } = useAuth();
   const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -62,6 +63,11 @@ export default function AdminScreen() {
   const [mailTray, setMailTray] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [operationalIssues, setOperationalIssues] = useState([]);
+  const [adminProfileDraft, setAdminProfileDraft] = useState({ name: "", phone: "", locationState: "", locationCity: "", address: "", avatarUrl: "" });
+  const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [savingAdminProfile, setSavingAdminProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [profileNotice, setProfileNotice] = useState("");
 
   const loadPending = useCallback(async () => {
     try { setPending(await AuthAPI.pendingApprovals()); } catch (err) { /* non-fatal */ }
@@ -89,6 +95,17 @@ export default function AdminScreen() {
   }, []);
 
   useEffect(() => { loadPending(); loadVendorRoster(); loadRiderRoster(); loadCustomerRoster(); loadAuditLog(); loadMailTray(); loadPayouts(); loadOperationalIssues(); }, [loadPending, loadVendorRoster, loadRiderRoster, loadCustomerRoster, loadAuditLog, loadMailTray, loadPayouts, loadOperationalIssues]);
+
+  useEffect(() => {
+    setAdminProfileDraft({
+      name: currentUser?.name || "",
+      phone: currentUser?.phone || "",
+      locationState: currentUser?.locationState || "Ogun",
+      locationCity: currentUser?.locationCity || "Abeokuta",
+      address: currentUser?.address || "",
+      avatarUrl: currentUser?.avatarUrl || "",
+    });
+  }, [currentUser]);
 
   useEffect(() => {
     const filtersActive = orderSearch.trim() || orderStatusFilter !== "all" || orderPaymentFilter !== "all";
@@ -208,6 +225,49 @@ export default function AdminScreen() {
     }
   };
 
+  const saveAdminProfile = async () => {
+    setSavingAdminProfile(true);
+    setProfileNotice("");
+    try {
+      await updateProfile({
+        name: adminProfileDraft.name,
+        phone: adminProfileDraft.phone,
+        locationState: adminProfileDraft.locationState,
+        locationCity: adminProfileDraft.locationCity,
+        address: adminProfileDraft.address,
+        avatarUrl: adminProfileDraft.avatarUrl,
+      });
+      setProfileNotice("Profile updated successfully.");
+    } catch (err) {
+      setProfileNotice(err.message || "Could not update profile.");
+    } finally {
+      setSavingAdminProfile(false);
+    }
+  };
+
+  const saveAdminPassword = async () => {
+    setSavingPassword(true);
+    setProfileNotice("");
+    try {
+      if (!passwordDraft.currentPassword || !passwordDraft.newPassword) {
+        throw new Error("Enter your current password and new password.");
+      }
+      if (passwordDraft.newPassword !== passwordDraft.confirmPassword) {
+        throw new Error("New password and confirmation do not match.");
+      }
+      await AuthAPI.changePassword({
+        currentPassword: passwordDraft.currentPassword,
+        newPassword: passwordDraft.newPassword,
+      });
+      setPasswordDraft({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setProfileNotice("Password changed successfully.");
+    } catch (err) {
+      setProfileNotice(err.message || "Could not change password.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const toggleRiderHistory = async (riderId) => {
     if (expandedRiderId === riderId) { setExpandedRiderId(null); return; }
     setExpandedRiderId(riderId);
@@ -291,7 +351,7 @@ export default function AdminScreen() {
               <Text style={styles.headerAvatarText}>{adminInitials}</Text>
             </View>
             <View style={styles.headerTitleBlock}>
-              <Pressable style={styles.headerPersonPill}>
+              <Pressable style={styles.headerPersonPill} onPress={() => setActiveTab("profile")}>
                 <Text style={styles.headerPersonIcon}>👤</Text>
                 <Text style={styles.headerPersonText} numberOfLines={1}>{adminName}</Text>
               </Pressable>
@@ -405,6 +465,125 @@ export default function AdminScreen() {
                   )}
                 </Pressable>
               ))}
+            </View>
+          </View>
+        )}
+
+        {activeTab === "profile" && (
+          <View style={styles.pageWrap}>
+            <Text style={styles.pageHeaderTitle}>👤 Admin Profile</Text>
+            <Text style={styles.pageHeaderSub}>Update your admin details and account security.</Text>
+
+            {!!profileNotice && (
+              <View style={styles.profileNotice}>
+                <Text style={styles.profileNoticeText}>{profileNotice}</Text>
+              </View>
+            )}
+
+            <View style={styles.profileCard}>
+              <View style={styles.profileHeroRow}>
+                <View style={styles.profileAvatarLarge}>
+                  <Text style={styles.profileAvatarLargeText}>{adminInitials}</Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.profileHeroName} numberOfLines={1}>{adminName}</Text>
+                  <Text style={styles.profileHeroMeta}>{adminRoleLabel} · {currentUser?.email || "No email"}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.profileLabel}>Full Name</Text>
+              <TextInput
+                value={adminProfileDraft.name}
+                onChangeText={(name) => setAdminProfileDraft((d) => ({ ...d, name }))}
+                placeholder="Admin name"
+                placeholderTextColor="#94A3B8"
+                style={styles.profileInput}
+              />
+              <Text style={styles.profileLabel}>Phone</Text>
+              <TextInput
+                value={adminProfileDraft.phone}
+                onChangeText={(phone) => setAdminProfileDraft((d) => ({ ...d, phone }))}
+                placeholder="Phone number"
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+                style={styles.profileInput}
+              />
+              <View style={styles.profileTwoCol}>
+                <View style={styles.profileCol}>
+                  <Text style={styles.profileLabel}>State</Text>
+                  <TextInput
+                    value={adminProfileDraft.locationState}
+                    onChangeText={(locationState) => setAdminProfileDraft((d) => ({ ...d, locationState }))}
+                    placeholder="Ogun"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.profileInput}
+                  />
+                </View>
+                <View style={styles.profileCol}>
+                  <Text style={styles.profileLabel}>City</Text>
+                  <TextInput
+                    value={adminProfileDraft.locationCity}
+                    onChangeText={(locationCity) => setAdminProfileDraft((d) => ({ ...d, locationCity }))}
+                    placeholder="Abeokuta"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.profileInput}
+                  />
+                </View>
+              </View>
+              <Text style={styles.profileLabel}>Address</Text>
+              <TextInput
+                value={adminProfileDraft.address}
+                onChangeText={(address) => setAdminProfileDraft((d) => ({ ...d, address }))}
+                placeholder="Office address"
+                placeholderTextColor="#94A3B8"
+                style={styles.profileInput}
+              />
+              <Text style={styles.profileLabel}>Profile Image URL</Text>
+              <TextInput
+                value={adminProfileDraft.avatarUrl}
+                onChangeText={(avatarUrl) => setAdminProfileDraft((d) => ({ ...d, avatarUrl }))}
+                placeholder="https://... or data:image..."
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                style={styles.profileInput}
+              />
+              <Pressable onPress={saveAdminProfile} disabled={savingAdminProfile} style={[styles.profilePrimaryBtn, savingAdminProfile && styles.approveBtnDisabled]}>
+                <Text style={styles.profilePrimaryBtnText}>{savingAdminProfile ? "Saving..." : "Save Profile"}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.profileCard}>
+              <Text style={styles.profileCardTitle}>Change Password</Text>
+              <Text style={styles.profileLabel}>Current Password</Text>
+              <TextInput
+                value={passwordDraft.currentPassword}
+                onChangeText={(currentPassword) => setPasswordDraft((d) => ({ ...d, currentPassword }))}
+                placeholder="Current password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry
+                style={styles.profileInput}
+              />
+              <Text style={styles.profileLabel}>New Password</Text>
+              <TextInput
+                value={passwordDraft.newPassword}
+                onChangeText={(newPassword) => setPasswordDraft((d) => ({ ...d, newPassword }))}
+                placeholder="At least 6 characters"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry
+                style={styles.profileInput}
+              />
+              <Text style={styles.profileLabel}>Confirm New Password</Text>
+              <TextInput
+                value={passwordDraft.confirmPassword}
+                onChangeText={(confirmPassword) => setPasswordDraft((d) => ({ ...d, confirmPassword }))}
+                placeholder="Repeat new password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry
+                style={styles.profileInput}
+              />
+              <Pressable onPress={saveAdminPassword} disabled={savingPassword} style={[styles.profileDarkBtn, savingPassword && styles.approveBtnDisabled]}>
+                <Text style={styles.profileDarkBtnText}>{savingPassword ? "Updating..." : "Change Password"}</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -1018,6 +1197,24 @@ const styles = StyleSheet.create({
   moduleTitle: { fontSize: 11.5, fontWeight: "800", color: DARK_NAVY, textAlign: "center" },
   moduleBadge: { position: "absolute", top: 8, right: 8, backgroundColor: CHILI, borderRadius: 10, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   moduleBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "900" },
+
+  profileNotice: { backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0", borderRadius: 16, padding: 12 },
+  profileNoticeText: { color: "#047857", fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
+  profileCard: { backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 16, gap: 9 },
+  profileHeroRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
+  profileAvatarLarge: { width: 54, height: 54, borderRadius: 27, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", shadowColor: PURPLE, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  profileAvatarLargeText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  profileHeroName: { color: DARK_NAVY, fontSize: 17, fontWeight: "900" },
+  profileHeroMeta: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 2 },
+  profileCardTitle: { color: DARK_NAVY, fontSize: 15, fontWeight: "900", marginBottom: 4 },
+  profileLabel: { color: DARK_NAVY, fontSize: 11.5, fontWeight: "900", marginTop: 4 },
+  profileInput: { minHeight: 44, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 14, paddingHorizontal: 12, color: DARK_NAVY, fontSize: 13, fontWeight: "700", backgroundColor: "#FFFFFF" },
+  profileTwoCol: { flexDirection: "row", gap: 10 },
+  profileCol: { flex: 1, minWidth: 0 },
+  profilePrimaryBtn: { backgroundColor: PURPLE, borderRadius: 16, paddingVertical: 13, alignItems: "center", marginTop: 6 },
+  profilePrimaryBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  profileDarkBtn: { backgroundColor: DARK_NAVY, borderRadius: 16, paddingVertical: 13, alignItems: "center", marginTop: 6 },
+  profileDarkBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
 
   emptyText: { color: "#64748B", fontSize: 13, fontStyle: "italic", marginBottom: 12 },
   emptyCard: { backgroundColor: "#ffffff", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", padding: 24, alignItems: "center", marginBottom: 16 },

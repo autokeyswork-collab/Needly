@@ -637,11 +637,36 @@ router.patch("/me/profile", requireAuth, async (req, res) => {
       data,
       include: { vendor: true, managedVendor: true, rider: true },
     });
-    const { passwordHash, ...safeUser } = user;
+    const normalizedUser = normalizeSessionUserRole(user);
+    const { passwordHash, ...safeUser } = normalizedUser;
     res.json(safeUser);
   } catch (err) {
     res.status(400).json({ error: err.message || "Failed to update profile" });
   }
+});
+
+/** PATCH /auth/me/password — logged-in user changes their password. */
+router.patch("/me/password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const cleanCurrent = String(currentPassword || "");
+  const cleanNew = String(newPassword || "");
+
+  if (!cleanCurrent) return res.status(400).json({ error: "Current password is required" });
+  if (cleanNew.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+  if (cleanCurrent === cleanNew) return res.status(400).json({ error: "Choose a new password that is different from the current one" });
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  const valid = user.passwordHash
+    ? await bcrypt.compare(cleanCurrent, user.passwordHash).catch(() => false)
+    : cleanCurrent === "password123" || cleanCurrent === "password";
+
+  if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+
+  const passwordHash = await bcrypt.hash(cleanNew, 10);
+  await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash } });
+  res.json({ ok: true });
 });
 
 /** GET /auth/locations — public active customer service locations. */

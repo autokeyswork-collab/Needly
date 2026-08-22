@@ -248,6 +248,7 @@ export const AuthAPI = {
     throw new Error("Invalid session");
   },
   updateMeProfile: (fields) => request("/auth/me/profile", { method: "PATCH", body: fields }),
+  changePassword: ({ currentPassword, newPassword }) => request("/auth/me/password", { method: "PATCH", body: { currentPassword, newPassword } }),
   locations: () => request("/auth/locations", { auth: false }).catch(() => []),
   registerPushToken: (expoPushToken) => request("/auth/me/push-token", { method: "PATCH", body: { expoPushToken } }).catch(() => null),
   pendingApprovals: async () => {
