@@ -31,6 +31,7 @@ const INTEGRATION_CATALOG = [
       { key: "FLUTTERWAVE_PUBLIC_KEY", label: "Public Key", envKey: "FLUTTERWAVE_PUBLIC_KEY", secret: true, placeholder: "FLWPUBK_..." },
       { key: "FLUTTERWAVE_SECRET_KEY", label: "Secret Key", envKey: "FLUTTERWAVE_SECRET_KEY", secret: true, placeholder: "FLWSECK_..." },
       { key: "FLUTTERWAVE_ENCRYPTION_KEY", label: "Encryption Key", envKey: "FLUTTERWAVE_ENCRYPTION_KEY", secret: true, placeholder: "Encryption key" },
+      { key: "FLUTTERWAVE_WEBHOOK_SECRET_HASH", label: "Webhook Secret Hash", envKey: "FLUTTERWAVE_WEBHOOK_SECRET_HASH", secret: true, placeholder: "Paste webhook secret hash" },
     ],
   },
   {

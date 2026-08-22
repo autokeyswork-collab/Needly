@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { getPaystackSecretKey, initializeTransaction } = require("../lib/paystack");
+const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
 
@@ -72,6 +73,86 @@ function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmou
     deliveryDistanceKm,
     customerAmount: safeVendorAmount + platformFeeAmount + safeDeliveryFee,
   };
+}
+
+async function markVendorOnboardingPaid(reference) {
+  const vendor = await prisma.vendor.findUnique({
+    where: { onboardingPaymentReference: reference },
+    include: { owner: true },
+  });
+
+  if (!vendor || vendor.onboardingFeeStatus === "PAID") return vendor;
+
+  const updatedVendor = await prisma.vendor.update({
+    where: { id: vendor.id },
+    data: { onboardingFeeStatus: "PAID", onboardingPaidAt: new Date() },
+    include: { owner: true },
+  });
+
+  if (updatedVendor.ownerId) {
+    await broadcastNotification(updatedVendor.ownerId, {
+      title: "Onboarding payment received",
+      body: `Your ₦${Number(updatedVendor.onboardingFeeAmount || 2500).toLocaleString()} vendor onboarding fee was received. Admin review is next.`,
+      type: "PAYMENT",
+    });
+  }
+
+  broadcastAdminAlert({
+    type: "vendor_onboarding_paid",
+    title: "Vendor onboarding fee paid",
+    message: `${updatedVendor.name} paid ₦${Number(updatedVendor.onboardingFeeAmount || 2500).toLocaleString()} onboarding fee.`,
+    vendorId: updatedVendor.id,
+  });
+
+  return updatedVendor;
+}
+
+async function markOrderPaymentPaid(reference, req) {
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { order: { include: { customer: true, vendor: { include: { owner: true, manager: true } } } } },
+  });
+
+  if (!payment || payment.status === "PAID") return payment;
+
+  await prisma.payment.update({
+    where: { reference },
+    data: { status: "PAID", paidAt: new Date() },
+  });
+
+  if (payment.order.customer.expoPushToken) {
+    sendPushNotification(payment.order.customer.expoPushToken, {
+      title: "Payment received",
+      body: `Your order #${payment.orderId.slice(-6)} is confirmed and on its way to the vendor.`,
+      data: { orderId: payment.orderId },
+    });
+  }
+
+  const contact = payment.order.vendor.owner || payment.order.vendor.manager;
+  if (contact?.expoPushToken) {
+    sendPushNotification(contact.expoPushToken, {
+      title: "New order!",
+      body: `${payment.order.customer.name} just paid \u20A6${payment.amount.toLocaleString()} \u2014 order #${payment.orderId.slice(-6)}`,
+      data: { orderId: payment.orderId },
+    });
+  }
+
+  if (contact?.id) {
+    await broadcastNotification(contact.id, {
+      title: "New paid order",
+      body: `${payment.order.customer.name} paid \u20A6${payment.amount.toLocaleString()}. Confirm receipt when the money enters your account.`,
+      type: "PAYMENT",
+    });
+  }
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`order:${payment.orderId}`).emit("payment:confirmed", { orderId: payment.orderId });
+    io.to(`order:${payment.orderId}`).emit("order:updated", { orderId: payment.orderId });
+    io.to(`vendor:${payment.order.vendorId}`).emit("order:updated", { orderId: payment.orderId });
+  }
+
+  return payment;
 }
 
 router.get("/platform-fee", requireAuth, async (_req, res) => {
@@ -177,92 +258,44 @@ router.post("/webhook", async (req, res) => {
   if (event.event === "charge.success") {
     const { reference } = event.data;
     if (String(reference || "").startsWith("needly_vendor_onboarding_")) {
-      const vendor = await prisma.vendor.findUnique({
-        where: { onboardingPaymentReference: reference },
-        include: { owner: true },
-      });
-
-      if (vendor && vendor.onboardingFeeStatus !== "PAID") {
-        await prisma.vendor.update({
-          where: { id: vendor.id },
-          data: { onboardingFeeStatus: "PAID", onboardingPaidAt: new Date() },
-        });
-
-        if (vendor.ownerId) {
-          await broadcastNotification(vendor.ownerId, {
-            title: "Onboarding payment received",
-            body: `Your ₦${Number(vendor.onboardingFeeAmount || 2500).toLocaleString()} vendor onboarding fee was received. Admin review is next.`,
-            type: "PAYMENT",
-          });
-        }
-
-        broadcastAdminAlert({
-          type: "vendor_onboarding_paid",
-          title: "Vendor onboarding fee paid",
-          message: `${vendor.name} paid ₦${Number(vendor.onboardingFeeAmount || 2500).toLocaleString()} onboarding fee.`,
-          vendorId: vendor.id,
-        });
-      }
-
+      await markVendorOnboardingPaid(reference);
       return res.sendStatus(200);
     }
 
-    const payment = await prisma.payment.findUnique({
-      where: { reference },
-      include: { order: { include: { customer: true, vendor: { include: { owner: true, manager: true } } } } },
-    });
-
-    if (payment && payment.status !== "PAID") {
-      await prisma.payment.update({
-        where: { reference },
-        data: { status: "PAID", paidAt: new Date() },
-      });
-
-      if (payment.order.customer.expoPushToken) {
-        sendPushNotification(payment.order.customer.expoPushToken, {
-          title: "Payment received",
-          body: `Your order #${payment.orderId.slice(-6)} is confirmed and on its way to the vendor.`,
-          data: { orderId: payment.orderId },
-        });
-      }
-
-      // This is the moment the order actually becomes real for the
-      // vendor/manager — before this, it was invisible to them entirely
-      // (payment-first). Nothing alerted them at all before this fix.
-      const contact = payment.order.vendor.owner || payment.order.vendor.manager;
-      if (contact?.expoPushToken) {
-        sendPushNotification(contact.expoPushToken, {
-          title: "New order!",
-          body: `${payment.order.customer.name} just paid \u20A6${payment.amount.toLocaleString()} \u2014 order #${payment.orderId.slice(-6)}`,
-          data: { orderId: payment.orderId },
-        });
-      }
-
-      if (contact?.id) {
-        await broadcastNotification(contact.id, {
-          title: "New paid order",
-          body: `${payment.order.customer.name} paid \u20A6${payment.amount.toLocaleString()}. Confirm receipt when the money enters your account.`,
-          type: "PAYMENT",
-        });
-      }
-
-      const io = req.app.get("io");
-      if (io) {
-        // TrackingScreen listens for "order:updated" specifically (see
-        // OrdersContext/TrackingScreen), not "payment:confirmed" — without
-        // this, the customer's screen wouldn't auto-refresh even though
-        // the webhook fired and the order is genuinely now paid.
-        io.to(`order:${payment.orderId}`).emit("payment:confirmed", { orderId: payment.orderId });
-        io.to(`order:${payment.orderId}`).emit("order:updated", { orderId: payment.orderId });
-        io.to(`vendor:${payment.order.vendorId}`).emit("order:updated", { orderId: payment.orderId });
-      }
-    }
+    await markOrderPaymentPaid(reference, req);
   }
 
   // Always 200 quickly — Paystack retries on non-2xx, and slow/failing
   // webhook responses can cause duplicate retries.
   res.sendStatus(200);
 });
+
+async function handleFlutterwaveWebhook(req, res) {
+  const secretHash = await getIntegrationValue("flutterwave", "FLUTTERWAVE_WEBHOOK_SECRET_HASH");
+  if (!secretHash) return res.status(500).json({ error: "Flutterwave webhook secret hash is not configured" });
+  if (req.headers["verif-hash"] !== secretHash) {
+    return res.status(401).json({ error: "Invalid Flutterwave webhook hash" });
+  }
+
+  const payload = req.body || {};
+  const data = payload.data || {};
+  const reference = data.tx_ref || data.reference || payload.tx_ref || payload.reference;
+  const status = String(data.status || payload.status || "").toLowerCase();
+  const successful = status === "successful" || status === "success" || payload.event === "charge.completed";
+
+  if (successful && reference) {
+    if (String(reference).startsWith("needly_vendor_onboarding_")) {
+      await markVendorOnboardingPaid(reference);
+    } else {
+      await markOrderPaymentPaid(reference, req);
+    }
+  }
+
+  res.sendStatus(200);
+}
+
+router.post("/flutterwave/webhook", handleFlutterwaveWebhook);
+router.post("/webhook/flutterwave", handleFlutterwaveWebhook);
 
 /**
  * GET /payments/callback — where Paystack's hosted checkout redirects the

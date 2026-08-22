@@ -60,6 +60,7 @@ app.use("/vendors", vendorRoutes);
 app.use("/orders", orderRoutes);
 app.use("/disputes", disputeRoutes);
 app.use("/payments", paymentRoutes);
+app.use("/api", paymentRoutes);
 app.use("/riders", riderRoutes);
 app.use("/audit-log", auditRoutes);
 app.use("/payouts", payoutRoutes);
