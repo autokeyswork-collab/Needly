@@ -7,6 +7,7 @@ import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { COLORS } from "../../theme/colors";
 import { AuthAPI } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { preparePickedImageDataUrl, PROFILE_IMAGE_LIMIT_BYTES } from "../../utils/imageUpload";
 
 const INK = "#15183F";
 const MUTED = "#747792";
@@ -165,17 +166,18 @@ export default function CustomerAccountScreen({ navigation }) {
 
       if (result.canceled || !result.assets?.length) return;
       const asset = result.assets[0];
-      if (asset.base64) {
-        const mimeType = asset.mimeType || "image/jpeg";
-        const nextAvatar = `data:${mimeType};base64,${asset.base64}`;
-        if (nextAvatar.length > 1800000) {
-          setError("That photo is too large. Please choose a smaller image.");
+      const nextAvatar = await preparePickedImageDataUrl(asset, {
+        maxBytes: PROFILE_IMAGE_LIMIT_BYTES,
+        maxSize: 720,
+        quality: 0.78,
+      });
+
+      if (nextAvatar) {
+        if (nextAvatar.length > PROFILE_IMAGE_LIMIT_BYTES) {
+          setError("That photo could not be compressed enough. Please try a different image.");
           return;
         }
         setAvatarUrl(nextAvatar);
-        setMessage("Photo selected. Tap Save Profile to update it.");
-      } else if (asset.uri) {
-        setAvatarUrl(asset.uri);
         setMessage("Photo selected. Tap Save Profile to update it.");
       }
     } catch (err) {

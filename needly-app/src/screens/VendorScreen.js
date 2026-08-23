@@ -8,6 +8,7 @@ import Thumb from "../components/Thumb";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { VendorAPI } from "../api/client";
+import { preparePickedImageDataUrl, PRODUCT_IMAGE_LIMIT_BYTES } from "../utils/imageUpload";
 
 const PURPLE = "#6F45E9";
 const DARK_PURPLE = "#15183F";
@@ -16,26 +17,6 @@ const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
 const INK = "#11123A";
 const MUTED = "#747792";
-const MAX_PRODUCT_IMAGE_BYTES = 900000;
-
-function canvasResizeDataUrl(dataUrl, maxSize = 520, quality = 0.72) {
-  if (Platform.OS !== "web" || typeof document === "undefined") return Promise.resolve(dataUrl);
-  return new Promise((resolve) => {
-    const img = document.createElement("img");
-    img.onload = () => {
-      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => resolve(dataUrl);
-    img.src = dataUrl;
-  });
-}
-
 async function pickResizedProductImage() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
@@ -52,11 +33,14 @@ async function pickResizedProductImage() {
 
   if (result.canceled || !result.assets?.length) return null;
   const asset = result.assets[0];
-  if (!asset.base64 && asset.uri) return asset.uri;
-  const dataUrl = `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
-  const resized = await canvasResizeDataUrl(dataUrl);
-  if (resized.length > MAX_PRODUCT_IMAGE_BYTES) {
-    throw new Error("That image is still too large. Choose a clearer but smaller photo.");
+  const resized = await preparePickedImageDataUrl(asset, {
+    maxBytes: PRODUCT_IMAGE_LIMIT_BYTES,
+    maxSize: 520,
+    quality: 0.72,
+    minQuality: 0.4,
+  });
+  if (resized?.length > PRODUCT_IMAGE_LIMIT_BYTES) {
+    throw new Error("That image could not be compressed enough. Please try a different product photo.");
   }
   return resized;
 }
