@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { useOrders } from "../../context/OrdersContext";
 import { WalletAPI } from "../../api/client";
@@ -31,6 +31,7 @@ export default function CustomerWalletScreen({ navigation }) {
   const [loadingWallet, setLoadingWallet] = useState(true);
   const [fundAmount, setFundAmount] = useState("");
   const [pendingReference, setPendingReference] = useState("");
+  const [checkoutUrl, setCheckoutUrl] = useState("");
   const [funding, setFunding] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [walletMessage, setWalletMessage] = useState("");
@@ -74,8 +75,18 @@ export default function CustomerWalletScreen({ navigation }) {
     try {
       const res = await WalletAPI.initializeFunding(amount);
       setPendingReference(res.reference);
-      setWalletMessage("Flutterwave checkout opened. After payment, tap Verify Payment.");
-      await Linking.openURL(res.authorizationUrl);
+      setCheckoutUrl(res.authorizationUrl || "");
+      setWalletMessage("Flutterwave checkout is ready. Complete payment, then tap Verify Payment.");
+      if (res.authorizationUrl) {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const opened = window.open(res.authorizationUrl, "_blank", "noopener,noreferrer");
+          if (!opened) {
+            setWalletMessage("Tap Continue to Flutterwave to complete your payment, then return and tap Verify Payment.");
+          }
+        } else {
+          await Linking.openURL(res.authorizationUrl);
+        }
+      }
       await loadWallet();
     } catch (err) {
       setWalletError(err.message || "Could not start wallet funding.");
@@ -93,6 +104,7 @@ export default function CustomerWalletScreen({ navigation }) {
       setWallet({ balance: next.balance || 0, transactions: next.transactions || [] });
       setFundAmount("");
       setPendingReference("");
+      setCheckoutUrl("");
       setWalletMessage("Wallet balance updated.");
     } catch (err) {
       setWalletError(err.message || "Payment is still pending or could not be verified.");
@@ -269,9 +281,16 @@ export default function CustomerWalletScreen({ navigation }) {
               </Pressable>
             </View>
             {pendingReference ? (
-              <Pressable disabled={verifying} onPress={verifyFunding} style={styles.verifyBtn}>
-                <Text style={styles.verifyBtnText}>{verifying ? "Verifying..." : "Verify Payment"}</Text>
-              </Pressable>
+              <View style={styles.checkoutActions}>
+                {!!checkoutUrl && (
+                  <Pressable onPress={() => Linking.openURL(checkoutUrl)} style={styles.continueCheckoutBtn}>
+                    <Text style={styles.continueCheckoutText}>Continue to Flutterwave</Text>
+                  </Pressable>
+                )}
+                <Pressable disabled={verifying} onPress={verifyFunding} style={styles.verifyBtn}>
+                  <Text style={styles.verifyBtnText}>{verifying ? "Verifying..." : "Verify Payment"}</Text>
+                </Pressable>
+              </View>
             ) : null}
             {walletMessage ? <Text style={styles.successText}>{walletMessage}</Text> : null}
             {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
@@ -428,6 +447,9 @@ const styles = StyleSheet.create({
   fundInput: { flex: 1, minHeight: 48, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: INK, fontSize: 14, fontWeight: "800", outlineStyle: "none" },
   fundBtn: { minHeight: 48, borderRadius: 16, backgroundColor: PURPLE, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   fundBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
+  checkoutActions: { gap: 9, marginTop: 10 },
+  continueCheckoutBtn: { minHeight: 46, borderRadius: 15, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center" },
+  continueCheckoutText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   verifyBtn: { marginTop: 10, minHeight: 44, borderRadius: 15, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#DDD6FE" },
   verifyBtnText: { color: PURPLE, fontSize: 13, fontWeight: "900" },
   disabledBtn: { opacity: 0.55 },
