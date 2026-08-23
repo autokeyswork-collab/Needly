@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
 import { STATUS_FLOW, STATUS_LABEL } from "../data/mockData";
@@ -12,6 +13,39 @@ const DARK_NAVY = "#15183F";
 const EMERALD = "#10B981";
 const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
+const ABEOKUTA_PROFILE_CITIES = [
+  "Abeokuta",
+  "Oke-Ilewo",
+  "Ibara",
+  "Panseke",
+  "Adigbe",
+  "Kuto",
+  "Ita Eko",
+  "Lafenwa",
+  "Hilltop",
+  "Omida",
+  "Asero",
+  "Obantoko",
+  "Camp",
+  "Isale Ake",
+  "Sapon",
+  "Lantoro",
+  "Totoro",
+  "Onikolobo",
+  "Olomore",
+  "Elega",
+  "Mawuko",
+  "Oke-Sokori",
+  "Ago Ika",
+  "Ijeun Titun",
+  "Idi Aba",
+  "Elite",
+  "Fajol",
+  "Olorunsogo",
+  "Kobape",
+  "Osiele",
+  "Odeda",
+];
 
 const ADMIN_TABS = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -521,13 +555,20 @@ export default function AdminScreen() {
                 </View>
                 <View style={styles.profileCol}>
                   <Text style={styles.profileLabel}>City</Text>
-                  <TextInput
-                    value={adminProfileDraft.locationCity}
-                    onChangeText={(locationCity) => setAdminProfileDraft((d) => ({ ...d, locationCity }))}
-                    placeholder="Abeokuta"
-                    placeholderTextColor="#94A3B8"
-                    style={styles.profileInput}
-                  />
+                  <View style={styles.profilePickerShell}>
+                    <Picker
+                      selectedValue={adminProfileDraft.locationCity || "Abeokuta"}
+                      onValueChange={(locationCity) => setAdminProfileDraft((d) => ({ ...d, locationCity }))}
+                      style={styles.profilePicker}
+                    >
+                      {Array.from(new Set([
+                        adminProfileDraft.locationCity,
+                        ...ABEOKUTA_PROFILE_CITIES,
+                      ].filter(Boolean))).map((city) => (
+                        <Picker.Item key={city} label={city} value={city} />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
               </View>
               <Text style={styles.profileLabel}>Address</Text>
@@ -1209,6 +1250,8 @@ const styles = StyleSheet.create({
   profileCardTitle: { color: DARK_NAVY, fontSize: 15, fontWeight: "900", marginBottom: 4 },
   profileLabel: { color: DARK_NAVY, fontSize: 11.5, fontWeight: "900", marginTop: 4 },
   profileInput: { minHeight: 44, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 14, paddingHorizontal: 12, color: DARK_NAVY, fontSize: 13, fontWeight: "700", backgroundColor: "#FFFFFF" },
+  profilePickerShell: { minHeight: 44, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 14, overflow: "hidden", backgroundColor: "#FFFFFF", justifyContent: "center" },
+  profilePicker: { width: "100%", minHeight: 44, color: DARK_NAVY, fontSize: 13, fontWeight: "700", backgroundColor: "#FFFFFF" },
   profileTwoCol: { flexDirection: "row", gap: 10 },
   profileCol: { flex: 1, minWidth: 0 },
   profilePrimaryBtn: { backgroundColor: PURPLE, borderRadius: 16, paddingVertical: 13, alignItems: "center", marginTop: 6 },
