@@ -873,7 +873,90 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
     res.json({ total: formatted.length, customers: formatted });
   } catch (err) {
     console.error("Customer directory query failed", err);
-    res.status(500).json({ error: "Could not load customers from the database" });
+    try {
+      const basicCustomers = await prisma.user.findMany({
+        where: { role: "CUSTOMER" },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          approved: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      const formatted = basicCustomers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        role: c.role,
+        approved: c.approved,
+        suspendedAt: null,
+        isSuspended: false,
+        createdAt: c.createdAt,
+        ordersCount: 0,
+        bookingsCount: 0,
+        reviewsCount: 0,
+        totalSpent: 0,
+        avgOrderValue: 0,
+        lastOrderAt: null,
+        daysSinceOrder: null,
+        loyaltyTier: "Bronze",
+        churnRisk: false,
+        isTopSpender: false,
+        recentOrders: [],
+      }));
+      return res.json({ total: formatted.length, customers: formatted, partial: true });
+    } catch (basicErr) {
+      console.error("Basic customer directory query failed", basicErr);
+    }
+
+    try {
+      const rawCustomers = await prisma.$queryRawUnsafe(`
+        SELECT
+          id,
+          name,
+          email,
+          phone,
+          role::text AS role,
+          approved,
+          "suspendedAt",
+          "createdAt"
+        FROM "User"
+        WHERE role::text = 'CUSTOMER'
+        ORDER BY "createdAt" DESC
+      `);
+      const formatted = rawCustomers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        role: c.role,
+        approved: c.approved,
+        suspendedAt: c.suspendedAt,
+        isSuspended: !!c.suspendedAt,
+        createdAt: c.createdAt,
+        ordersCount: 0,
+        bookingsCount: 0,
+        reviewsCount: 0,
+        totalSpent: 0,
+        avgOrderValue: 0,
+        lastOrderAt: null,
+        daysSinceOrder: null,
+        loyaltyTier: "Bronze",
+        churnRisk: false,
+        isTopSpender: false,
+        recentOrders: [],
+      }));
+      return res.json({ total: formatted.length, customers: formatted, partial: true });
+    } catch (rawErr) {
+      console.error("Raw customer directory query failed", rawErr);
+    }
+
+    return res.status(500).json({ error: "Could not load customers from the database" });
   }
 });
 
