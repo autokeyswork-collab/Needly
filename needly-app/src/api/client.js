@@ -357,6 +357,11 @@ export const WalletAPI = {
   summary: () => request("/wallet").catch(() => ({ balance: 0, transactions: [] })),
   initializeFunding: (amount) => request("/wallet/fund/initialize", { method: "POST", body: { amount } }),
   verifyFunding: (reference) => request("/wallet/fund/verify", { method: "POST", body: { reference } }),
+  transfer: ({ recipient, amount, note }) => request("/wallet/transfer", { method: "POST", body: { recipient, amount, note } }),
+  withdraw: ({ amount, bankName, bankAccountNumber, bankAccountName }) =>
+    request("/wallet/withdraw", { method: "POST", body: { amount, bankName, bankAccountNumber, bankAccountName } }),
+  markWithdrawalPaid: (reference, note) => request(`/wallet/withdrawals/${encodeURIComponent(reference)}/mark-paid`, { method: "PATCH", body: { note } }),
+  rejectWithdrawal: (reference, note) => request(`/wallet/withdrawals/${encodeURIComponent(reference)}/reject`, { method: "PATCH", body: { note } }),
   payBill: ({ category, amount, recipient, provider, note }) =>
     request("/wallet/bills/pay", { method: "POST", body: { category, amount, recipient, provider, note } }),
 };

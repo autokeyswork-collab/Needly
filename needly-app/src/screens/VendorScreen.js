@@ -7,7 +7,7 @@ import { Pill, StatusPill } from "../components/Pill";
 import Thumb from "../components/Thumb";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
-import { VendorAPI } from "../api/client";
+import { VendorAPI, WalletAPI } from "../api/client";
 import { preparePickedImageDataUrl, PRODUCT_IMAGE_LIMIT_BYTES } from "../utils/imageUpload";
 
 const PURPLE = "#6F45E9";
@@ -156,6 +156,10 @@ export default function VendorScreen() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [bankDraft, setBankDraft] = useState({ bankName: "", bankAccountNumber: "", bankAccountName: "" });
   const [savingBank, setSavingBank] = useState(false);
+  const [wallet, setWallet] = useState({ balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [decliningOrderId, setDecliningOrderId] = useState(null);
@@ -172,6 +176,22 @@ export default function VendorScreen() {
       bankAccountName: activeVendor.bankAccountName || "",
     });
   }, [activeVendor?.id, activeVendor?.bankName, activeVendor?.bankAccountNumber, activeVendor?.bankAccountName]);
+
+  const loadWallet = async () => {
+    setWalletLoading(true);
+    try {
+      const next = await WalletAPI.summary();
+      setWallet(next || { balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
+    } catch (_) {
+      setWallet({ balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWallet();
+  }, []);
 
   const acceptOrder = async (orderId) => {
     setActionError(null);
@@ -313,6 +333,34 @@ export default function VendorScreen() {
       setActionError(err.message || "Could not save vendor account details.");
     } finally {
       setSavingBank(false);
+    }
+  };
+
+  const requestWalletWithdrawal = async () => {
+    setActionError(null);
+    const amount = Number(withdrawAmount);
+    if (!Number.isFinite(amount) || amount < 500) {
+      setActionError("Enter at least ₦500 to withdraw from your wallet.");
+      return;
+    }
+    if (!hasBankAccount) {
+      setActionError("Add your vendor payment account before requesting withdrawal.");
+      return;
+    }
+    setWithdrawing(true);
+    try {
+      const next = await WalletAPI.withdraw({
+        amount,
+        bankName: activeVendor.bankName,
+        bankAccountNumber: activeVendor.bankAccountNumber,
+        bankAccountName: activeVendor.bankAccountName,
+      });
+      setWallet(next || wallet);
+      setWithdrawAmount("");
+    } catch (err) {
+      setActionError(err.message || "Could not request wallet withdrawal.");
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -626,6 +674,67 @@ export default function VendorScreen() {
             </Pressable>
           </View>
         )}
+      </View>
+
+      <View style={styles.walletCard}>
+        <View style={styles.walletTopRow}>
+          <View>
+            <Text style={styles.walletEyebrow}>NEEDLY WALLET</Text>
+            <Text style={styles.walletBalance}>{walletLoading ? "..." : fmtNaira(wallet.available ?? wallet.balance ?? 0)}</Text>
+            {!!wallet.pendingDebitAmount && (
+              <Text style={styles.walletSub}>Pending withdrawal: {fmtNaira(wallet.pendingDebitAmount)}</Text>
+            )}
+          </View>
+          <Pressable style={styles.walletRefreshBtn} onPress={loadWallet}>
+            <Ionicons name="refresh" size={18} color={PURPLE} />
+          </Pressable>
+        </View>
+
+        <View style={styles.walletReceiveBox}>
+          <Ionicons name="wallet-outline" size={19} color={PURPLE} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.walletReceiveTitle}>Receive customer payments in wallet</Text>
+            <Text style={styles.walletReceiveText} numberOfLines={2}>
+              Customers can send to {user?.email || user?.phone || "your vendor account"}; sales payouts and Needly fee splits post here automatically.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.walletWithdrawRow}>
+          <TextInput
+            value={withdrawAmount}
+            onChangeText={(text) => setWithdrawAmount(text.replace(/[^0-9]/g, ""))}
+            placeholder="Withdraw amount"
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+            style={[styles.input, styles.withdrawInput]}
+          />
+          <Pressable
+            onPress={requestWalletWithdrawal}
+            disabled={withdrawing || !hasBankAccount}
+            style={[styles.withdrawBtn, (withdrawing || !hasBankAccount) && styles.withdrawBtnDisabled]}
+          >
+            <Text style={styles.withdrawBtnText}>{withdrawing ? "Requesting..." : "Withdraw"}</Text>
+          </Pressable>
+        </View>
+
+        {(wallet.transactions || []).slice(0, 3).map((tx) => {
+          const isCredit = ["FUNDING", "ADJUSTMENT", "ORDER_PAYMENT", "RIDER_EARNING", "COMPANY_FEE", "TRANSFER_IN"].includes(tx.type);
+          return (
+            <View key={tx.id || tx.reference} style={styles.walletTxRow}>
+              <View style={[styles.walletTxIcon, isCredit ? styles.walletTxIconCredit : styles.walletTxIconDebit]}>
+                <Ionicons name={isCredit ? "arrow-down" : "arrow-up"} size={15} color={isCredit ? EMERALD : CHILI} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.walletTxTitle} numberOfLines={1}>{tx.description || tx.type?.replace(/_/g, " ") || "Wallet transaction"}</Text>
+                <Text style={styles.walletTxMeta} numberOfLines={1}>{tx.status} · {tx.reference}</Text>
+              </View>
+              <Text style={[styles.walletTxAmount, isCredit ? styles.walletTxAmountCredit : styles.walletTxAmountDebit]}>
+                {isCredit ? "+" : "-"}{fmtNaira(tx.amount || 0)}
+              </Text>
+            </View>
+          );
+        })}
       </View>
 
       {/* Revenue Analytics Cards */}
@@ -1161,6 +1270,29 @@ const styles = StyleSheet.create({
   saveBankBtn: { height: 46, borderRadius: 23, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", marginTop: 2 },
   saveBankBtnDisabled: { opacity: 0.5 },
   saveBankBtnText: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "900" },
+  walletCard: { backgroundColor: DARK_PURPLE, borderRadius: 24, padding: 15, marginBottom: 14, shadowColor: PURPLE, shadowOpacity: 0.12, shadowRadius: 15, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  walletTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  walletEyebrow: { color: "rgba(255,255,255,0.7)", fontSize: 10.5, fontWeight: "900", marginBottom: 4 },
+  walletBalance: { color: "#FFFFFF", fontSize: 26, fontWeight: "900" },
+  walletSub: { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontWeight: "800", marginTop: 4 },
+  walletRefreshBtn: { width: 38, height: 38, borderRadius: 15, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  walletReceiveBox: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 12, marginBottom: 12 },
+  walletReceiveTitle: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "900" },
+  walletReceiveText: { color: "rgba(255,255,255,0.72)", fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
+  walletWithdrawRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  withdrawInput: { flex: 1, minHeight: 44, borderColor: "rgba(255,255,255,0.22)", backgroundColor: "rgba(255,255,255,0.96)" },
+  withdrawBtn: { minHeight: 44, borderRadius: 14, backgroundColor: PURPLE, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  withdrawBtnDisabled: { opacity: 0.52 },
+  withdrawBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
+  walletTxRow: { flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.12)", paddingTop: 9, marginTop: 8 },
+  walletTxIcon: { width: 30, height: 30, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  walletTxIconCredit: { backgroundColor: "#DCFCE7" },
+  walletTxIconDebit: { backgroundColor: "#FEE2E2" },
+  walletTxTitle: { color: "#FFFFFF", fontSize: 12.3, fontWeight: "900" },
+  walletTxMeta: { color: "rgba(255,255,255,0.58)", fontSize: 10.5, fontWeight: "700", marginTop: 1 },
+  walletTxAmount: { fontSize: 12.3, fontWeight: "900" },
+  walletTxAmountCredit: { color: "#86EFAC" },
+  walletTxAmountDebit: { color: "#FCA5A5" },
 
   /* Stats Grid */
   statGrid: { flexDirection: "row", gap: 9, marginBottom: 14 },

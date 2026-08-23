@@ -7,7 +7,7 @@ const { getAvailablePaymentGateways, initializeHostedPayment } = require("../lib
 const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
-const { handleFlutterwaveWalletWebhook } = require("./wallet.routes");
+const { createWalletCredit, findCompanyWalletUser, handleFlutterwaveWalletWebhook } = require("./wallet.routes");
 
 const router = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
@@ -119,14 +119,82 @@ async function markVendorOnboardingPaid(reference) {
 async function markOrderPaymentPaid(reference, req) {
   const payment = await prisma.payment.findUnique({
     where: { reference },
-    include: { order: { include: { customer: true, vendor: { include: { owner: true, manager: true } } } } },
+    include: { order: { include: { customer: true, rider: { include: { user: true } }, vendor: { include: { owner: true, manager: true } } } } },
   });
 
   if (!payment || payment.status === "PAID") return payment;
 
-  await prisma.payment.update({
-    where: { reference },
-    data: { status: "PAID", paidAt: new Date() },
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { reference },
+      data: { status: "PAID", paidAt: new Date() },
+    });
+
+    const vendorWalletUserId = payment.order.vendor.ownerId || payment.order.vendor.managerId;
+    if (vendorWalletUserId && payment.vendorAmount > 0) {
+      await createWalletCredit({
+        userId: vendorWalletUserId,
+        amount: payment.vendorAmount,
+        reference: `${payment.reference}:vendor`,
+        type: "ORDER_PAYMENT",
+        category: "VENDOR_SALE",
+        gateway: payment.gateway || "checkout",
+        description: `Vendor payout for order #${payment.orderId.slice(-6)}`,
+        metadata: {
+          orderId: payment.orderId,
+          paymentId: payment.id,
+          paymentReference: payment.reference,
+          customerId: payment.order.customerId,
+          vendorId: payment.order.vendorId,
+          customerPaidAmount: payment.amount,
+          platformFeeAmount: payment.platformFeeAmount,
+        },
+        txClient: tx,
+      });
+    }
+
+    const companyWalletUser = await findCompanyWalletUser(tx);
+    const companyAmount = Number(payment.platformFeeAmount || 0) + Number(payment.companyDeliveryFeeAmount || 0);
+    if (companyWalletUser?.id && companyAmount > 0) {
+      await createWalletCredit({
+        userId: companyWalletUser.id,
+        amount: companyAmount,
+        reference: `${payment.reference}:company`,
+        type: "COMPANY_FEE",
+        category: "PLATFORM_REVENUE",
+        gateway: payment.gateway || "checkout",
+        description: `Needly fees for order #${payment.orderId.slice(-6)}`,
+        metadata: {
+          orderId: payment.orderId,
+          paymentId: payment.id,
+          paymentReference: payment.reference,
+          platformFeeAmount: payment.platformFeeAmount,
+          companyDeliveryFeeAmount: payment.companyDeliveryFeeAmount,
+          riderFeePercent: payment.riderPayoutAmount > 0 ? DEFAULT_RIDER_FEE_PERCENT : 0,
+        },
+        txClient: tx,
+      });
+    }
+
+    if (payment.order.rider?.userId && payment.riderPayoutAmount > 0) {
+      await createWalletCredit({
+        userId: payment.order.rider.userId,
+        amount: payment.riderPayoutAmount,
+        reference: `${payment.reference}:rider`,
+        type: "RIDER_EARNING",
+        category: "DELIVERY_PAYOUT",
+        gateway: payment.gateway || "checkout",
+        description: `Rider payout for order #${payment.orderId.slice(-6)}`,
+        metadata: {
+          orderId: payment.orderId,
+          paymentId: payment.id,
+          paymentReference: payment.reference,
+          deliveryFeeAmount: payment.deliveryFeeAmount,
+          companyDeliveryFeeAmount: payment.companyDeliveryFeeAmount,
+        },
+        txClient: tx,
+      });
+    }
   });
 
   if (payment.order.customer.expoPushToken) {

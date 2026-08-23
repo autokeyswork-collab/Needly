@@ -39,6 +39,9 @@ export default function CustomerWalletScreen({ navigation }) {
   const [billAmount, setBillAmount] = useState("");
   const [billRecipient, setBillRecipient] = useState("");
   const [payingBill, setPayingBill] = useState(false);
+  const [transferRecipient, setTransferRecipient] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [sendingTransfer, setSendingTransfer] = useState(false);
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
@@ -127,16 +130,42 @@ export default function CustomerWalletScreen({ navigation }) {
     }
   };
 
+  const sendWalletTransfer = async () => {
+    const amount = Number(transferAmount);
+    setWalletError("");
+    setWalletMessage("");
+    if (!transferRecipient.trim()) {
+      setWalletError("Enter the vendor, rider, admin, or customer email/phone.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 50) {
+      setWalletError("Enter at least ₦50 to send.");
+      return;
+    }
+    setSendingTransfer(true);
+    try {
+      const next = await WalletAPI.transfer({ recipient: transferRecipient.trim(), amount, note: "Needly wallet transfer" });
+      setWallet(next || wallet);
+      setTransferRecipient("");
+      setTransferAmount("");
+      setWalletMessage("Wallet transfer completed.");
+    } catch (err) {
+      setWalletError(err.message || "Wallet transfer failed.");
+    } finally {
+      setSendingTransfer(false);
+    }
+  };
+
   const walletActivity = useMemo(() => (
     (wallet.transactions || []).map((tx) => ({
       id: tx.id || tx.reference,
-      title: tx.type === "FUNDING" ? "Wallet funding" : tx.category ? `${tx.category.replace(/_/g, " ")} payment` : "Wallet transaction",
+      title: tx.type === "FUNDING" ? "Wallet funding" : tx.description || (tx.category ? `${tx.category.replace(/_/g, " ")}` : "Wallet transaction"),
       detail: `${tx.status || "PENDING"} · ${tx.reference}`,
       amount: tx.amount || 0,
       date: tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Recent",
       createdAt: tx.createdAt,
       paid: tx.status === "SUCCESS",
-      credit: tx.type === "FUNDING" || tx.type === "ADJUSTMENT",
+      credit: ["FUNDING", "ADJUSTMENT", "ORDER_PAYMENT", "RIDER_EARNING", "COMPANY_FEE", "TRANSFER_IN"].includes(tx.type),
       orderId: null,
     }))
   ), [wallet.transactions]);
@@ -190,7 +219,7 @@ export default function CustomerWalletScreen({ navigation }) {
             <View style={styles.balanceTop}>
               <View>
                 <Text style={styles.balanceLabel}>Available Balance</Text>
-                <Text style={styles.balanceAmount}>{loadingWallet ? "..." : fmtNaira(wallet.balance || 0)}</Text>
+                <Text style={styles.balanceAmount}>{loadingWallet ? "..." : fmtNaira(wallet.available ?? wallet.balance ?? 0)}</Text>
               </View>
               <View style={styles.scanBadge}>
                 <MaterialCommunityIcons name="qrcode-scan" size={28} color="#fff" />
@@ -216,7 +245,7 @@ export default function CustomerWalletScreen({ navigation }) {
 
           <View style={styles.actionsCard}>
             <WalletAction icon="plus" label="Fund Wallet" color={PURPLE} family="FontAwesome" onPress={startFunding} />
-            <WalletAction icon="send" label="Send Money" color="#0EA5E9" onPress={() => navigation.navigate("CustomerOrders")} />
+            <WalletAction icon="send" label="Send Money" color="#0EA5E9" onPress={sendWalletTransfer} />
             <WalletAction icon="file-document-outline" label="Pay Bills" color="#F97316" onPress={payBill} />
             <WalletAction icon="cellphone" label="Airtime & Data" color="#10B981" onPress={() => setBillCategory("AIRTIME")} />
           </View>
@@ -281,6 +310,31 @@ export default function CustomerWalletScreen({ navigation }) {
             />
             <Pressable disabled={payingBill} onPress={payBill} style={[styles.billBtn, payingBill && styles.disabledBtn]}>
               <Text style={styles.billBtnText}>{payingBill ? "Processing..." : "Pay from Wallet"}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Send Money</Text>
+              <Text style={styles.panelHint}>Needly wallet</Text>
+            </View>
+            <TextInput
+              value={transferRecipient}
+              onChangeText={setTransferRecipient}
+              placeholder="Recipient email or phone"
+              placeholderTextColor="#9A9CB0"
+              style={styles.billInput}
+            />
+            <TextInput
+              value={transferAmount}
+              onChangeText={(text) => setTransferAmount(text.replace(/[^0-9]/g, ""))}
+              placeholder="Amount"
+              placeholderTextColor="#9A9CB0"
+              keyboardType="numeric"
+              style={styles.billInput}
+            />
+            <Pressable disabled={sendingTransfer} onPress={sendWalletTransfer} style={[styles.billBtn, sendingTransfer && styles.disabledBtn]}>
+              <Text style={styles.billBtnText}>{sendingTransfer ? "Sending..." : "Send from Wallet"}</Text>
             </Pressable>
           </View>
 

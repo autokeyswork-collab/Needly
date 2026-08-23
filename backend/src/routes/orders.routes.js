@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { refundTransaction } = require("../lib/paystack");
 const { logAction } = require("../lib/auditLog");
+const { createWalletCredit } = require("./wallet.routes");
 
 const router = express.Router();
 
@@ -248,7 +249,8 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
 
   const rule = TRANSITIONS[order.status];
   if (!rule) return res.status(400).json({ error: `Order is in a terminal state (${order.status})` });
-  if (!rule.allow.includes(req.user.role) && req.user.role !== "ADMIN") {
+  const isAdminRole = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
+  if (!rule.allow.includes(req.user.role) && !isAdminRole) {
     return res.status(403).json({ error: "Not authorized to advance this order" });
   }
 
@@ -271,7 +273,7 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
   // API call); this is the actual authorization boundary. Admin can
   // override, matching the broader authority Admin already has elsewhere
   // (e.g. force-cancelling further into the order lifecycle than anyone else can).
-  if (order.status === "PLACED" && req.user.role !== "ADMIN") {
+  if (order.status === "PLACED" && !isAdminRole) {
     const payment = await prisma.payment.findUnique({ where: { orderId: order.id } });
     if (!payment || payment.status !== "PAID") {
       return res.status(400).json({ error: "This order hasn't been paid for yet" });
@@ -337,8 +339,27 @@ router.post("/:id/claim", requireAuth, requireRole("RIDER"), async (req, res) =>
 
   const order = await prisma.order.findUnique({
     where: { id: req.params.id },
-    include: { items: true, vendor: true, rider: { include: { user: true } } },
+    include: { items: true, vendor: true, payment: true, rider: { include: { user: true } } },
   });
+  if (order?.payment?.status === "PAID" && order.rider?.userId && order.payment.riderPayoutAmount > 0) {
+    await createWalletCredit({
+      userId: order.rider.userId,
+      amount: order.payment.riderPayoutAmount,
+      reference: `${order.payment.reference}:rider`,
+      type: "RIDER_EARNING",
+      category: "DELIVERY_PAYOUT",
+      gateway: order.payment.gateway || "checkout",
+      description: `Rider payout for order #${order.id.slice(-6)}`,
+      metadata: {
+        orderId: order.id,
+        paymentId: order.payment.id,
+        paymentReference: order.payment.reference,
+        deliveryFeeAmount: order.payment.deliveryFeeAmount,
+        companyDeliveryFeeAmount: order.payment.companyDeliveryFeeAmount,
+        creditedOnClaim: true,
+      },
+    });
+  }
   emit(req, `order:${order.id}`, "order:updated", order);
   res.json(order);
 });
@@ -367,7 +388,7 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
   // actually used, since there was no path for a manager to pass this
   // authorization regardless of whether it was their own store's order.
   const isManager = req.user.role === "MANAGER" && order.vendor.managerId === req.user.id;
-  const isAdmin = req.user.role === "ADMIN";
+  const isAdmin = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
   if (!isOwner && !isVendor && !isManager && !isAdmin) {
     return res.status(403).json({ error: "Not authorized to cancel this order" });
   }
