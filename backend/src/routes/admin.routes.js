@@ -434,6 +434,20 @@ router.get("/refunds", async (req, res) => {
   }
 });
 
+router.get("/wallet-transactions", async (req, res) => {
+  try {
+    const transactions = await prisma.walletTransaction.findMany({
+      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    res.json(transactions);
+  } catch (err) {
+    if (isMissingTableError(err)) return res.json([]);
+    res.status(500).json({ error: err.message || "Failed to load wallet transactions" });
+  }
+});
+
 /**
  * GET /admin/fraud-alerts
  * Fraud & Risk Alert Center

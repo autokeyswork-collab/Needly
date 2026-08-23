@@ -406,6 +406,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [tickets, setTickets] = useState([]);
   const [roles, setRoles] = useState([]);
   const [refunds, setRefunds] = useState([]);
+  const [walletTransactions, setWalletTransactions] = useState([]);
   const [fraudAlerts, setFraudAlerts] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [disputes, setDisputes] = useState([]);
@@ -489,10 +490,10 @@ export default function SuperAdminControlCenter({ onLogout }) {
         PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), SuperAdminAPI.notifications(),
         SuperAdminAPI.health(), SuperAdminAPI.integrations(), SuperAdminAPI.orders(),
         SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.categories(), SuperAdminAPI.admins(),
-        SuperAdminAPI.fraudAlerts(),
+        SuperAdminAPI.fraudAlerts(), SuperAdminAPI.walletTransactions(),
       ]);
 
-      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig, od, pd, sv, cg, au, fa] = rs;
+      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig, od, pd, sv, cg, au, fa, wt] = rs;
       if (st.status === "fulfilled" && st.value) setStats(st.value);
       if (lo.status === "fulfilled" && lo.value) setLiveOps(lo.value);
       if (cu.status === "fulfilled") setCustomers(Array.isArray(cu.value) ? cu.value : cu.value?.customers || []);
@@ -517,6 +518,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
       if (cg.status === "fulfilled") setCategories(Array.isArray(cg.value) ? cg.value : []);
       if (au.status === "fulfilled") setAdminUsers(Array.isArray(au.value) ? au.value : []);
       if (fa.status === "fulfilled") setFraudAlerts(Array.isArray(fa.value) ? fa.value : []);
+      if (wt.status === "fulfilled") setWalletTransactions(Array.isArray(wt.value) ? wt.value : []);
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -797,7 +799,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
       bg: ["#FCE7F3", "#DCFCE7", "#DBEAFE", "#E0E7FF", "#CCFBF1"][i] || PURPLE_SOFT,
     }));
 
-  const recentTx = [
+  const allFinancialTx = [
     ...payouts.map((p) => ({
       id: p.reference || p.id,
       type: "Payout",
@@ -814,7 +816,17 @@ export default function SuperAdminControlCenter({ onLogout }) {
       time: formatClock(r.createdAt || r.updatedAt),
       status: statusLabel(r.status),
     })),
-  ].sort((a, b) => String(b.time).localeCompare(String(a.time))).slice(0, 5);
+    ...walletTransactions.map((tx) => ({
+      id: tx.reference || tx.id,
+      type: tx.type === "FUNDING" ? "Wallet Funding" : tx.category ? `Wallet ${tx.category}` : "Wallet",
+      name: tx.user?.name || tx.user?.email || "Customer",
+      amount: fmt(tx.amount),
+      gateway: tx.gateway || "wallet",
+      time: formatClock(tx.createdAt || tx.updatedAt),
+      status: statusLabel(tx.status),
+    })),
+  ].sort((a, b) => String(b.time).localeCompare(String(a.time)));
+  const recentTx = allFinancialTx.slice(0, 5);
 
   const pendingApprovals = [
     { label: "New Vendors", val: fmtN(stats?.pendingVendors), color: RED },
@@ -2249,7 +2261,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
     if (activeTab === "transactions" || activeTab === "invoices" || activeTab === "receipts") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <Text style={[s.pageH, { marginBottom: 16 }]}>Financial Transactions & Invoices Ledger</Text>
-        <GenericList items={recentTx} type="transaction" fields={[{ key: "id", bold: true }, { key: "type", label: "Type" }, { key: "name", label: "Party" }, { key: "amount", label: "Amount" }, { key: "status", label: "Status" }]} />
+        <GenericList items={allFinancialTx} type="transaction" fields={[{ key: "id", bold: true }, { key: "type", label: "Type" }, { key: "name", label: "Party" }, { key: "amount", label: "Amount" }, { key: "gateway", label: "Gateway" }, { key: "status", label: "Status" }]} />
       </ScrollView>
     );
 

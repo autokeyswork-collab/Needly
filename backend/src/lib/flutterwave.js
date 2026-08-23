@@ -54,8 +54,30 @@ async function initializeFlutterwaveTransaction({ email, name, phone, amountNair
   };
 }
 
+async function verifyFlutterwaveTransactionByReference(reference) {
+  const secretKey = await getFlutterwaveSecretKey();
+  if (!isUsableKey(secretKey)) throw new Error("Flutterwave secret key is not configured");
+
+  const { data } = await axios.get(
+    "https://api.flutterwave.com/v3/transactions/verify_by_reference",
+    {
+      params: { tx_ref: reference },
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (data?.status !== "success" || !data?.data) {
+    throw new Error(data?.message || "Flutterwave transaction could not be verified");
+  }
+  return data.data;
+}
+
 module.exports = {
   getFlutterwaveSecretKey,
   hasFlutterwaveSecretKey,
   initializeFlutterwaveTransaction,
+  verifyFlutterwaveTransactionByReference,
 };

@@ -68,6 +68,7 @@ model User {
   reviews           Review[]           @relation("CustomerReviews")
   bookings          Booking[]          @relation("CustomerBookings")
   notifications     Notification[]     @relation("UserNotifications")
+  walletTransactions WalletTransaction[]
   userRoles         UserRole[]
   assignedTickets   SupportTicket[]    @relation("AssignedAdminTickets")
   tickets           SupportTicket[]    @relation("UserSupportTickets")
@@ -276,6 +277,29 @@ model Payment {
   createdAt          DateTime  @default(now())
   paidAt             DateTime?
   refundedAt         DateTime?
+}
+
+model WalletTransaction {
+  id                       String   @id @default(cuid())
+  userId                   String
+  user                     User     @relation(fields: [userId], references: [id])
+  reference                String   @unique
+  gateway                  String   @default("flutterwave")
+  gatewayTransactionId     String?
+  providerReference        String?
+  type                     String
+  category                 String?
+  amount                   Int
+  balanceAfter             Int?
+  status                   String   @default("PENDING")
+  description              String?
+  metadata                 Json?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  completedAt              DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status])
 }
 
 model Service {

@@ -7,6 +7,7 @@ const { getAvailablePaymentGateways, initializeHostedPayment } = require("../lib
 const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
+const { handleFlutterwaveWalletWebhook } = require("./wallet.routes");
 
 const router = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
@@ -163,6 +164,36 @@ async function markOrderPaymentPaid(reference, req) {
   return payment;
 }
 
+async function markOrderPaymentFailed(reference, req) {
+  const payment = await prisma.payment.findUnique({ where: { reference }, include: { order: true } });
+  if (!payment || payment.status === "PAID" || payment.status === "REFUNDED") return payment;
+  const updated = await prisma.payment.update({
+    where: { reference },
+    data: { status: "FAILED" },
+  });
+  const io = req.app.get("io");
+  if (io && payment.orderId) {
+    io.to(`order:${payment.orderId}`).emit("payment:failed", { orderId: payment.orderId });
+    io.to(`order:${payment.orderId}`).emit("order:updated", { orderId: payment.orderId });
+  }
+  return updated;
+}
+
+async function markOrderPaymentReversed(reference, req) {
+  const payment = await prisma.payment.findUnique({ where: { reference }, include: { order: true } });
+  if (!payment || payment.status === "REFUNDED") return payment;
+  const updated = await prisma.payment.update({
+    where: { reference },
+    data: { status: "REFUNDED", refundedAt: new Date() },
+  });
+  const io = req.app.get("io");
+  if (io && payment.orderId) {
+    io.to(`order:${payment.orderId}`).emit("payment:reversed", { orderId: payment.orderId });
+    io.to(`order:${payment.orderId}`).emit("order:updated", { orderId: payment.orderId });
+  }
+  return updated;
+}
+
 router.get("/platform-fee", requireAuth, async (_req, res) => {
   const platformFeePercent = await getPlatformFeePercent();
   res.json({
@@ -314,8 +345,13 @@ async function handleFlutterwaveWebhook(req, res) {
   const payload = req.body || {};
   const data = payload.data || {};
   const reference = data.tx_ref || data.reference || payload.tx_ref || payload.reference;
+  if (await handleFlutterwaveWalletWebhook(payload)) {
+    return res.sendStatus(200);
+  }
   const status = String(data.status || payload.status || "").toLowerCase();
   const successful = status === "successful" || status === "success" || payload.event === "charge.completed";
+  const failed = status === "failed" || String(payload.event || "").toLowerCase().includes("failed");
+  const reversed = status === "reversed" || String(payload.event || "").toLowerCase().includes("reversal") || String(payload.event || "").toLowerCase().includes("refund");
 
   if (successful && reference) {
     if (String(reference).startsWith("needly_vendor_onboarding_")) {
@@ -323,6 +359,10 @@ async function handleFlutterwaveWebhook(req, res) {
     } else {
       await markOrderPaymentPaid(reference, req);
     }
+  } else if (failed && reference && !String(reference).startsWith("needly_vendor_onboarding_")) {
+    await markOrderPaymentFailed(reference, req);
+  } else if (reversed && reference && !String(reference).startsWith("needly_vendor_onboarding_")) {
+    await markOrderPaymentReversed(reference, req);
   }
 
   res.sendStatus(200);

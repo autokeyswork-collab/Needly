@@ -352,6 +352,15 @@ export const PaymentAPI = {
   confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),
 };
 
+/* --- Customer Wallet / Needly Pay --- */
+export const WalletAPI = {
+  summary: () => request("/wallet").catch(() => ({ balance: 0, transactions: [] })),
+  initializeFunding: (amount) => request("/wallet/fund/initialize", { method: "POST", body: { amount } }),
+  verifyFunding: (reference) => request("/wallet/fund/verify", { method: "POST", body: { reference } }),
+  payBill: ({ category, amount, recipient, provider, note }) =>
+    request("/wallet/bills/pay", { method: "POST", body: { category, amount, recipient, provider, note } }),
+};
+
 /* --- Audit log --- */
 export const AuditAPI = {
   list: (limit) => request(`/audit-log${limit ? `?limit=${limit}` : ""}`),
@@ -408,6 +417,7 @@ export const SuperAdminAPI = {
   createPromotion: (data) => request("/admin/promotions", { method: "POST", body: data }),
   tickets: () => request("/admin/tickets").catch(() => []),
   refunds: () => request("/admin/refunds").catch(() => []),
+  walletTransactions: () => request("/admin/wallet-transactions").catch(() => []),
   fraudAlerts: () => request("/admin/fraud-alerts").catch(() => []),
   orders: () => request("/admin/orders").catch(() => []),
   bookings: () => request("/admin/bookings").catch(() => []),

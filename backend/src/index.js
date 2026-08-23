@@ -18,6 +18,7 @@ const operationalIssueRoutes = require("./routes/operationalIssues.routes");
 const reviewRoutes = require("./routes/reviews.routes");
 const bookingRoutes = require("./routes/bookings.routes");
 const notificationRoutes = require("./routes/notifications.routes");
+const { router: walletRoutes } = require("./routes/wallet.routes");
 
 const app = express();
 
@@ -61,6 +62,7 @@ app.use("/orders", orderRoutes);
 app.use("/disputes", disputeRoutes);
 app.use("/payments", paymentRoutes);
 app.use("/api", paymentRoutes);
+app.use("/wallet", walletRoutes);
 app.use("/riders", riderRoutes);
 app.use("/audit-log", auditRoutes);
 app.use("/payouts", payoutRoutes);

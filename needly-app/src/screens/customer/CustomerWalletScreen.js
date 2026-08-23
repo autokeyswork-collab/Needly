@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { useOrders } from "../../context/OrdersContext";
+import { WalletAPI } from "../../api/client";
 import { fmtNaira } from "../../theme/colors";
 
 const PURPLE = "#642BE4";
@@ -26,13 +27,121 @@ function WalletAction({ icon, label, color, family = "MaterialCommunityIcons", o
 export default function CustomerWalletScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const { orders = [] } = useOrders();
+  const [wallet, setWallet] = useState({ balance: 0, transactions: [] });
+  const [loadingWallet, setLoadingWallet] = useState(true);
+  const [fundAmount, setFundAmount] = useState("");
+  const [pendingReference, setPendingReference] = useState("");
+  const [funding, setFunding] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [walletMessage, setWalletMessage] = useState("");
+  const [walletError, setWalletError] = useState("");
+  const [billCategory, setBillCategory] = useState("AIRTIME");
+  const [billAmount, setBillAmount] = useState("");
+  const [billRecipient, setBillRecipient] = useState("");
+  const [payingBill, setPayingBill] = useState(false);
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
   const pendingOrders = orders.filter((order) => order.paymentStatus !== "paid");
   const totalPaid = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
 
-  const recentActivity = useMemo(() => (
+  const loadWallet = async () => {
+    setLoadingWallet(true);
+    try {
+      const next = await WalletAPI.summary();
+      setWallet(next || { balance: 0, transactions: [] });
+    } finally {
+      setLoadingWallet(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWallet();
+  }, []);
+
+  const startFunding = async () => {
+    const amount = Number(fundAmount);
+    setWalletError("");
+    setWalletMessage("");
+    if (!Number.isFinite(amount) || amount < 100) {
+      setWalletError("Enter at least ₦100 to fund your wallet.");
+      return;
+    }
+    setFunding(true);
+    try {
+      const res = await WalletAPI.initializeFunding(amount);
+      setPendingReference(res.reference);
+      setWalletMessage("Flutterwave checkout opened. After payment, tap Verify Payment.");
+      await Linking.openURL(res.authorizationUrl);
+      await loadWallet();
+    } catch (err) {
+      setWalletError(err.message || "Could not start wallet funding.");
+    } finally {
+      setFunding(false);
+    }
+  };
+
+  const verifyFunding = async () => {
+    if (!pendingReference) return;
+    setVerifying(true);
+    setWalletError("");
+    try {
+      const next = await WalletAPI.verifyFunding(pendingReference);
+      setWallet({ balance: next.balance || 0, transactions: next.transactions || [] });
+      setFundAmount("");
+      setPendingReference("");
+      setWalletMessage("Wallet balance updated.");
+    } catch (err) {
+      setWalletError(err.message || "Payment is still pending or could not be verified.");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const payBill = async () => {
+    const amount = Number(billAmount);
+    setWalletError("");
+    setWalletMessage("");
+    if (!Number.isFinite(amount) || amount < 50) {
+      setWalletError("Enter a valid bill amount.");
+      return;
+    }
+    if (!billRecipient.trim()) {
+      setWalletError("Enter the phone, meter, or customer number.");
+      return;
+    }
+    setPayingBill(true);
+    try {
+      const res = await WalletAPI.payBill({ category: billCategory, amount, recipient: billRecipient.trim() });
+      setWallet((current) => ({
+        balance: res.balance ?? current.balance,
+        transactions: [res.transaction, ...(current.transactions || [])].filter(Boolean),
+      }));
+      setBillAmount("");
+      setBillRecipient("");
+      setWalletMessage(`${billCategory.replace(/_/g, " ")} payment recorded.`);
+    } catch (err) {
+      setWalletError(err.message || "Bill payment failed.");
+    } finally {
+      setPayingBill(false);
+    }
+  };
+
+  const walletActivity = useMemo(() => (
+    (wallet.transactions || []).map((tx) => ({
+      id: tx.id || tx.reference,
+      title: tx.type === "FUNDING" ? "Wallet funding" : tx.category ? `${tx.category.replace(/_/g, " ")} payment` : "Wallet transaction",
+      detail: `${tx.status || "PENDING"} · ${tx.reference}`,
+      amount: tx.amount || 0,
+      date: tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Recent",
+      createdAt: tx.createdAt,
+      paid: tx.status === "SUCCESS",
+      credit: tx.type === "FUNDING" || tx.type === "ADJUSTMENT",
+      orderId: null,
+    }))
+  ), [wallet.transactions]);
+
+  const orderActivity = useMemo(() => (
     orders
       .slice()
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
@@ -43,9 +152,19 @@ export default function CustomerWalletScreen({ navigation }) {
         detail: `${order.items?.length || 0} item(s) · ${order.paymentStatus || "pending"} payment`,
         amount: order.total || 0,
         date: order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "Recent",
+        createdAt: order.createdAt,
         paid: order.paymentStatus === "paid",
+        credit: false,
+        orderId: order.id,
       }))
   ), [orders]);
+
+  const recentActivity = useMemo(() => (
+    [...walletActivity, ...orderActivity]
+      .slice()
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .slice(0, 8)
+  ), [walletActivity, orderActivity]);
 
   return (
     <View style={styles.page}>
@@ -71,7 +190,7 @@ export default function CustomerWalletScreen({ navigation }) {
             <View style={styles.balanceTop}>
               <View>
                 <Text style={styles.balanceLabel}>Available Balance</Text>
-                <Text style={styles.balanceAmount}>{fmtNaira(0)}</Text>
+                <Text style={styles.balanceAmount}>{loadingWallet ? "..." : fmtNaira(wallet.balance || 0)}</Text>
               </View>
               <View style={styles.scanBadge}>
                 <MaterialCommunityIcons name="qrcode-scan" size={28} color="#fff" />
@@ -96,10 +215,73 @@ export default function CustomerWalletScreen({ navigation }) {
           </View>
 
           <View style={styles.actionsCard}>
-            <WalletAction icon="qrcode-scan" label="Scan to Pay" color={PURPLE} onPress={() => navigation.navigate("CustomerOrders")} />
+            <WalletAction icon="plus" label="Fund Wallet" color={PURPLE} family="FontAwesome" onPress={startFunding} />
             <WalletAction icon="send" label="Send Money" color="#0EA5E9" onPress={() => navigation.navigate("CustomerOrders")} />
-            <WalletAction icon="file-document-outline" label="Pay Bills" color="#F97316" onPress={() => navigation.navigate("CustomerOrders")} />
-            <WalletAction icon="cellphone" label="Airtime & Data" color="#10B981" onPress={() => navigation.navigate("CustomerOrders")} />
+            <WalletAction icon="file-document-outline" label="Pay Bills" color="#F97316" onPress={payBill} />
+            <WalletAction icon="cellphone" label="Airtime & Data" color="#10B981" onPress={() => setBillCategory("AIRTIME")} />
+          </View>
+
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Fund Wallet</Text>
+              <Pressable onPress={loadWallet}><Text style={styles.panelLink}>Refresh</Text></Pressable>
+            </View>
+            <View style={styles.fundRow}>
+              <TextInput
+                value={fundAmount}
+                onChangeText={(text) => setFundAmount(text.replace(/[^0-9]/g, ""))}
+                placeholder="Amount in naira"
+                placeholderTextColor="#9A9CB0"
+                keyboardType="numeric"
+                style={styles.fundInput}
+              />
+              <Pressable disabled={funding} onPress={startFunding} style={[styles.fundBtn, funding && styles.disabledBtn]}>
+                {funding ? <ActivityIndicator color="#fff" /> : <Text style={styles.fundBtnText}>Flutterwave</Text>}
+              </Pressable>
+            </View>
+            {pendingReference ? (
+              <Pressable disabled={verifying} onPress={verifyFunding} style={styles.verifyBtn}>
+                <Text style={styles.verifyBtnText}>{verifying ? "Verifying..." : "Verify Payment"}</Text>
+              </Pressable>
+            ) : null}
+            {walletMessage ? <Text style={styles.successText}>{walletMessage}</Text> : null}
+            {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
+          </View>
+
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Bills & Services</Text>
+              <Text style={styles.panelHint}>Wallet debit</Text>
+            </View>
+            <View style={styles.categoryRow}>
+              {["AIRTIME", "DATA", "ELECTRICITY", "WATER"].map((category) => (
+                <Pressable
+                  key={category}
+                  onPress={() => setBillCategory(category)}
+                  style={[styles.categoryChip, billCategory === category && styles.categoryChipActive]}
+                >
+                  <Text style={[styles.categoryChipText, billCategory === category && styles.categoryChipTextActive]}>{category}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={billRecipient}
+              onChangeText={setBillRecipient}
+              placeholder="Phone, meter, or customer number"
+              placeholderTextColor="#9A9CB0"
+              style={styles.billInput}
+            />
+            <TextInput
+              value={billAmount}
+              onChangeText={(text) => setBillAmount(text.replace(/[^0-9]/g, ""))}
+              placeholder="Amount"
+              placeholderTextColor="#9A9CB0"
+              keyboardType="numeric"
+              style={styles.billInput}
+            />
+            <Pressable disabled={payingBill} onPress={payBill} style={[styles.billBtn, payingBill && styles.disabledBtn]}>
+              <Text style={styles.billBtnText}>{payingBill ? "Processing..." : "Pay from Wallet"}</Text>
+            </Pressable>
           </View>
 
           <View style={styles.panel}>
@@ -110,8 +292,8 @@ export default function CustomerWalletScreen({ navigation }) {
             <View style={styles.methodRow}>
               <View style={styles.methodIcon}><FontAwesome name="credit-card" size={18} color={PURPLE} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.methodTitle}>Paystack checkout</Text>
-                <Text style={styles.methodSub}>Cards, bank transfer and USSD</Text>
+                <Text style={styles.methodTitle}>Flutterwave wallet funding</Text>
+                <Text style={styles.methodSub}>Cards, bank transfer and mobile money</Text>
               </View>
               <Text style={styles.readyBadge}>Ready</Text>
             </View>
@@ -119,9 +301,9 @@ export default function CustomerWalletScreen({ navigation }) {
               <View style={styles.methodIcon}><Ionicons name="wallet-outline" size={20} color={PURPLE} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.methodTitle}>Needly wallet</Text>
-                <Text style={styles.methodSub}>Wallet top-up and transfers coming online</Text>
+                <Text style={styles.methodSub}>Bills and in-app payments from wallet balance</Text>
               </View>
-              <Text style={styles.pendingBadge}>Soon</Text>
+              <Text style={styles.readyBadge}>Ready</Text>
             </View>
           </View>
 
@@ -137,7 +319,7 @@ export default function CustomerWalletScreen({ navigation }) {
                 <Text style={styles.emptyText}>Payments for orders, bills and wallet actions will appear here.</Text>
               </View>
             ) : recentActivity.map((item) => (
-              <Pressable key={item.id} style={styles.activityRow} onPress={() => navigation.navigate("Tracking", { orderId: item.id })}>
+              <Pressable key={item.id} style={styles.activityRow} onPress={() => item.orderId && navigation.navigate("Tracking", { orderId: item.orderId })}>
                 <View style={[styles.activityIcon, item.paid && styles.activityIconPaid]}>
                   <Ionicons name={item.paid ? "checkmark" : "time-outline"} size={18} color={item.paid ? "#10B981" : "#F59E0B"} />
                 </View>
@@ -146,7 +328,7 @@ export default function CustomerWalletScreen({ navigation }) {
                   <Text numberOfLines={1} style={styles.activitySub}>{item.detail}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.activityAmount}>{fmtNaira(item.amount)}</Text>
+                  <Text style={[styles.activityAmount, item.credit && { color: "#10B981" }]}>{item.credit ? "+" : "-"}{fmtNaira(item.amount)}</Text>
                   <Text style={styles.activityDate}>{item.date}</Text>
                 </View>
               </Pressable>
@@ -187,6 +369,24 @@ const styles = StyleSheet.create({
   panelHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   panelTitle: { color: INK, fontSize: 16, fontWeight: "900" },
   panelLink: { color: PURPLE, fontSize: 13, fontWeight: "900" },
+  panelHint: { color: MUTED, fontSize: 12, fontWeight: "800" },
+  fundRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  fundInput: { flex: 1, minHeight: 48, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: INK, fontSize: 14, fontWeight: "800", outlineStyle: "none" },
+  fundBtn: { minHeight: 48, borderRadius: 16, backgroundColor: PURPLE, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  fundBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
+  verifyBtn: { marginTop: 10, minHeight: 44, borderRadius: 15, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#DDD6FE" },
+  verifyBtnText: { color: PURPLE, fontSize: 13, fontWeight: "900" },
+  disabledBtn: { opacity: 0.55 },
+  successText: { color: "#059669", fontSize: 12, lineHeight: 17, fontWeight: "800", marginTop: 9 },
+  errorText: { color: "#DC2626", fontSize: 12, lineHeight: 17, fontWeight: "800", marginTop: 9 },
+  categoryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  categoryChip: { borderRadius: 999, borderWidth: 1, borderColor: "#E5DEF5", backgroundColor: "#FFFFFF", paddingHorizontal: 10, paddingVertical: 7 },
+  categoryChipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
+  categoryChipText: { color: MUTED, fontSize: 10.5, fontWeight: "900" },
+  categoryChipTextActive: { color: "#FFFFFF" },
+  billInput: { minHeight: 46, borderRadius: 15, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: INK, fontSize: 13.5, fontWeight: "800", marginBottom: 9, outlineStyle: "none" },
+  billBtn: { minHeight: 46, borderRadius: 16, backgroundColor: PURPLE_DARK, alignItems: "center", justifyContent: "center" },
+  billBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   methodRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#F4F0FB" },
   methodIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#F4EDFF", alignItems: "center", justifyContent: "center" },
   methodTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
