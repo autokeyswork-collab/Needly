@@ -15,6 +15,11 @@ function appUrl(path) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
+function frontendUrl(path) {
+  const base = process.env.FRONTEND_BASE_URL || process.env.APP_PUBLIC_URL || "https://needly-frontend-seven.vercel.app";
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
 function signedAmount(tx) {
   if (tx.status !== "SUCCESS") return 0;
   if (CREDIT_TYPES.has(tx.type)) return tx.amount;
@@ -474,13 +479,23 @@ router.post("/bills/pay", requireAuth, requireRole("CUSTOMER"), async (req, res)
 
 router.get("/callback", async (req, res) => {
   const reference = String(req.query.reference || req.query.tx_ref || "").trim();
+  let status = "pending";
   if (reference) {
-    creditWalletFromFlutterwave(reference, "callback").catch((err) => console.error("Wallet callback verification failed", err.message));
+    try {
+      const updated = await creditWalletFromFlutterwave(reference, "callback");
+      status = updated?.status === "SUCCESS" ? "success" : "pending";
+    } catch (err) {
+      console.error("Wallet callback verification failed", err.message);
+      status = "pending";
+    }
   }
+  const redirectUrl = frontendUrl(`/?walletPayment=${encodeURIComponent(status)}&reference=${encodeURIComponent(reference)}&screen=NeedlyPay`);
   res.set("Content-Type", "text/html").send(`
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="0;url=${redirectUrl}">
     <style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F8F5FF;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box}div{max-width:340px;background:#fff;border-radius:24px;padding:24px;box-shadow:0 18px 50px rgba(100,43,228,.16)}h1{font-size:22px;color:#11123A}p{color:#6B6F76;font-size:14px;line-height:1.5}</style></head>
-    <body><div><h1>Wallet payment received</h1><p>You can close this page and return to Needly Pay. Your wallet will refresh after Flutterwave confirms the transaction.</p></div></body></html>
+    <body><div><h1>Returning to Needly Pay</h1><p>Your payment was received by Flutterwave. Redirecting you back to Needly now...</p><p><a href="${redirectUrl}">Open Needly Pay</a></p></div>
+    <script>window.location.replace(${JSON.stringify(redirectUrl)});</script></body></html>
   `);
 });
 

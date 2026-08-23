@@ -17,6 +17,11 @@ const DEFAULT_DELIVERY_PER_KM = Number(process.env.DELIVERY_PER_KM_NAIRA || 120)
 const DEFAULT_DELIVERY_MIN_FEE = Number(process.env.DELIVERY_MIN_FEE_NAIRA || 500);
 const DEFAULT_DELIVERY_MAX_FEE = Number(process.env.DELIVERY_MAX_FEE_NAIRA || 3500);
 
+function frontendUrl(path) {
+  const base = process.env.FRONTEND_BASE_URL || process.env.APP_PUBLIC_URL || "https://needly-frontend-seven.vercel.app";
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
 async function getPlatformFeePercent() {
   try {
     const rule = await prisma.commissionRule.findFirst({
@@ -448,11 +453,15 @@ router.post("/webhook/flutterwave", handleFlutterwaveWebhook);
  * confirmation via socket/push once the webhook fires, not from this redirect.
  */
 router.get("/callback", (req, res) => {
+  const reference = String(req.query.reference || req.query.tx_ref || "").trim();
+  const redirectUrl = frontendUrl(`/?payment=return&reference=${encodeURIComponent(reference)}&screen=CustomerOrders`);
   res.set("Content-Type", "text/html").send(`
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="0;url=${redirectUrl}">
     <style>body{font-family:-apple-system,sans-serif;background:#F5F4F0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box;}
     div{max-width:320px}h1{font-size:20px;color:#14171F}p{color:#6B6F76;font-size:14px}</style></head>
-    <body><div><h1>Thanks!</h1><p>You can close this window and return to the Needly app — your order will update automatically once payment is confirmed.</p></div></body></html>
+    <body><div><h1>Returning to Needly</h1><p>Your payment is being confirmed. Redirecting you back to the app...</p><p><a href="${redirectUrl}">Open Needly</a></p></div>
+    <script>window.location.replace(${JSON.stringify(redirectUrl)});</script></body></html>
   `);
 });
 

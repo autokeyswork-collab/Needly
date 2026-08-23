@@ -16,8 +16,14 @@ import { COLORS } from "../theme/colors";
 const Stack = createNativeStackNavigator();
 
 export default function CustomerStack() {
+  const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const walletReference = query?.get("walletPayment") ? query?.get("reference") : null;
+  const paymentReturn = query?.get("payment") ? query?.get("reference") : null;
+  const initialRouteName = walletReference ? "NeedlyPay" : paymentReturn ? "CustomerOrders" : "Browse";
+
   return (
     <Stack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.indigo },
         headerTintColor: "#fff",
@@ -26,8 +32,8 @@ export default function CustomerStack() {
     >
       <Stack.Screen name="Browse" component={BrowseScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CategoryResults" component={CategoryResultsScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="NeedlyPay" component={CustomerWalletScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CustomerOrders" component={CustomerOrdersScreen} initialParams={paymentReturn ? { paymentReference: paymentReturn } : undefined} options={{ headerShown: false }} />
+      <Stack.Screen name="NeedlyPay" component={CustomerWalletScreen} initialParams={walletReference ? { returnReference: walletReference } : undefined} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerBookings" component={CustomerBookingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerNotifications" component={CustomerNotificationsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerAccount" component={CustomerAccountScreen} options={{ headerShown: false }} />

@@ -90,7 +90,7 @@ function TransactionRow({ item }) {
   );
 }
 
-export default function CustomerWalletScreen({ navigation }) {
+export default function CustomerWalletScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const { orders = [] } = useOrders();
   const [wallet, setWallet] = useState({ balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
@@ -130,6 +130,37 @@ export default function CustomerWalletScreen({ navigation }) {
   useEffect(() => {
     loadWallet();
   }, []);
+
+  useEffect(() => {
+    const reference = route?.params?.returnReference;
+    if (!reference) return;
+    let mounted = true;
+    setPendingReference(reference);
+    setCheckoutUrl("");
+    setWalletMessage("Confirming your Flutterwave payment...");
+    setVerifying(true);
+    WalletAPI.verifyFunding(reference)
+      .then((next) => {
+        if (!mounted) return;
+        setWallet(next || { balance: 0, transactions: [] });
+        setPendingReference("");
+        setWalletMessage("Payment successful. Your wallet balance has been updated.");
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setWalletError(err.message || "Payment is still pending. Tap Verify Payment in a moment.");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setVerifying(false);
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.history.replaceState({}, "", window.location.pathname || "/");
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [route?.params?.returnReference]);
 
   const clearStatus = () => {
     setWalletError("");
