@@ -40,6 +40,7 @@ const CATEGORY_GRID = [
   { label: "Auto", category: "Auto", image: CATEGORY_IMAGES.Auto },
   { label: "Home Services", category: "Home Services", image: CATEGORY_IMAGES["Home Services"] },
   { label: "Health", category: "Pharmacy", image: CATEGORY_IMAGES.Pharmacy },
+  { label: "Services", category: "Services", image: CATEGORY_IMAGES.Services || CATEGORY_IMAGES["Home Services"] },
   { label: "Stay & Dine", category: "Stay & Dine", image: CATEGORY_IMAGES["Stay & Dine"] },
   { label: "Learn", category: "Learn", image: CATEGORY_IMAGES.Learn },
   { label: "Utilities", category: "Utilities", image: CATEGORY_IMAGES.Utilities },

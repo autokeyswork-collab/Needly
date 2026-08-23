@@ -17,6 +17,7 @@ const CATEGORY_AVATARS = {
   Supermarket: "🛍️",
   Restaurant: "🥗",
   "Home Services": "🏠",
+  Services: "🧰",
   Auto: "🚙",
   Pharmacy: "💊",
   "Stay & Dine": "🏨",

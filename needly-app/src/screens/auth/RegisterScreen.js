@@ -32,6 +32,7 @@ const VENDOR_CATEGORIES = [
   "Supermarket",
   "Pharmacy",
   "Gas & Water",
+  "Services",
   "Home Services",
   "Auto",
   "Laundry",

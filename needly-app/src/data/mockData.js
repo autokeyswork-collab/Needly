@@ -7,6 +7,7 @@ export const MARKETPLACE_SHORTCUTS = [
   { key: "Local Market", emoji: "🥬", title: "Open Market", subtitle: "Fresh local market runs", flow: "BUY" },
   { key: "Pharmacy", emoji: "💊", title: "Health", subtitle: "Pharmacies & medical supplies", flow: "BUY" },
   { key: "Stay & Dine", emoji: "🏨", title: "Stay & Dine", subtitle: "Resorts, hotels & fine dining", flow: "RESERVE" },
+  { key: "Services", emoji: "🧰", title: "Services", subtitle: "Book trusted everyday providers", flow: "BOOK" },
   { key: "Home Services", emoji: "🏠", title: "Home Services", subtitle: "Cleaners, laundry & repairs", flow: "BOOK" },
   { key: "Auto", emoji: "🚙", title: "Auto", subtitle: "Abeokuta mechanics & car wash", flow: "BOOK" },
   { key: "Learn", emoji: "🎓", title: "Learn", subtitle: "Home & online private tutors", flow: "BOOK" },
@@ -25,6 +26,7 @@ export const CATEGORY_TINT = {
   "Local Market": "#E5F2E9",
   Pharmacy: "#E3F0F7",
   "Stay & Dine": "#FDF2F8",
+  Services: "#EDE9FF",
 };
 
 export const INITIAL_VENDORS = [

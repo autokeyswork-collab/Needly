@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import { AUTO_PROVIDERS } from "../../data/serviceData";
+import { ALL_SERVICE_PROVIDERS, AUTO_PROVIDERS } from "../../data/serviceData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 
@@ -9,9 +9,11 @@ const INK = "#15183F";
 const PURPLE = "#6F45E9";
 
 export default function AutoBookingScreen({ route, navigation }) {
-  const initialProviderId = route.params?.providerId || AUTO_PROVIDERS[0].id;
+  const providers = ALL_SERVICE_PROVIDERS.length ? ALL_SERVICE_PROVIDERS : AUTO_PROVIDERS;
+  const initialProviderId = route.params?.providerId || providers[0].id;
   const [providerId, setProviderId] = useState(initialProviderId);
-  const provider = AUTO_PROVIDERS.find((p) => p.id === providerId) || AUTO_PROVIDERS[0];
+  const provider = providers.find((p) => p.id === providerId) || providers[0];
+  const providerCategory = provider.category || "Auto";
   const initialServiceId = route.params?.serviceId || provider.services[0].id;
   const [serviceId, setServiceId] = useState(initialServiceId);
   const service = provider.services.find((s) => s.id === serviceId) || provider.services[0];
@@ -26,7 +28,7 @@ export default function AutoBookingScreen({ route, navigation }) {
 
   const canSubmit = vehicle.trim() && location.trim() && date.trim() && time.trim() && !submitting;
 
-  const providerOptions = useMemo(() => AUTO_PROVIDERS.map((p) => ({ label: `${p.name} - ${p.area}`, value: p.id })), []);
+  const providerOptions = useMemo(() => providers.map((p) => ({ label: `${p.name} - ${p.area}`, value: p.id })), [providers]);
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -36,7 +38,7 @@ export default function AutoBookingScreen({ route, navigation }) {
       const res = await createBooking({
         serviceId: service.id,
         providerName: provider.name,
-        category: "Auto",
+        category: providerCategory,
         address: location.trim(),
         phone: "",
         total: service.price,
@@ -53,8 +55,8 @@ export default function AutoBookingScreen({ route, navigation }) {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.overline}>BOOK AUTO SERVICE</Text>
-      <Text style={styles.title}>Find a mechanic near you</Text>
+      <Text style={styles.overline}>BOOK {providerCategory.toUpperCase()} SERVICE</Text>
+      <Text style={styles.title}>Find a trusted service near you</Text>
       <Text style={styles.subtitle}>Choose a provider, service, time, and location. This creates a customer booking request inside Needly.</Text>
 
       <Text style={styles.label}>PROVIDER</Text>
@@ -62,7 +64,7 @@ export default function AutoBookingScreen({ route, navigation }) {
         <Picker
           selectedValue={providerId}
           onValueChange={(value) => {
-            const nextProvider = AUTO_PROVIDERS.find((p) => p.id === value);
+            const nextProvider = providers.find((p) => p.id === value);
             setProviderId(value);
             setServiceId(nextProvider?.services[0]?.id);
           }}
@@ -91,8 +93,8 @@ export default function AutoBookingScreen({ route, navigation }) {
         })}
       </View>
 
-      <Text style={styles.label}>VEHICLE INFORMATION</Text>
-      <TextInput value={vehicle} onChangeText={setVehicle} placeholder="e.g. Toyota Corolla 2012" style={styles.input} />
+      <Text style={styles.label}>SERVICE DETAILS</Text>
+      <TextInput value={vehicle} onChangeText={setVehicle} placeholder={providerCategory === "Auto" ? "e.g. Toyota Corolla 2012" : "What do you need help with?"} style={styles.input} />
 
       <Text style={styles.label}>SERVICE LOCATION</Text>
       <TextInput value={location} onChangeText={setLocation} placeholder="Street, landmark, area in Abeokuta" style={styles.input} />

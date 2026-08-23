@@ -2,6 +2,7 @@ export const CATEGORY_IMAGES = {
   Supermarket: require("../assets/marketplace/supermarket.jpg"),
   Restaurant: require("../assets/marketplace/restaurant.jpg"),
   "Home Services": require("../assets/marketplace/home-services.jpg"),
+  Services: require("../assets/marketplace/home-services.jpg"),
   Auto: require("../assets/marketplace/auto.jpg"),
   Pharmacy: require("../assets/marketplace/pharmacy.jpg"),
   "Stay & Dine": require("../assets/marketplace/stay-dine.jpg"),
