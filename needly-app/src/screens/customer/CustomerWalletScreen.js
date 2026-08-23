@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
@@ -93,10 +93,12 @@ function TransactionRow({ item }) {
 export default function CustomerWalletScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const { orders = [] } = useOrders();
+  const scrollRef = useRef(null);
   const [wallet, setWallet] = useState({ balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
   const [loadingWallet, setLoadingWallet] = useState(true);
   const [activeTool, setActiveTool] = useState("fund");
-  const [fundAmount, setFundAmount] = useState("");
+  const [fundAmount, setFundAmount] = useState("1000");
+  const [fundPanelY, setFundPanelY] = useState(0);
   const [pendingReference, setPendingReference] = useState("");
   const [checkoutUrl, setCheckoutUrl] = useState("");
   const [funding, setFunding] = useState(false);
@@ -325,12 +327,18 @@ export default function CustomerWalletScreen({ navigation, route }) {
     clearStatus();
     if (tool === "bills") setBillCategory("ELECTRICITY");
     if (tool === "airtime") setBillCategory("AIRTIME");
+    if (tool === "fund" && !fundAmount) setFundAmount("1000");
+    if (tool === "fund") {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo?.({ y: Math.max(0, fundPanelY - 18), animated: true });
+      });
+    }
   };
 
   return (
     <View style={styles.page}>
       <View style={[styles.shell, { maxWidth: 430 }]}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <View style={styles.topHeader}>
             <View style={styles.statusRow}>
               <Text style={styles.statusTime}>{now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Text>
@@ -374,6 +382,10 @@ export default function CustomerWalletScreen({ navigation, route }) {
                   <View style={styles.eyeButton}><Ionicons name="eye" size={20} color="#fff" /></View>
                 </View>
                 <Text style={styles.walletHeroSub}>Pay, send, receive and enjoy more with Needly Pay</Text>
+                <Pressable style={styles.heroAddMoneyBtn} onPress={() => openTool("fund")}>
+                  <FontAwesome name="plus" size={13} color={PURPLE} />
+                  <Text style={styles.heroAddMoneyText}>Add Money</Text>
+                </Pressable>
               </View>
               <WalletIllustration />
               <View style={styles.heroMiniCards}>
@@ -403,7 +415,7 @@ export default function CustomerWalletScreen({ navigation, route }) {
               <WalletAction icon="bank" label="Withdraw" color="#EEE7FF" iconColor={PURPLE} onPress={() => openTool("withdraw")} last />
             </View>
 
-            <View style={styles.toolPanel}>
+            <View style={styles.toolPanel} onLayout={(event) => setFundPanelY(event.nativeEvent.layout.y)}>
               <View style={styles.panelHeader}>
                 <Text style={styles.panelTitle}>
                   {activeTool === "fund" ? "Fund Wallet" : activeTool === "send" ? "Send Money" : activeTool === "withdraw" ? "Withdraw" : "Scan & Pay"}
@@ -586,6 +598,8 @@ const styles = StyleSheet.create({
   balanceAmount: { color: "#FFFFFF", fontSize: 30, fontWeight: "900", maxWidth: 205 },
   eyeButton: { width: 42, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
   walletHeroSub: { color: "rgba(255,255,255,0.88)", fontSize: 13.5, fontWeight: "700", lineHeight: 19, marginTop: 8 },
+  heroAddMoneyBtn: { alignSelf: "flex-start", minHeight: 36, borderRadius: 18, backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, marginTop: 12 },
+  heroAddMoneyText: { color: PURPLE, fontSize: 12.5, fontWeight: "900" },
   walletArt: { position: "absolute", right: 10, top: 28, width: 128, height: 116 },
   cash: { position: "absolute", width: 64, height: 38, borderRadius: 8, backgroundColor: "#F7E1B0", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", alignItems: "center", justifyContent: "center", transform: [{ rotate: "-12deg" }] },
   cashOne: { right: 42, top: 0 },
