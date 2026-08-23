@@ -88,28 +88,19 @@ const categoryIcon = (category = "") => {
   return "📦";
 };
 const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
+const ABEOKUTA_BOUNDS = {
+  minLat: 7.08,
+  maxLat: 7.24,
+  minLng: 3.25,
+  maxLng: 3.47,
+};
 const hasCoords = (item = {}) => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude));
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const mapBoundsFor = (points = []) => {
-  const valid = points.filter((point) => hasCoords(point));
-  if (!valid.length) {
-    return {
-      minLat: ABEOKUTA_CENTER.latitude - 0.05,
-      maxLat: ABEOKUTA_CENTER.latitude + 0.05,
-      minLng: ABEOKUTA_CENTER.longitude - 0.06,
-      maxLng: ABEOKUTA_CENTER.longitude + 0.06,
-    };
-  }
-  const lats = valid.map((point) => Number(point.latitude));
-  const lngs = valid.map((point) => Number(point.longitude));
-  const minLat = Math.min(...lats, ABEOKUTA_CENTER.latitude);
-  const maxLat = Math.max(...lats, ABEOKUTA_CENTER.latitude);
-  const minLng = Math.min(...lngs, ABEOKUTA_CENTER.longitude);
-  const maxLng = Math.max(...lngs, ABEOKUTA_CENTER.longitude);
-  const latPad = Math.max((maxLat - minLat) * 0.35, 0.018);
-  const lngPad = Math.max((maxLng - minLng) * 0.35, 0.02);
-  return { minLat: minLat - latPad, maxLat: maxLat + latPad, minLng: minLng - lngPad, maxLng: maxLng + lngPad };
-};
+const isInsideAbeokuta = (point = {}) => hasCoords(point)
+  && Number(point.latitude) >= ABEOKUTA_BOUNDS.minLat
+  && Number(point.latitude) <= ABEOKUTA_BOUNDS.maxLat
+  && Number(point.longitude) >= ABEOKUTA_BOUNDS.minLng
+  && Number(point.longitude) <= ABEOKUTA_BOUNDS.maxLng;
 const projectMapPoint = (point, bounds) => ({
   left: `${clamp(((Number(point.longitude) - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100, 4, 96)}%`,
   top: `${clamp((1 - ((Number(point.latitude) - bounds.minLat) / (bounds.maxLat - bounds.minLat))) * 100, 5, 95)}%`,
@@ -262,7 +253,7 @@ function RevenueChart({ width = 280, height = 110 }) {
   );
 }
 
-function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 205 }) {
+function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 320 }) {
   const points = [
     ...vendors.filter(hasCoords).slice(0, 18).map((vendor) => ({
       id: `vendor-${vendor.id}`,
@@ -320,7 +311,8 @@ function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 205 }
       return [...deliveryPoint, ...vendorPoint, ...riderPoint];
     }),
   ];
-  const displayPoints = points.length ? points : [{
+  const abeokutaPoints = points.filter(isInsideAbeokuta);
+  const displayPoints = abeokutaPoints.length ? abeokutaPoints : [{
     id: "abeokuta-center",
     latitude: ABEOKUTA_CENTER.latitude,
     longitude: ABEOKUTA_CENTER.longitude,
@@ -329,7 +321,7 @@ function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 205 }
     icon: "📍",
     color: PURPLE,
   }];
-  const bounds = mapBoundsFor(displayPoints);
+  const bounds = ABEOKUTA_BOUNDS;
   const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
   const center = displayPoints[0] || ABEOKUTA_CENTER;
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${Number(center.latitude)},${Number(center.longitude)}`;
@@ -365,9 +357,9 @@ function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 205 }
       })}
 
       <View style={s.mapInfoCard}>
-        <Text style={s.mapInfoTitle}>Real OpenStreetMap</Text>
+        <Text style={s.mapInfoTitle}>Abeokuta Live Map</Text>
         <Text numberOfLines={1} style={s.mapInfoSub}>
-          {displayPoints.length} live point(s) around Abeokuta
+          {displayPoints.length} live point(s) inside Abeokuta
         </Text>
         <View style={{ flexDirection: "row", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
           <Badge label={`${vendors.filter(hasCoords).length} Vendors`} color={AMBER} bg={AMBER_BG} />
@@ -1445,7 +1437,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
                 <Badge label={`${fmtN(activeOpsList.length)} Delivery Routes`} color={PURPLE} bg={PURPLE_SOFT} />
               </View>
             </View>
-            <LiveMapGraphic orders={activeOpsList.map((op) => liveOrdersRaw.find((order) => (order.orderNumber || order.reference || order.id) === op.id)).filter(Boolean)} riders={riders} vendors={vendors} height={245} />
+            <LiveMapGraphic orders={activeOpsList.map((op) => liveOrdersRaw.find((order) => (order.orderNumber || order.reference || order.id) === op.id)).filter(Boolean)} riders={riders} vendors={vendors} height={360} />
           </View>
 
           {/* Live Stream Table */}

@@ -9,6 +9,12 @@ import StarRating from "../../components/StarRating";
 
 const DISPUTE_REASONS = ["Missing item", "Wrong item", "Item damaged", "Arrived late", "Other"];
 const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
+const ABEOKUTA_BOUNDS = {
+  minLat: 7.08,
+  maxLat: 7.24,
+  minLng: 3.25,
+  maxLng: 3.47,
+};
 
 function hasCoords(point) {
   return Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude));
@@ -61,17 +67,24 @@ function markerPosition(point, bounds) {
   };
 }
 
+function inAbeokuta(point) {
+  if (!hasCoords(point)) return false;
+  const latitude = Number(point.latitude);
+  const longitude = Number(point.longitude);
+  return latitude >= ABEOKUTA_BOUNDS.minLat
+    && latitude <= ABEOKUTA_BOUNDS.maxLat
+    && longitude >= ABEOKUTA_BOUNDS.minLng
+    && longitude <= ABEOKUTA_BOUNDS.maxLng;
+}
+
 function TrackingMap({ order }) {
-  const points = buildTrackingPoints(order);
-  const allPoints = [points.vendor, points.customer, points.rider].filter(hasCoords);
-  const lats = allPoints.map((p) => p.latitude);
-  const lngs = allPoints.map((p) => p.longitude);
-  const bounds = {
-    minLat: Math.min(...lats, ABEOKUTA_CENTER.latitude) - 0.012,
-    maxLat: Math.max(...lats, ABEOKUTA_CENTER.latitude) + 0.012,
-    minLng: Math.min(...lngs, ABEOKUTA_CENTER.longitude) - 0.012,
-    maxLng: Math.max(...lngs, ABEOKUTA_CENTER.longitude) + 0.012,
+  const rawPoints = buildTrackingPoints(order);
+  const points = {
+    vendor: inAbeokuta(rawPoints.vendor) ? rawPoints.vendor : ABEOKUTA_CENTER,
+    customer: inAbeokuta(rawPoints.customer) ? rawPoints.customer : null,
+    rider: inAbeokuta(rawPoints.rider) ? rawPoints.rider : null,
   };
+  const bounds = ABEOKUTA_BOUNDS;
   const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
   const center = points.customer || points.vendor || ABEOKUTA_CENTER;
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${center.latitude},${center.longitude}`;
@@ -90,7 +103,7 @@ function TrackingMap({ order }) {
       <View style={styles.mapHeader}>
         <View>
           <Text style={styles.mapTitle}>Live geo tracking</Text>
-          <Text style={styles.mapSubtitle}>Abeokuta rider, vendor and delivery points</Text>
+          <Text style={styles.mapSubtitle}>Abeokuta service area only</Text>
         </View>
         <Pressable disabled={!hasCoords(points.rider)} onPress={openDirections} style={[styles.mapBtn, !hasCoords(points.rider) && { opacity: 0.45 }]}>
           <Text style={styles.mapBtnText}>Open map</Text>
@@ -122,7 +135,7 @@ function TrackingMap({ order }) {
       </View>
       <View style={styles.geoRows}>
         <Text style={styles.geoLine}>Vendor: {order.vendor?.address || order.vendor?.area || "Abeokuta"} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
-        <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS not attached to this order"}</Text>
+        <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS not attached inside Abeokuta"}</Text>
         <Text style={styles.geoLine}>Rider: {points.rider ? `${points.rider.latitude.toFixed(5)}, ${points.rider.longitude.toFixed(5)}${riderDistance ? ` · ${riderDistance.toFixed(1)} km away` : ""}` : "Not assigned yet"}</Text>
       </View>
     </View>
@@ -395,7 +408,7 @@ const styles = StyleSheet.create({
   mapBtn: { backgroundColor: COLORS.ink, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   mapBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   mapCanvas: {
-    height: 180, borderRadius: 12, overflow: "hidden", backgroundColor: "#E5F2E9",
+    height: 285, borderRadius: 12, overflow: "hidden", backgroundColor: "#E5F2E9",
     borderWidth: 1, borderColor: COLORS.line, position: "relative",
   },
   routeLine: { position: "absolute", left: "16%", right: "14%", top: "50%", height: 3, backgroundColor: COLORS.mango, opacity: 0.75 },
