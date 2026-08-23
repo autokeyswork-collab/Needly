@@ -1,0 +1,3 @@
+ALTER TABLE "Payment"
+ADD COLUMN "riderPayoutAmount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "companyDeliveryFeeAmount" INTEGER NOT NULL DEFAULT 0;

@@ -722,7 +722,7 @@ export default function VendorScreen() {
                   <Text style={styles.paymentSplitNote}>
                     Customer paid {fmtNaira(o.customerPaidAmount || o.total)}
                     {!!o.platformFeeAmount && ` · Fee ${fmtNaira(o.platformFeeAmount)}`}
-                    {!!o.deliveryFeeAmount && ` · Rider ${fmtNaira(o.deliveryFeeAmount)}`}
+                    {!!(o.riderPayoutAmount || o.deliveryFeeAmount) && ` · Rider ${fmtNaira(o.riderPayoutAmount || o.deliveryFeeAmount)}`}
                   </Text>
                 </View>
 

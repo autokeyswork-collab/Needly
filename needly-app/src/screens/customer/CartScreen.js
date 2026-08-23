@@ -91,6 +91,7 @@ export default function CartScreen({ route, navigation }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
+  const [riderFeePercent, setRiderFeePercent] = useState(5);
   const [paymentGateways, setPaymentGateways] = useState([]);
   const [selectedGateway, setSelectedGateway] = useState(checkoutDraft.paymentGateway || "");
   const [deliveryFeeConfig, setDeliveryFeeConfig] = useState({
@@ -111,6 +112,8 @@ export default function CartScreen({ route, navigation }) {
   const platformFeeAmount = Math.round(total * (Number(platformFeePercent || 0) / 100));
   const deliveryEstimate = estimateDeliveryFee(vendor, deliveryLocation, deliveryFeeConfig);
   const deliveryFeeAmount = deliveryEstimate.fee;
+  const companyDeliveryFeeAmount = Math.round(deliveryFeeAmount * (Number(riderFeePercent || 0) / 100));
+  const riderPayoutAmount = Math.max(0, deliveryFeeAmount - companyDeliveryFeeAmount);
   const customerTotal = total + platformFeeAmount + deliveryFeeAmount;
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
   const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && selectedGateway && itemCount > 0 && !submitting;
@@ -120,6 +123,7 @@ export default function CartScreen({ route, navigation }) {
     PaymentAPI.platformFee().then((res) => {
       if (mounted && Number.isFinite(Number(res?.platformFeePercent))) {
         setPlatformFeePercent(Number(res.platformFeePercent));
+        if (Number.isFinite(Number(res?.riderFeePercent))) setRiderFeePercent(Number(res.riderFeePercent));
         setDeliveryFeeConfig((prev) => ({ ...prev, ...res }));
       }
     });
@@ -294,6 +298,9 @@ export default function CartScreen({ route, navigation }) {
               </Text>
               <Text style={styles.splitValue}>{fmtNaira(deliveryFeeAmount)}</Text>
             </View>
+            <Text style={styles.splitFinePrint}>
+              Rider receives {fmtNaira(riderPayoutAmount)}. Needly keeps {riderFeePercent}% of delivery ({fmtNaira(companyDeliveryFeeAmount)}).
+            </Text>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Customer pays</Text>
               <Text style={styles.totalValue}>{fmtNaira(customerTotal)}</Text>
@@ -448,6 +455,7 @@ const styles = StyleSheet.create({
   splitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10 },
   splitLabel: { color: MUTED, fontSize: 12.2, fontWeight: "800" },
   splitValue: { color: INK, fontSize: 12.8, fontWeight: "900" },
+  splitFinePrint: { color: MUTED, fontSize: 10.8, lineHeight: 15, fontWeight: "700", marginTop: 5 },
   totalLabel: { color: INK, fontSize: 15, fontWeight: "900" },
   totalValue: { color: GREEN, fontSize: 19, fontWeight: "900" },
   gpsCard: { backgroundColor: SOFT, borderRadius: 20, borderWidth: 1, borderColor: "#E6DDFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },

@@ -159,6 +159,8 @@ export function normalizeOrder(o) {
     platformFeePercent: o.payment?.platformFeePercent ?? 0,
     deliveryFeeAmount: o.payment?.deliveryFeeAmount ?? 0,
     deliveryDistanceKm: o.payment?.deliveryDistanceKm ?? null,
+    riderPayoutAmount: o.payment?.riderPayoutAmount ?? 0,
+    companyDeliveryFeeAmount: o.payment?.companyDeliveryFeeAmount ?? 0,
     paymentGateway: o.payment?.gateway || null,
     vendorReceived: !!o.payment?.vendorReceived,
     vendorReceivedAt: o.payment?.vendorReceivedAt || null,
@@ -344,7 +346,7 @@ export const ReviewAPI = {
 
 /* --- Payments --- */
 export const PaymentAPI = {
-  platformFee: () => request("/payments/platform-fee").catch(() => ({ platformFeePercent: 2.5 })),
+  platformFee: () => request("/payments/platform-fee").catch(() => ({ platformFeePercent: 2.5, riderFeePercent: 5 })),
   options: () => request("/payments/options").catch(() => ({ gateways: [], defaultGateway: null })),
   initialize: (orderId, gateway) => request("/payments/initialize", { method: "POST", body: { orderId, gateway } }),
   confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),

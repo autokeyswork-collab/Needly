@@ -6,6 +6,13 @@ const { logAction } = require("../lib/auditLog");
 const router = express.Router();
 const RIDER_PAYOUT = Number(process.env.RIDER_PAYOUT_PER_DELIVERY || 600);
 
+function orderRiderPayout(order) {
+  const payment = order?.payment;
+  if (payment?.riderPayoutAmount) return payment.riderPayoutAmount;
+  if (payment?.deliveryFeeAmount) return Math.max(0, payment.deliveryFeeAmount - Math.round(payment.deliveryFeeAmount * 0.05));
+  return RIDER_PAYOUT;
+}
+
 /**
  * GET /riders — admin-only roster. Nothing like this existed before this
  * pass: every other route in this file is scoped to "me" (the logged-in
@@ -56,12 +63,12 @@ router.get("/me/deliveries", requireAuth, requireRole("RIDER"), async (req, res)
 
   const deliveries = await prisma.order.findMany({
     where: { riderId: rider.id, status: "DELIVERED", updatedAt: { gte: since } },
-    include: { vendor: { select: { name: true, emoji: true } } },
+    include: { vendor: { select: { name: true, emoji: true } }, payment: true },
     orderBy: { updatedAt: "desc" },
   });
   res.json(deliveries.map((o) => ({
     id: o.id, vendorName: o.vendor.name, vendorEmoji: o.vendor.emoji, total: o.total,
-    deliveredAt: o.updatedAt, payout: RIDER_PAYOUT,
+    deliveredAt: o.updatedAt, payout: orderRiderPayout(o),
   })));
 });
 
@@ -80,19 +87,23 @@ router.get("/me/stats", requireAuth, requireRole("RIDER"), async (req, res) => {
   startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay()); // Sunday start
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const countSince = async (since) =>
-    prisma.order.count({ where: { riderId: rider.id, status: "DELIVERED", updatedAt: { gte: since } } });
+  const ordersSince = async (since) =>
+    prisma.order.findMany({
+      where: { riderId: rider.id, status: "DELIVERED", updatedAt: { gte: since } },
+      include: { payment: true },
+    });
 
-  const [today, week, month] = await Promise.all([
-    countSince(startOfDay),
-    countSince(startOfWeek),
-    countSince(startOfMonth),
+  const [todayOrders, weekOrders, monthOrders] = await Promise.all([
+    ordersSince(startOfDay),
+    ordersSince(startOfWeek),
+    ordersSince(startOfMonth),
   ]);
+  const sumPayouts = (orders) => orders.reduce((sum, order) => sum + orderRiderPayout(order), 0);
 
   res.json({
-    today: { completed: today, earnings: today * RIDER_PAYOUT },
-    week: { completed: week, earnings: week * RIDER_PAYOUT },
-    month: { completed: month, earnings: month * RIDER_PAYOUT },
+    today: { completed: todayOrders.length, earnings: sumPayouts(todayOrders) },
+    week: { completed: weekOrders.length, earnings: sumPayouts(weekOrders) },
+    month: { completed: monthOrders.length, earnings: sumPayouts(monthOrders) },
     rating: rider.rating,
     isOnline: rider.isOnline,
   });
@@ -106,12 +117,12 @@ router.get("/me/stats", requireAuth, requireRole("RIDER"), async (req, res) => {
  * still awaiting admin action).
  */
 async function computeBalance(riderId) {
-  const [deliveredCount, paidAgg, pendingAgg] = await Promise.all([
-    prisma.order.count({ where: { riderId, status: "DELIVERED" } }),
+  const [deliveredOrders, paidAgg, pendingAgg] = await Promise.all([
+    prisma.order.findMany({ where: { riderId, status: "DELIVERED" }, include: { payment: true } }),
     prisma.payout.aggregate({ where: { riderId, status: "PAID" }, _sum: { amount: true } }),
     prisma.payout.aggregate({ where: { riderId, status: "PENDING" }, _sum: { amount: true } }),
   ]);
-  const totalEarned = deliveredCount * RIDER_PAYOUT;
+  const totalEarned = deliveredOrders.reduce((sum, order) => sum + orderRiderPayout(order), 0);
   const totalPaidOut = paidAgg._sum.amount || 0;
   const totalPending = pendingAgg._sum.amount || 0;
   return { totalEarned, totalPaidOut, totalPending, available: totalEarned - totalPaidOut - totalPending };

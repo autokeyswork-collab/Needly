@@ -1158,6 +1158,8 @@ router.get("/customers/:id/full-profile", requireAuth, requireRole("ADMIN"), asy
         paymentStatus: payStatus,
         paymentReference: o.payment?.reference || `ref_${o.id.slice(-8)}`,
         paymentGateway: o.payment?.gateway || null,
+        riderPayoutAmount: o.payment?.riderPayoutAmount || 0,
+        companyDeliveryFeeAmount: o.payment?.companyDeliveryFeeAmount || 0,
         paidAt: o.payment?.paidAt || (o.status === "DELIVERED" ? o.createdAt : null),
         refundedAt: o.payment?.refundedAt || null,
         vendorName: o.vendor?.name || "Store",

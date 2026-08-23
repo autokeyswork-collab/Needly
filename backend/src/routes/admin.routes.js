@@ -51,6 +51,7 @@ router.get("/stats/overview", async (req, res) => {
       cancelledOrders,
       activeBookings,
       allOrders,
+      payments,
       payouts,
       openTicketsCount,
       pendingRefundsCount,
@@ -69,6 +70,7 @@ router.get("/stats/overview", async (req, res) => {
       prisma.order.count({ where: { status: "CANCELLED" } }),
       emptyIfMissingTable(prisma.booking.count({ where: { status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } } }), 0),
       prisma.order.findMany({ select: { total: true, status: true } }),
+      prisma.payment.findMany({ select: { amount: true, platformFeeAmount: true, companyDeliveryFeeAmount: true, riderPayoutAmount: true, status: true } }),
       prisma.payout.findMany({ select: { amount: true, status: true, riderId: true } }),
       prisma.supportTicket ? emptyIfMissingTable(prisma.supportTicket.count({ where: { status: { in: ["OPEN", "ASSIGNED", "WAITING"] } } }), 0) : Promise.resolve(0),
       prisma.refund ? emptyIfMissingTable(prisma.refund.count({ where: { status: "REQUESTED" } }), 0) : Promise.resolve(0),
@@ -80,7 +82,12 @@ router.get("/stats/overview", async (req, res) => {
       orderBy: { createdAt: "desc" },
     }).catch(() => null);
     const platformFeePercent = Number(globalFeeRule?.ratePercent ?? 2.5);
-    const platformCommission = Math.round(grossRevenue * (platformFeePercent / 100));
+    const paidPayments = payments.filter((payment) => payment.status === "PAID");
+    const platformCommission = paidPayments.reduce(
+      (sum, payment) => sum + (payment.platformFeeAmount || 0) + (payment.companyDeliveryFeeAmount || 0),
+      0,
+    );
+    const riderEarningsTotal = paidPayments.reduce((sum, payment) => sum + (payment.riderPayoutAmount || 0), 0);
     const vendorPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
     const riderPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
 
@@ -101,6 +108,8 @@ router.get("/stats/overview", async (req, res) => {
       grossRevenue,
       platformCommission,
       platformFeePercent,
+      riderFeePercent: 5,
+      riderEarningsTotal,
       vendorPayoutsTotal,
       riderPayoutsTotal,
       pendingRefundsCount,

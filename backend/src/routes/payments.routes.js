@@ -10,6 +10,7 @@ const { broadcastAdminAlert, broadcastNotification } = require("../sockets/order
 
 const router = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
+const DEFAULT_RIDER_FEE_PERCENT = 5;
 const DEFAULT_DELIVERY_BASE_FEE = Number(process.env.DELIVERY_BASE_FEE_NAIRA || 500);
 const DEFAULT_DELIVERY_PER_KM = Number(process.env.DELIVERY_PER_KM_NAIRA || 120);
 const DEFAULT_DELIVERY_MIN_FEE = Number(process.env.DELIVERY_MIN_FEE_NAIRA || 500);
@@ -66,12 +67,18 @@ function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmou
   const safePercent = Math.max(0, Number(platformFeePercent || 0));
   const safeDeliveryFee = Math.max(0, Math.round(Number(deliveryFeeAmount || 0)));
   const platformFeeAmount = Math.round(safeVendorAmount * (safePercent / 100));
+  const companyDeliveryFeeAmount = Math.round(safeDeliveryFee * (DEFAULT_RIDER_FEE_PERCENT / 100));
+  const riderPayoutAmount = Math.max(0, safeDeliveryFee - companyDeliveryFeeAmount);
   return {
     vendorAmount: safeVendorAmount,
     platformFeePercent: safePercent,
     platformFeeAmount,
     deliveryFeeAmount: safeDeliveryFee,
     deliveryDistanceKm,
+    riderFeePercent: DEFAULT_RIDER_FEE_PERCENT,
+    riderPayoutAmount,
+    companyDeliveryFeeAmount,
+    companyAmount: platformFeeAmount + companyDeliveryFeeAmount,
     customerAmount: safeVendorAmount + platformFeeAmount + safeDeliveryFee,
   };
 }
@@ -160,6 +167,7 @@ router.get("/platform-fee", requireAuth, async (_req, res) => {
   const platformFeePercent = await getPlatformFeePercent();
   res.json({
     platformFeePercent,
+    riderFeePercent: DEFAULT_RIDER_FEE_PERCENT,
     deliveryBaseFee: DEFAULT_DELIVERY_BASE_FEE,
     deliveryPerKm: DEFAULT_DELIVERY_PER_KM,
     deliveryMinFee: DEFAULT_DELIVERY_MIN_FEE,
@@ -223,6 +231,10 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
         platformFeePercent: split.platformFeePercent,
         deliveryFeeAmount: split.deliveryFeeAmount,
         deliveryDistanceKm: split.deliveryDistanceKm,
+        riderFeePercent: split.riderFeePercent,
+        riderPayoutAmount: split.riderPayoutAmount,
+        companyDeliveryFeeAmount: split.companyDeliveryFeeAmount,
+        companyAmount: split.companyAmount,
       },
     });
   } catch (err) {
@@ -242,6 +254,8 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
       platformFeePercent: split.platformFeePercent,
       deliveryFeeAmount: split.deliveryFeeAmount,
       deliveryDistanceKm: split.deliveryDistanceKm,
+      riderPayoutAmount: split.riderPayoutAmount,
+      companyDeliveryFeeAmount: split.companyDeliveryFeeAmount,
       gateway: txn.gateway || gateway || "paystack",
       status: "PENDING",
     },

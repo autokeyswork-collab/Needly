@@ -266,6 +266,8 @@ model Payment {
   platformFeePercent Float     @default(0)
   deliveryFeeAmount  Int       @default(0)
   deliveryDistanceKm Float?
+  riderPayoutAmount  Int       @default(0)
+  companyDeliveryFeeAmount Int  @default(0)
   gateway            String?
   vendorReceived     Boolean   @default(false)
   vendorReceivedAt   DateTime?
