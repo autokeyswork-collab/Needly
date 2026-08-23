@@ -1282,6 +1282,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
             riderName: o.rider?.user?.name || "Unassigned",
             totalFormatted: fmt(o.total),
             paymentStatus: o.payment?.status || "PENDING",
+            paymentGateway: o.payment?.gateway || "-",
           }))}
           type="order"
           filterKey="id"
@@ -1293,6 +1294,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
             { key: "totalFormatted", label: "Total" },
             { key: "status", label: "Status" },
             { key: "paymentStatus", label: "Payment" },
+            { key: "paymentGateway", label: "Gateway" },
           ]}
         />
       </ScrollView>
@@ -2558,6 +2560,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
                           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                             <View>
                               <Text style={{ fontSize: 10.5, color: TEXT_SUB }}>Ref: {o.paymentReference}</Text>
+                              <Text style={{ fontSize: 10.5, color: TEXT_SUB }}>Gateway: {o.paymentGateway || "-"}</Text>
                               <Text style={{ fontSize: 10.5, color: TEXT_SUB }}>Items: {o.items.map(i => `${i.name} (x${i.qty || 1})`).join(", ") || `${o.itemsCount} item(s)`}</Text>
                               <Text style={{ fontSize: 10, color: TEXT_SUB, marginTop: 2 }}>{new Date(o.createdAt).toLocaleString()}</Text>
                             </View>

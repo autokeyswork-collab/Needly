@@ -10,10 +10,43 @@ async function hasPaystackSecretKey() {
   return isUsableKey(await getPaystackSecretKey());
 }
 
+async function getAvailablePaymentGateways() {
+  const [flutterwaveReady, paystackReady] = await Promise.all([
+    hasFlutterwaveSecretKey(),
+    hasPaystackSecretKey(),
+  ]);
+  return [
+    {
+      id: "flutterwave",
+      label: "Flutterwave",
+      enabled: flutterwaveReady,
+      description: "Cards, bank transfer and mobile money where available.",
+    },
+    {
+      id: "paystack",
+      label: "Paystack",
+      enabled: paystackReady,
+      description: "Cards, bank transfer and USSD through Paystack.",
+    },
+  ];
+}
+
 async function initializeHostedPayment(args) {
+  const requestedGateway = String(args.gateway || "").trim().toLowerCase();
   const preferredGateway = String(process.env.PAYMENT_GATEWAY || "flutterwave").trim().toLowerCase();
   const flutterwaveReady = await hasFlutterwaveSecretKey();
   const paystackReady = await hasPaystackSecretKey();
+
+  if (requestedGateway) {
+    if (requestedGateway === "paystack" && paystackReady) {
+      const txn = await initializePaystackTransaction(args);
+      return { ...txn, gateway: "paystack" };
+    }
+    if (requestedGateway === "flutterwave" && flutterwaveReady) {
+      return initializeFlutterwaveTransaction(args);
+    }
+    throw new Error(`${requestedGateway === "paystack" ? "Paystack" : requestedGateway === "flutterwave" ? "Flutterwave" : "Selected payment option"} is not configured`);
+  }
 
   if (preferredGateway === "paystack" && paystackReady) {
     const txn = await initializePaystackTransaction(args);
@@ -33,5 +66,6 @@ async function initializeHostedPayment(args) {
 }
 
 module.exports = {
+  getAvailablePaymentGateways,
   initializeHostedPayment,
 };

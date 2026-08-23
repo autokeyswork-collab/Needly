@@ -91,6 +91,8 @@ export default function CartScreen({ route, navigation }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
+  const [paymentGateways, setPaymentGateways] = useState([]);
+  const [selectedGateway, setSelectedGateway] = useState(checkoutDraft.paymentGateway || "");
   const [deliveryFeeConfig, setDeliveryFeeConfig] = useState({
     deliveryBaseFee: DEFAULT_DELIVERY_BASE_FEE,
     deliveryPerKm: DEFAULT_DELIVERY_PER_KM,
@@ -111,7 +113,7 @@ export default function CartScreen({ route, navigation }) {
   const deliveryFeeAmount = deliveryEstimate.fee;
   const customerTotal = total + platformFeeAmount + deliveryFeeAmount;
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
-  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && itemCount > 0 && !submitting;
+  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && selectedGateway && itemCount > 0 && !submitting;
 
   useEffect(() => {
     let mounted = true;
@@ -123,6 +125,25 @@ export default function CartScreen({ route, navigation }) {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    PaymentAPI.options().then((res) => {
+      if (!mounted) return;
+      const gateways = Array.isArray(res?.gateways) ? res.gateways : [];
+      setPaymentGateways(gateways);
+      const enabled = gateways.filter((gateway) => gateway.enabled);
+      const saved = checkoutDraft.paymentGateway;
+      if (saved && enabled.some((gateway) => gateway.id === saved)) {
+        setSelectedGateway(saved);
+      } else if (res?.defaultGateway) {
+        setSelectedGateway(res.defaultGateway);
+      } else if (enabled[0]?.id) {
+        setSelectedGateway(enabled[0].id);
+      }
+    });
+    return () => { mounted = false; };
+  }, [checkoutDraft.paymentGateway]);
 
   useEffect(() => {
     const draft = customerActivity?.checkoutDrafts?.[vendorId];
@@ -138,8 +159,9 @@ export default function CartScreen({ route, navigation }) {
       deliveryAddress,
       deliveryPhone,
       deliveryLocation,
+      paymentGateway: selectedGateway,
     });
-  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, saveCheckoutDraft, vendorId]);
+  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, saveCheckoutDraft, selectedGateway, vendorId]);
 
   const useCurrentLocation = () => {
     setGeoLoading(true);
@@ -183,7 +205,7 @@ export default function CartScreen({ route, navigation }) {
         deliveryPhone.trim(),
         deliveryLocation,
       );
-      const { authorizationUrl } = await PaymentAPI.initialize(id);
+      const { authorizationUrl } = await PaymentAPI.initialize(id, selectedGateway);
       await Linking.openURL(authorizationUrl);
       clearDraftCart(vendor.id);
       clearCheckoutDraft(vendor.id);
@@ -329,6 +351,44 @@ export default function CartScreen({ route, navigation }) {
             </View>
           </View>
 
+          <View style={[styles.sectionCard, { marginHorizontal: sidePad }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Payment Option</Text>
+              <Text style={styles.sectionHint}>Choose checkout provider</Text>
+            </View>
+
+            <View style={styles.paymentOptionList}>
+              {(paymentGateways.length ? paymentGateways : [
+                { id: "flutterwave", label: "Flutterwave", enabled: true, description: "Cards, bank transfer and mobile money." },
+                { id: "paystack", label: "Paystack", enabled: true, description: "Cards, transfer and USSD." },
+              ]).map((gateway) => {
+                const active = selectedGateway === gateway.id;
+                const disabled = gateway.enabled === false;
+                return (
+                  <Pressable
+                    key={gateway.id}
+                    onPress={() => !disabled && setSelectedGateway(gateway.id)}
+                    disabled={disabled}
+                    style={[styles.paymentOption, active && styles.paymentOptionActive, disabled && styles.paymentOptionDisabled]}
+                  >
+                    <View style={[styles.paymentOptionIcon, active && styles.paymentOptionIconActive]}>
+                      <FontAwesome name={gateway.id === "paystack" ? "credit-card" : "bolt"} size={16} color={active ? "#fff" : PURPLE} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.paymentOptionTitle}>{gateway.label}</Text>
+                      <Text numberOfLines={2} style={styles.paymentOptionText}>
+                        {disabled ? "Not configured yet in Super Admin settings." : gateway.description}
+                      </Text>
+                    </View>
+                    <View style={[styles.radioOuter, active && styles.radioOuterActive]}>
+                      {active && <View style={styles.radioInner} />}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           {(!deliveryAddress.trim() || !deliveryPhone.trim()) && (
             <Text style={[styles.hint, { marginHorizontal: sidePad }]}>Add a delivery address and phone number to place your order.</Text>
           )}
@@ -343,7 +403,7 @@ export default function CartScreen({ route, navigation }) {
               <>
                 <View>
                   <Text style={styles.checkoutText}>Continue to payment</Text>
-                  <Text style={styles.checkoutSub}>{itemCount} item{itemCount === 1 ? "" : "s"} · GPS {deliveryLocation ? "attached" : "optional"}</Text>
+                  <Text style={styles.checkoutSub}>{selectedGateway === "paystack" ? "Paystack" : "Flutterwave"} · GPS {deliveryLocation ? "attached" : "optional"}</Text>
                 </View>
                 <View style={styles.checkoutPrice}>
                   <Text style={styles.checkoutPriceText}>{fmtNaira(customerTotal)}</Text>
@@ -401,6 +461,17 @@ const styles = StyleSheet.create({
   locationInput: { fontSize: 13.5, fontWeight: "700" },
   phoneWrap: { height: 50, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 },
   phoneInput: { flex: 1, color: INK, fontSize: 14, fontWeight: "700", outlineStyle: "none" },
+  paymentOptionList: { gap: 10 },
+  paymentOption: { borderRadius: 18, borderWidth: 1, borderColor: "#E5DEF5", backgroundColor: "#FFFFFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  paymentOptionActive: { borderColor: PURPLE, backgroundColor: SOFT },
+  paymentOptionDisabled: { opacity: 0.48 },
+  paymentOptionIcon: { width: 40, height: 40, borderRadius: 15, backgroundColor: SOFT, alignItems: "center", justifyContent: "center" },
+  paymentOptionIconActive: { backgroundColor: PURPLE },
+  paymentOptionTitle: { color: INK, fontSize: 14, fontWeight: "900" },
+  paymentOptionText: { color: MUTED, fontSize: 11.5, lineHeight: 15.5, fontWeight: "700", marginTop: 2 },
+  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#CFC7E6", alignItems: "center", justifyContent: "center" },
+  radioOuterActive: { borderColor: PURPLE },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: PURPLE },
   hint: { color: RED, fontSize: 12, fontWeight: "800", marginTop: 12 },
   error: { color: RED, fontSize: 12.5, fontWeight: "800", marginTop: 8 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "#F1ECFB" },

@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { getPaystackSecretKey } = require("../lib/paystack");
-const { initializeHostedPayment } = require("../lib/paymentGateway");
+const { getAvailablePaymentGateways, initializeHostedPayment } = require("../lib/paymentGateway");
 const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
@@ -167,6 +167,11 @@ router.get("/platform-fee", requireAuth, async (_req, res) => {
   });
 });
 
+router.get("/options", requireAuth, async (_req, res) => {
+  const gateways = await getAvailablePaymentGateways();
+  res.json({ gateways, defaultGateway: gateways.find((gateway) => gateway.enabled)?.id || null });
+});
+
 /**
  * POST /payments/initialize
  * body: { orderId }
@@ -175,7 +180,7 @@ router.get("/platform-fee", requireAuth, async (_req, res) => {
  * React Native SDK can use the returned access_code directly).
  */
 router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
-  const { orderId } = req.body;
+  const { orderId, gateway } = req.body;
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { customer: true, vendor: true, payment: true },
@@ -207,6 +212,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
       phone: order.customer.phone,
       amountNaira: split.customerAmount,
       reference,
+      gateway,
       callbackUrl: `${process.env.APP_BASE_URL}/payments/callback`,
       metadata: {
         type: "order_payment",
@@ -236,6 +242,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
       platformFeePercent: split.platformFeePercent,
       deliveryFeeAmount: split.deliveryFeeAmount,
       deliveryDistanceKm: split.deliveryDistanceKm,
+      gateway: txn.gateway || gateway || "paystack",
       status: "PENDING",
     },
   });
