@@ -260,7 +260,8 @@ export const AuthAPI = {
   },
   customers: async () => {
     const res = await request("/auth/customers");
-    return Array.isArray(res) ? res : [];
+    if (Array.isArray(res)) return res;
+    return Array.isArray(res?.customers) ? res.customers : [];
   },
   mailTray: () => request("/auth/mail-tray").catch(() => []),
   approveUser: async (id) => {

@@ -761,7 +761,6 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
             reviews: true,
           },
         },
-        // all completed orders for accurate spend + last-order date
         orders: {
           where: { status: { not: "CANCELLED" } },
           select: {
@@ -769,20 +768,14 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
             total: true,
             status: true,
             createdAt: true,
+            payment: {
+              select: {
+                amount: true,
+                status: true,
+              },
+            },
           },
           orderBy: { createdAt: "desc" },
-        },
-        // last 3 recent orders for the activity feed (all statuses)
-        recentOrders: {
-          from: "orders",
-          select: {
-            id: true,
-            total: true,
-            status: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" },
-          take: 3,
         },
       },
       orderBy: { createdAt: "desc" },
@@ -790,7 +783,8 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
 
     const formatted = customers.map((c) => {
       const completedOrders = c.orders || [];
-      const totalSpent      = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const paidOrders      = completedOrders.filter((o) => o.payment?.status === "PAID" || o.status === "DELIVERED");
+      const totalSpent      = paidOrders.reduce((sum, o) => sum + (o.payment?.amount || o.total || 0), 0);
       const ordersCount     = c._count.orders;
       const avgOrderValue   = ordersCount > 0 ? Math.round(totalSpent / ordersCount) : 0;
       const lastOrderAt     = completedOrders.length > 0 ? completedOrders[0].createdAt : null;
@@ -836,43 +830,10 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
       };
     });
 
-    res.json(formatted);
+    res.json({ total: formatted.length, customers: formatted });
   } catch (err) {
-    // Graceful fallback with realistic demo data
-    res.json([
-      {
-        id: "u-cust-1", name: "Amina Lawal", email: "customer@demo.needly",
-        phone: "08032201141", role: "CUSTOMER", approved: true, isSuspended: false,
-        ordersCount: 28, bookingsCount: 3, reviewsCount: 12, totalSpent: 185000,
-        avgOrderValue: 6607, lastOrderAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-        daysSinceOrder: 2, loyaltyTier: "Gold", churnRisk: false, isTopSpender: true,
-        createdAt: new Date(Date.now() - 120 * 86400000).toISOString(), recentOrders: [],
-      },
-      {
-        id: "u-cust-2", name: "Kazeem Bello", email: "kazeem@demo.needly",
-        phone: "08032201199", role: "CUSTOMER", approved: true, isSuspended: false,
-        ordersCount: 6, bookingsCount: 1, reviewsCount: 2, totalSpent: 38500,
-        avgOrderValue: 6416, lastOrderAt: new Date(Date.now() - 45 * 86400000).toISOString(),
-        daysSinceOrder: 45, loyaltyTier: "Silver", churnRisk: true, isTopSpender: false,
-        createdAt: new Date(Date.now() - 60 * 86400000).toISOString(), recentOrders: [],
-      },
-      {
-        id: "u-cust-3", name: "Funke Adeyemi", email: "funke@demo.needly",
-        phone: "08055671234", role: "CUSTOMER", approved: true, isSuspended: false,
-        ordersCount: 52, bookingsCount: 8, reviewsCount: 30, totalSpent: 620000,
-        avgOrderValue: 11923, lastOrderAt: new Date(Date.now() - 1 * 86400000).toISOString(),
-        daysSinceOrder: 1, loyaltyTier: "Platinum", churnRisk: false, isTopSpender: true,
-        createdAt: new Date(Date.now() - 300 * 86400000).toISOString(), recentOrders: [],
-      },
-      {
-        id: "u-cust-4", name: "Tunde Oladipo", email: "tunde@demo.needly",
-        phone: "08077889900", role: "CUSTOMER", approved: true, isSuspended: false,
-        ordersCount: 2, bookingsCount: 0, reviewsCount: 1, totalSpent: 7200,
-        avgOrderValue: 3600, lastOrderAt: new Date(Date.now() - 10 * 86400000).toISOString(),
-        daysSinceOrder: 10, loyaltyTier: "Bronze", churnRisk: false, isTopSpender: false,
-        createdAt: new Date(Date.now() - 14 * 86400000).toISOString(), recentOrders: [],
-      },
-    ]);
+    console.error("Customer directory query failed", err);
+    res.status(500).json({ error: "Could not load customers from the database" });
   }
 });
 
