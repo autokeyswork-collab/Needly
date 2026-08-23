@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
@@ -90,6 +90,8 @@ export default function CartScreen({ route, navigation }) {
   const [geoError, setGeoError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [checkoutUrl, setCheckoutUrl] = useState("");
+  const [checkoutReference, setCheckoutReference] = useState("");
   const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
   const [riderFeePercent, setRiderFeePercent] = useState(5);
   const [paymentGateways, setPaymentGateways] = useState([]);
@@ -209,14 +211,38 @@ export default function CartScreen({ route, navigation }) {
         deliveryPhone.trim(),
         deliveryLocation,
       );
-      const { authorizationUrl } = await PaymentAPI.initialize(id, selectedGateway);
-      await Linking.openURL(authorizationUrl);
+      const payment = await PaymentAPI.initialize(id, selectedGateway);
+      const authorizationUrl = String(payment?.authorizationUrl || "").trim();
+      if (!/^https?:\/\//i.test(authorizationUrl)) {
+        throw new Error("Payment link was not created. Please choose another payment option or try again.");
+      }
+      setCheckoutUrl(authorizationUrl);
+      setCheckoutReference(payment?.reference || "");
       clearDraftCart(vendor.id);
       clearCheckoutDraft(vendor.id);
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.assign(authorizationUrl);
+        return;
+      }
+      await Linking.openURL(authorizationUrl);
       navigation.replace("Tracking", { orderId: id });
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
+    }
+  };
+
+  const reopenCheckout = async () => {
+    if (!checkoutUrl) return;
+    setError(null);
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.assign(checkoutUrl);
+        return;
+      }
+      await Linking.openURL(checkoutUrl);
+    } catch (err) {
+      setError(err.message || "Could not open the payment page.");
     }
   };
 
@@ -400,6 +426,18 @@ export default function CartScreen({ route, navigation }) {
             <Text style={[styles.hint, { marginHorizontal: sidePad }]}>Add a delivery address and phone number to place your order.</Text>
           )}
           {error && <Text style={[styles.error, { marginHorizontal: sidePad }]}>{error}</Text>}
+          {checkoutUrl ? (
+            <View style={[styles.checkoutFallback, { marginHorizontal: sidePad }]}>
+              <Text style={styles.checkoutFallbackTitle}>Payment page ready</Text>
+              <Text style={styles.checkoutFallbackText}>
+                If the payment page did not open, tap below to continue{checkoutReference ? ` (${checkoutReference.slice(-8)})` : ""}.
+              </Text>
+              <Pressable style={styles.checkoutFallbackBtn} onPress={reopenCheckout}>
+                <Text style={styles.checkoutFallbackBtnText}>Open payment page</Text>
+                <FontAwesome name="external-link" size={12} color="#fff" />
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -482,6 +520,11 @@ const styles = StyleSheet.create({
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: PURPLE },
   hint: { color: RED, fontSize: 12, fontWeight: "800", marginTop: 12 },
   error: { color: RED, fontSize: 12.5, fontWeight: "800", marginTop: 8 },
+  checkoutFallback: { marginTop: 12, borderRadius: 18, borderWidth: 1, borderColor: "#DDD6FE", backgroundColor: SOFT, padding: 13 },
+  checkoutFallbackTitle: { color: INK, fontSize: 14, fontWeight: "900" },
+  checkoutFallbackText: { color: MUTED, fontSize: 12, lineHeight: 17, fontWeight: "700", marginTop: 4 },
+  checkoutFallbackBtn: { alignSelf: "flex-start", minHeight: 40, borderRadius: 14, backgroundColor: PURPLE, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, marginTop: 10 },
+  checkoutFallbackBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "#F1ECFB" },
   checkoutBtn: { minHeight: 64, borderRadius: 24, backgroundColor: PURPLE, paddingHorizontal: 17, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", shadowColor: PURPLE, shadowOpacity: 0.32, shadowRadius: 16, shadowOffset: { width: 0, height: 9 }, elevation: 5 },
   checkoutDisabled: { opacity: 0.45 },

@@ -121,7 +121,7 @@ function TrackingMap({ order }) {
         <View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap</Text></View>
       </View>
       <View style={styles.geoRows}>
-        <Text style={styles.geoLine}>Vendor: {order.vendor.address || order.vendor.area} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
+        <Text style={styles.geoLine}>Vendor: {order.vendor?.address || order.vendor?.area || "Abeokuta"} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
         <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS not attached to this order"}</Text>
         <Text style={styles.geoLine}>Rider: {points.rider ? `${points.rider.latitude.toFixed(5)}, ${points.rider.longitude.toFixed(5)}${riderDistance ? ` · ${riderDistance.toFixed(1)} km away` : ""}` : "Not assigned yet"}</Text>
       </View>
@@ -130,8 +130,8 @@ function TrackingMap({ order }) {
 }
 
 export default function TrackingScreen({ route, navigation }) {
-  const { orderId } = route.params;
-  const { orders, refreshOrders, raiseDispute } = useOrders();
+  const orderId = route?.params?.orderId;
+  const { orders = [], loading, refreshOrders, raiseDispute } = useOrders();
   const order = orders.find((o) => o.id === orderId);
   const [reportOpen, setReportOpen] = useState(false);
   const [payingAgain, setPayingAgain] = useState(false);
@@ -145,6 +145,7 @@ export default function TrackingScreen({ route, navigation }) {
   // Watch this specific order's room for instant pushes while this screen
   // is open, on top of the context's coarser fallback poll/refresh.
   useEffect(() => {
+    if (!orderId) return undefined;
     const socket = getSocket();
     if (!socket) return;
     socket.emit("order:watch", orderId);
@@ -156,7 +157,31 @@ export default function TrackingScreen({ route, navigation }) {
     };
   }, [orderId, refreshOrders]);
 
-  if (!order) return null;
+  if (!orderId) {
+    return (
+      <View style={styles.statePage}>
+        <Text style={styles.stateTitle}>Order not found</Text>
+        <Text style={styles.stateText}>This delivery link is missing its order reference.</Text>
+        <Pressable onPress={() => navigation.navigate("CustomerOrders")} style={styles.stateBtn}>
+          <Text style={styles.stateBtnText}>Back to orders</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={styles.statePage}>
+        <Text style={styles.stateTitle}>{loading ? "Loading delivery" : "Order not found"}</Text>
+        <Text style={styles.stateText}>
+          {loading ? "Getting the latest order details." : "This order may have been removed or is not linked to this account."}
+        </Text>
+        <Pressable onPress={() => navigation.navigate("CustomerOrders")} style={styles.stateBtn}>
+          <Text style={styles.stateBtnText}>Back to orders</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   const awaitingPayment = order.status === "placed" && order.paymentStatus !== "paid";
 
@@ -165,6 +190,13 @@ export default function TrackingScreen({ route, navigation }) {
     setPayError(null);
     try {
       const { authorizationUrl } = await PaymentAPI.initialize(order.id);
+      if (!/^https?:\/\//i.test(String(authorizationUrl || ""))) {
+        throw new Error("Payment link was not created. Please try from your cart again.");
+      }
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.assign(authorizationUrl);
+        return;
+      }
       await Linking.openURL(authorizationUrl);
     } catch (err) {
       setPayError(err.message);
@@ -192,7 +224,7 @@ export default function TrackingScreen({ route, navigation }) {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.paper }} contentContainerStyle={{ padding: 16 }}>
       <Text style={styles.title}>Order #{order.id.slice(-6)}</Text>
-      <Text style={styles.subtitle}>{order.vendor.name} {"\u00B7"} {fmtNaira(order.total)}</Text>
+      <Text style={styles.subtitle}>{order.vendor?.name || "Needly vendor"} {"\u00B7"} {fmtNaira(order.total)}</Text>
       {order.deliveryAddress && (
         <Text style={styles.address}>{"\uD83D\uDCCD"} {order.deliveryAddress}</Text>
       )}
@@ -201,7 +233,7 @@ export default function TrackingScreen({ route, navigation }) {
         {order.status === "cancelled" ? (
           <View style={styles.cancelledBox}>
             <Text style={{ fontWeight: "700", fontSize: 14.5, marginBottom: 6 }}>
-              {order.cancelReason ? `${order.vendor.name} couldn't take your order` : "Order cancelled"}
+              {order.cancelReason ? `${order.vendor?.name || "This vendor"} couldn't take your order` : "Order cancelled"}
             </Text>
             {order.cancelReason && (
               <Text style={{ fontSize: 13, color: COLORS.ink, marginBottom: 6 }}>{order.cancelReason} {"\u2014"} sorry about that!</Text>
@@ -270,14 +302,14 @@ export default function TrackingScreen({ route, navigation }) {
           {order.review ? (
             <View style={styles.reviewThanksBox}>
               <Text style={{ fontSize: 13.5 }}>
-                Thanks for your feedback! You rated {order.vendor.name} {order.review.vendorRating}{"\u2605"}
+                Thanks for your feedback! You rated {order.vendor?.name || "this vendor"} {order.review.vendorRating}{"\u2605"}
                 {order.review.riderRating ? ` and your rider ${order.review.riderRating}\u2605` : ""}.
               </Text>
             </View>
           ) : (
             <View style={styles.reviewBox}>
               <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 10 }}>Rate your order</Text>
-              <Text style={{ fontSize: 12.5, color: COLORS.mute, marginBottom: 6 }}>{order.vendor.name}</Text>
+              <Text style={{ fontSize: 12.5, color: COLORS.mute, marginBottom: 6 }}>{order.vendor?.name || "Needly vendor"}</Text>
               <StarRating value={vendorStars} onChange={setVendorStars} />
               {order.riderId && (
                 <>
@@ -339,6 +371,11 @@ export default function TrackingScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  statePage: { flex: 1, backgroundColor: COLORS.paper, alignItems: "center", justifyContent: "center", padding: 22 },
+  stateTitle: { color: COLORS.ink, fontSize: 19, fontWeight: "800", textAlign: "center" },
+  stateText: { color: COLORS.mute, fontSize: 13.5, lineHeight: 19, textAlign: "center", marginTop: 7, marginBottom: 16 },
+  stateBtn: { borderRadius: 20, backgroundColor: COLORS.indigo, paddingHorizontal: 18, paddingVertical: 11 },
+  stateBtnText: { color: "#fff", fontSize: 13.5, fontWeight: "800" },
   title: { fontWeight: "800", fontSize: 19, color: COLORS.ink },
   subtitle: { fontSize: 13.5, color: COLORS.mute, marginTop: 2, marginBottom: 2 },
   address: { fontSize: 12.5, color: COLORS.mute, marginBottom: 6 },

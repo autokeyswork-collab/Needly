@@ -22,6 +22,11 @@ function frontendUrl(path) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
+function appUrl(path) {
+  const base = process.env.APP_BASE_URL || "https://needly-backend-7tap.onrender.com";
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
 async function getPlatformFeePercent() {
   try {
     const rule = await prisma.commissionRule.findFirst({
@@ -325,7 +330,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
       amountNaira: split.customerAmount,
       reference,
       gateway,
-      callbackUrl: `${process.env.APP_BASE_URL}/payments/callback`,
+      callbackUrl: appUrl("/payments/callback"),
       metadata: {
         type: "order_payment",
         orderId: order.id,
