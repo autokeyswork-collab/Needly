@@ -7,7 +7,6 @@ import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { COLORS } from "../../theme/colors";
 import { AuthAPI } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
-import { CUSTOMER_AVATAR } from "../../data/customerAssets";
 
 const INK = "#15183F";
 const MUTED = "#747792";
@@ -139,7 +138,12 @@ export default function CustomerAccountScreen({ navigation }) {
     }
   };
 
-  const avatarSource = avatarUrl ? { uri: avatarUrl } : CUSTOMER_AVATAR;
+  const initials = String(name || user?.name || user?.email || "C")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "C";
 
   const chooseProfileImage = async () => {
     setError("");
@@ -188,7 +192,13 @@ export default function CustomerAccountScreen({ navigation }) {
               <Ionicons name="chevron-back" size={22} color="#fff" />
             </Pressable>
             <Pressable style={styles.avatar} onPress={chooseProfileImage}>
-              <Image source={avatarSource} style={styles.avatarImage} />
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarInitials}>
+                  <Text style={styles.avatarInitialsText}>{initials}</Text>
+                </View>
+              )}
               <View style={styles.avatarEditBadge}>
                 <FontAwesome name="camera" size={11} color="#fff" />
               </View>
@@ -199,7 +209,13 @@ export default function CustomerAccountScreen({ navigation }) {
 
           <View style={styles.card}>
             <View style={styles.identityRow}>
-              <Image source={avatarSource} style={styles.smallAvatar} />
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.smallAvatar} />
+              ) : (
+                <View style={[styles.smallAvatar, styles.smallAvatarInitials]}>
+                  <Text style={styles.smallAvatarInitialsText}>{initials}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{user?.name || "Needly Customer"}</Text>
                 <Text numberOfLines={1} style={styles.meta}>{user?.email}</Text>
@@ -341,12 +357,16 @@ const styles = StyleSheet.create({
   backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center", marginBottom: 12 },
   avatar: { width: 64, height: 64, borderRadius: 24, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
   avatarImage: { width: 60, height: 60, borderRadius: 22 },
+  avatarInitials: { width: 60, height: 60, borderRadius: 22, backgroundColor: "#F3E8FF", alignItems: "center", justifyContent: "center" },
+  avatarInitialsText: { color: PURPLE, fontSize: 20, fontWeight: "900" },
   avatarEditBadge: { position: "absolute", right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: PURPLE_DARK },
   title: { color: "#fff", fontSize: 24, fontWeight: "900", marginTop: 12 },
   subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 12.5, lineHeight: 18, fontWeight: "700", marginTop: 4 },
   card: { margin: 16, marginTop: -12, borderRadius: 22, backgroundColor: "#fff", borderWidth: 1, borderColor: "#EFEAF9", padding: 16, shadowColor: "#1E164C", shadowOpacity: 0.09, shadowRadius: 18, shadowOffset: { width: 0, height: 9 } },
   identityRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   smallAvatar: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#F2EEFF" },
+  smallAvatarInitials: { alignItems: "center", justifyContent: "center" },
+  smallAvatarInitialsText: { color: PURPLE, fontSize: 15, fontWeight: "900" },
   photoButton: { height: 34, borderRadius: 17, backgroundColor: "#F4F1FE", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10 },
   photoButtonText: { color: PURPLE, fontSize: 11.5, fontWeight: "900" },
   name: { color: INK, fontSize: 15, fontWeight: "900" },

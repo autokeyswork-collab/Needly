@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
-import { CATEGORY_IMAGES, CUSTOMER_AVATAR } from "../../data/customerAssets";
+import { CATEGORY_IMAGES } from "../../data/customerAssets";
 import { SERVICE_CATEGORIES } from "../../data/serviceData";
 import { useAuth } from "../../context/AuthContext";
 import { useOrders } from "../../context/OrdersContext";
@@ -141,7 +141,12 @@ export default function BrowseScreen({ navigation }) {
   const customerName = user?.name || "Customer";
   const customerCity = user?.locationCity || "Abeokuta";
   const customerState = user?.locationState || "Ogun";
-  const customerAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
+  const customerInitials = String(user?.name || user?.email || "C")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "C";
 
   const cartCount = draftCartCount;
   const unreadNotifications = notifications.filter((n) => !n.read).length || notifications.length;
@@ -330,7 +335,13 @@ export default function BrowseScreen({ navigation }) {
 
             <View style={styles.topRow}>
               <View style={styles.leftCluster}>
-                <Image source={customerAvatarSource} style={styles.avatar} />
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarInitials]}>
+                    <Text style={styles.avatarInitialsText}>{customerInitials}</Text>
+                  </View>
+                )}
                 <Pressable
                   style={styles.personPill}
                   onPress={() => navigation.navigate("CustomerAccount")}
@@ -607,6 +618,8 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   leftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
+  avatarInitials: { backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  avatarInitialsText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   personPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 36, borderRadius: 18, maxWidth: 156 },
   personText: { color: "#fff", fontSize: 13.5, fontWeight: "900", flexShrink: 1 },
   locationContextPill: { alignSelf: "flex-start", maxWidth: "100%", marginTop: 12, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10 },

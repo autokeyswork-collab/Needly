@@ -8,7 +8,6 @@ import Thumb from "../components/Thumb";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { VendorAPI } from "../api/client";
-import { CUSTOMER_AVATAR } from "../data/customerAssets";
 
 const PURPLE = "#6F45E9";
 const DARK_PURPLE = "#15183F";
@@ -256,7 +255,12 @@ export default function VendorScreen() {
   const myDisputes = (disputes || []).filter((d) => d.vendorId === activeVendorId);
   const openDisputes = myDisputes.filter((d) => (d.status || "").toLowerCase() === "open");
   const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const vendorAvatarSource = user?.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
+  const vendorInitials = String(user?.name || user?.email || "V")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "V";
   const bankLocked = !!activeVendor.bankAccountLocked;
   const hasBankAccount = !!(activeVendor.bankName && activeVendor.bankAccountNumber && activeVendor.bankAccountName);
   const vendorNotifications = (notifications || []).slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -428,7 +432,13 @@ export default function VendorScreen() {
 
         <View style={styles.vendorAppTopRow}>
           <View style={styles.vendorLeftCluster}>
-            <Image source={vendorAvatarSource} style={styles.vendorAvatar} />
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.vendorAvatar} />
+            ) : (
+              <View style={[styles.vendorAvatar, styles.vendorAvatarInitials]}>
+                <Text style={styles.vendorAvatarInitialsText}>{vendorInitials}</Text>
+              </View>
+            )}
             <View style={styles.vendorIdentity}>
               <Pressable style={styles.vendorPersonPill}>
                 <Ionicons name="person" size={16} color="#fff" />
@@ -1091,6 +1101,8 @@ const styles = StyleSheet.create({
   vendorAppTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 15 },
   vendorLeftCluster: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   vendorAvatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.9)" },
+  vendorAvatarInitials: { backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  vendorAvatarInitialsText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   vendorIdentity: { flex: 1, minWidth: 0, gap: 5 },
   vendorPersonPill: { alignSelf: "flex-start", maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 34, borderRadius: 17 },
   vendorPersonText: { color: "#fff", fontSize: 13, fontWeight: "900", maxWidth: 132 },

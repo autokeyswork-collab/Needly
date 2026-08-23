@@ -3,7 +3,6 @@ import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../theme/colors";
 import { useAuth } from "../context/AuthContext";
-import { CUSTOMER_AVATAR } from "../data/customerAssets";
 
 import NeedlyLogo from "../components/NeedlyLogo";
 
@@ -20,7 +19,12 @@ export default function AppHeader() {
   const { user, logout } = useAuth();
   if (!user) return null;
   const isTiny = width < 360;
-  const avatarSource = user.avatarUrl ? { uri: user.avatarUrl } : CUSTOMER_AVATAR;
+  const initials = String(user.name || user.email || "U")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 
   if (user.role === "CUSTOMER") {
     return (
@@ -30,11 +34,17 @@ export default function AppHeader() {
             <NeedlyLogo size={isTiny ? "small" : "medium"} theme="light" />
           </View>
           <View style={[styles.profileBlock, isTiny && styles.profileBlockTiny]}>
-            <Image
-              source={avatarSource}
-              style={[styles.avatar, isTiny && styles.avatarTiny]}
-              resizeMode="cover"
-            />
+            {user.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={[styles.avatar, isTiny && styles.avatarTiny]}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarInitials, isTiny && styles.avatarTiny]}>
+                <Text style={[styles.avatarInitialsText, isTiny && styles.avatarInitialsTextTiny]}>{initials}</Text>
+              </View>
+            )}
             <View style={{ maxWidth: isTiny ? 70 : 108 }}>
               <Text numberOfLines={1} style={[styles.profileName, isTiny && styles.profileNameTiny]}>{user.name}</Text>
               <Text numberOfLines={1} style={[styles.profileRole, isTiny && styles.profileRoleTiny]}>{ROLE_LABEL[user.role]}</Text>
@@ -94,6 +104,9 @@ const styles = StyleSheet.create({
   profileBlockTiny: { gap: 6 },
   avatar: { width: 42, height: 42, borderRadius: 14 },
   avatarTiny: { width: 34, height: 34, borderRadius: 11 },
+  avatarInitials: { backgroundColor: "#6F45E9", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#EDE9FE" },
+  avatarInitialsText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  avatarInitialsTextTiny: { fontSize: 12 },
   profileName: { color: "#15183F", fontSize: 13.5, fontWeight: "800" },
   profileNameTiny: { fontSize: 11.5 },
   profileRole: { color: "#6F45E9", fontSize: 12, fontWeight: "700", marginTop: 1 },
