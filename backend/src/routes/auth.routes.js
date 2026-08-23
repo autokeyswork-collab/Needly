@@ -754,38 +754,78 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
         approved: true,
         suspendedAt: true,
         createdAt: true,
-        _count: {
-          select: {
-            orders: true,
-            bookings: true,
-            reviews: true,
-          },
-        },
-        orders: {
-          where: { status: { not: "CANCELLED" } },
-          select: {
-            id: true,
-            total: true,
-            status: true,
-            createdAt: true,
-            payment: {
-              select: {
-                amount: true,
-                status: true,
-              },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        },
       },
       orderBy: { createdAt: "desc" },
     });
 
+    const customerIds = customers.map((c) => c.id);
+
+    const orders = customerIds.length ? await prisma.order.findMany({
+      where: { customerId: { in: customerIds } },
+      select: {
+        id: true,
+        customerId: true,
+        total: true,
+        status: true,
+        createdAt: true,
+        payment: {
+          select: {
+            amount: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }).catch(async (err) => {
+      console.error("Customer order/payment summary query failed", err);
+      return prisma.order.findMany({
+        where: { customerId: { in: customerIds } },
+        select: {
+          id: true,
+          customerId: true,
+          total: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }).catch((fallbackErr) => {
+        console.error("Customer order summary fallback failed", fallbackErr);
+        return [];
+      });
+    }) : [];
+
+    const bookingsByCustomer = customerIds.length && prisma.booking ? await prisma.booking.groupBy({
+      by: ["customerId"],
+      where: { customerId: { in: customerIds } },
+      _count: { _all: true },
+    }).catch((err) => {
+      console.error("Customer booking count query failed", err);
+      return [];
+    }) : [];
+
+    const reviewsByCustomer = customerIds.length && prisma.review ? await prisma.review.groupBy({
+      by: ["customerId"],
+      where: { customerId: { in: customerIds } },
+      _count: { _all: true },
+    }).catch((err) => {
+      console.error("Customer review count query failed", err);
+      return [];
+    }) : [];
+
+    const bookingCountByCustomer = Object.fromEntries(bookingsByCustomer.map((row) => [row.customerId, row._count?._all || 0]));
+    const reviewCountByCustomer = Object.fromEntries(reviewsByCustomer.map((row) => [row.customerId, row._count?._all || 0]));
+    const ordersByCustomer = orders.reduce((acc, order) => {
+      if (!acc[order.customerId]) acc[order.customerId] = [];
+      acc[order.customerId].push(order);
+      return acc;
+    }, {});
+
     const formatted = customers.map((c) => {
-      const completedOrders = c.orders || [];
+      const customerOrders  = ordersByCustomer[c.id] || [];
+      const completedOrders = customerOrders.filter((o) => o.status !== "CANCELLED");
       const paidOrders      = completedOrders.filter((o) => o.payment?.status === "PAID" || o.status === "DELIVERED");
       const totalSpent      = paidOrders.reduce((sum, o) => sum + (o.payment?.amount || o.total || 0), 0);
-      const ordersCount     = c._count.orders;
+      const ordersCount     = customerOrders.length;
       const avgOrderValue   = ordersCount > 0 ? Math.round(totalSpent / ordersCount) : 0;
       const lastOrderAt     = completedOrders.length > 0 ? completedOrders[0].createdAt : null;
 
@@ -817,8 +857,8 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
         isSuspended:   !!c.suspendedAt,
         createdAt:     c.createdAt,
         ordersCount,
-        bookingsCount: c._count.bookings,
-        reviewsCount:  c._count.reviews,
+        bookingsCount: bookingCountByCustomer[c.id] || 0,
+        reviewsCount:  reviewCountByCustomer[c.id] || 0,
         totalSpent,
         avgOrderValue,
         lastOrderAt,
