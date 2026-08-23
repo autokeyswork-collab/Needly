@@ -22,10 +22,22 @@ services:
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
+      - key: FLUTTERWAVE_CLIENT_ID
+        sync: false
+      - key: FLUTTERWAVE_CLIENT_SECRET
+        sync: false
+      - key: FLUTTERWAVE_PUBLIC_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_ENCRYPTION_KEY
+        sync: false
+      - key: FLUTTERWAVE_WEBHOOK_SECRET_HASH
+        sync: false
       - key: PORT
         value: "4000"
       - key: APP_BASE_URL
-        value: https://needly-backend.onrender.com
+        value: https://needly-backend-7tap.onrender.com
       - key: FRONTEND_BASE_URL
         value: https://needly-frontend-seven.vercel.app
       - key: SMTP_HOST

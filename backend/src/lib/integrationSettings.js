@@ -27,8 +27,10 @@ const INTEGRATION_CATALOG = [
   {
     provider: "flutterwave",
     label: "Flutterwave",
-    description: "Reserved for Flutterwave payment and payout integration.",
+    description: "Flutterwave checkout, wallet funding, onboarding payments, webhooks and future payouts.",
     settings: [
+      { key: "FLUTTERWAVE_CLIENT_ID", label: "Client ID", envKey: "FLUTTERWAVE_CLIENT_ID", secret: false, placeholder: "Flutterwave client ID" },
+      { key: "FLUTTERWAVE_CLIENT_SECRET", label: "Client Secret", envKey: "FLUTTERWAVE_CLIENT_SECRET", secret: true, placeholder: "Flutterwave client secret" },
       { key: "FLUTTERWAVE_PUBLIC_KEY", label: "Public Key", envKey: "FLUTTERWAVE_PUBLIC_KEY", secret: true, placeholder: "FLWPUBK_..." },
       { key: "FLUTTERWAVE_SECRET_KEY", label: "Secret Key", envKey: "FLUTTERWAVE_SECRET_KEY", secret: true, placeholder: "FLWSECK_..." },
       { key: "FLUTTERWAVE_ENCRYPTION_KEY", label: "Encryption Key", envKey: "FLUTTERWAVE_ENCRYPTION_KEY", secret: true, placeholder: "Encryption key" },
