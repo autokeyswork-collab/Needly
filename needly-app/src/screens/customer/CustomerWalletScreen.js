@@ -413,6 +413,19 @@ export default function CustomerWalletScreen({ navigation, route }) {
 
               {activeTool === "fund" && (
                 <>
+                  <View style={styles.quickAmountRow}>
+                    {[1000, 5000, 10000].map((amount) => (
+                      <Pressable
+                        key={amount}
+                        onPress={() => setFundAmount(String(amount))}
+                        style={[styles.quickAmountChip, Number(fundAmount) === amount && styles.quickAmountChipActive]}
+                      >
+                        <Text style={[styles.quickAmountText, Number(fundAmount) === amount && styles.quickAmountTextActive]}>
+                          {fmtNaira(amount)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                   <View style={styles.inlineFormRow}>
                     <TextInput
                       value={fundAmount}
@@ -423,9 +436,10 @@ export default function CustomerWalletScreen({ navigation, route }) {
                       style={styles.input}
                     />
                     <Pressable disabled={funding} onPress={startFunding} style={[styles.primarySmallBtn, funding && styles.disabledBtn]}>
-                      {funding ? <ActivityIndicator color="#fff" /> : <Text style={styles.primarySmallBtnText}>Flutterwave</Text>}
+                      {funding ? <ActivityIndicator color="#fff" /> : <Text style={styles.primarySmallBtnText}>Add Money</Text>}
                     </Pressable>
                   </View>
+                  <Text style={styles.fundingHint}>Payment opens securely with Flutterwave. Your balance updates after successful payment.</Text>
                   {pendingReference ? (
                     <View style={styles.checkoutActions}>
                       {!!checkoutUrl && (
@@ -594,11 +608,17 @@ const styles = StyleSheet.create({
   panelHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   panelTitle: { color: INK, fontSize: 16, fontWeight: "900" },
   panelLink: { color: PURPLE, fontSize: 13, fontWeight: "900" },
+  quickAmountRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  quickAmountChip: { flex: 1, minHeight: 38, borderRadius: 999, borderWidth: 1, borderColor: "#E5DEF5", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  quickAmountChipActive: { backgroundColor: "#F4EDFF", borderColor: PURPLE },
+  quickAmountText: { color: INK, fontSize: 12.5, fontWeight: "900" },
+  quickAmountTextActive: { color: PURPLE },
   inlineFormRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   input: { flex: 1, minHeight: 46, borderRadius: 15, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: INK, fontSize: 13.5, fontWeight: "800", outlineStyle: "none" },
   fullInput: { minHeight: 46, borderRadius: 15, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: INK, fontSize: 13.5, fontWeight: "800", marginBottom: 9, outlineStyle: "none" },
   primarySmallBtn: { minHeight: 46, borderRadius: 15, backgroundColor: PURPLE, paddingHorizontal: 15, alignItems: "center", justifyContent: "center" },
   primarySmallBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
+  fundingHint: { color: MUTED, fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 8 },
   checkoutActions: { gap: 9, marginTop: 10 },
   continueCheckoutBtn: { minHeight: 46, borderRadius: 15, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center" },
   continueCheckoutText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
