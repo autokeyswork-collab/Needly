@@ -31,16 +31,19 @@ const app = express();
 // to no origins (same-origin/native-app requests only, which don't send
 // an Origin header) if the env var isn't set, rather than defaulting open.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean);
+const allowAnyOrigin = allowedOrigins.includes("*");
 const isProduction = process.env.NODE_ENV === "production";
 const devOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?$/;
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
+    if (allowAnyOrigin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     if (!isProduction && devOriginPattern.test(origin)) return callback(null, true);
     return callback(new Error(`Origin ${origin} is not allowed by CORS`));
   },
 }));
+app.options("*", cors());
 
 // The Paystack webhook needs the *raw* request body to verify its
 // signature (see payments.routes.js), so it's mounted with express.raw()
