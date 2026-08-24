@@ -73,10 +73,13 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
 
   if (!res.ok) {
     const message = (data && data.error) || `Request failed (${res.status})`;
+    const error = new Error(message);
+    error.status = res.status;
+    error.path = path;
     if (res.status === 403 && /suspended/i.test(message) && suspensionHandler) {
       suspensionHandler(message);
     }
-    throw new Error(message);
+    throw error;
   }
   return data;
 }

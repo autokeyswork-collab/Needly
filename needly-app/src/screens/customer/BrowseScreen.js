@@ -141,7 +141,7 @@ export default function BrowseScreen({ navigation }) {
       .catch((err) => {
         if (!mounted) return;
         setRemoteBanners([]);
-        setBannerError(err.message || "Could not load homepage ads");
+        setBannerError(err.status === 404 ? "" : (err.message || "Could not load homepage ads"));
       });
     return () => {
       mounted = false;

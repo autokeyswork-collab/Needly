@@ -21,23 +21,29 @@ export function OrdersProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const isMissingEndpoint = (err) => err?.status === 404 || /Request failed \(404\)/i.test(err?.message || "");
+
+  const setSectionError = useCallback((label, err) => {
+    setError(`${label}: ${err.message || "Could not load data"}`);
+  }, []);
+
   const refreshVendors = useCallback(async () => {
     try {
       setVendors(await VendorAPI.list());
     } catch (err) {
-      setError(err.message);
+      setSectionError("Products and vendors", err);
     }
-  }, []);
+  }, [setSectionError]);
 
   const refreshCategories = useCallback(async () => {
     try {
       const data = await HomeAPI.categories(user?.locationCity);
       setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      if (!isMissingEndpoint(err)) setSectionError("Categories", err);
       setCategories([]);
     }
-  }, [user?.locationCity]);
+  }, [setSectionError, user?.locationCity]);
 
   const refreshServices = useCallback(async () => {
     try {
@@ -71,10 +77,10 @@ export function OrdersProvider({ children }) {
       });
       setServiceProviders(Array.from(byProvider.values()));
     } catch (err) {
-      setError(err.message);
+      if (!isMissingEndpoint(err)) setSectionError("Services", err);
       setServiceProviders([]);
     }
-  }, []);
+  }, [setSectionError]);
 
   const refreshOrders = useCallback(async () => {
     if (!user) return;
@@ -90,9 +96,9 @@ export function OrdersProvider({ children }) {
         setOrders((Array.isArray(data) ? data : []).map(normalizeOrder));
       }
     } catch (err) {
-      setError(err.message);
+      setSectionError("Orders", err);
     }
-  }, [user]);
+  }, [setSectionError, user]);
 
   const refreshBookings = useCallback(async () => {
     if (!user) return;
@@ -100,9 +106,10 @@ export function OrdersProvider({ children }) {
       const data = await BookingAPI.mine();
       setBookings(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      if (!isMissingEndpoint(err)) setSectionError("Bookings", err);
+      setBookings([]);
     }
-  }, [user]);
+  }, [setSectionError, user]);
 
   const refreshNotifications = useCallback(async () => {
     if (!user) return;
@@ -110,9 +117,10 @@ export function OrdersProvider({ children }) {
       const data = await NotificationAPI.list();
       setNotifications(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      if (!isMissingEndpoint(err)) setSectionError("Notifications", err);
+      setNotifications([]);
     }
-  }, [user]);
+  }, [setSectionError, user]);
 
   const markNotificationRead = useCallback(async (id) => {
     if (!id) return;
@@ -132,12 +140,13 @@ export function OrdersProvider({ children }) {
     try {
       setDisputes(await DisputeAPI.list());
     } catch (err) {
-      setError(err.message);
+      if (!isMissingEndpoint(err)) setSectionError("Issues", err);
     }
-  }, [user]);
+  }, [setSectionError, user]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     await Promise.all([
       refreshVendors(),
       refreshCategories(),
