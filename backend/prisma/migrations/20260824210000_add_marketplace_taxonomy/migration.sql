@@ -91,7 +91,13 @@ ON CONFLICT ("key") DO UPDATE SET
 
 UPDATE "Category"
 SET
-  "slug" = COALESCE("slug", lower(regexp_replace("key", '[^a-zA-Z0-9]+', '-', 'g'))),
+  "slug" = COALESCE("slug",
+    CASE
+      WHEN "key" IN ('Auto', 'Home Services', 'Services', 'Learn', 'Utilities') THEN 'services/' || lower(regexp_replace("key", '[^a-zA-Z0-9]+', '-', 'g'))
+      WHEN "key" IN ('Stay & Dine') THEN 'rentals/' || lower(regexp_replace("key", '[^a-zA-Z0-9]+', '-', 'g'))
+      ELSE 'open-market/' || lower(regexp_replace("key", '[^a-zA-Z0-9]+', '-', 'g'))
+    END
+  ),
   "type" = COALESCE("type", 'CATEGORY'),
   "divisionId" = CASE
     WHEN "divisionId" IS NOT NULL THEN "divisionId"
