@@ -1119,17 +1119,19 @@ export default function VendorScreen() {
                     placeholderTextColor="#94A3B8"
                     style={[styles.miniInput, styles.addonNameInput]}
                   />
-                  <TextInput
-                    value={draft.price}
-                    onChangeText={(text) => setDraft(item.id, { price: text.replace(/[^0-9]/g, "") })}
-                    placeholder="₦ Price"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    style={[styles.miniInput, styles.addonPriceInput]}
-                  />
-                  <Pressable onPress={() => submitAddOn(item.id)} style={styles.addAddonBtn}>
-                    <Text style={styles.addAddonBtnText}>+ Add</Text>
-                  </Pressable>
+                  <View style={styles.addonPriceRow}>
+                    <TextInput
+                      value={draft.price}
+                      onChangeText={(text) => setDraft(item.id, { price: text.replace(/[^0-9]/g, "") })}
+                      placeholder="₦ Price"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="numeric"
+                      style={[styles.miniInput, styles.addonPriceInput]}
+                    />
+                    <Pressable onPress={() => submitAddOn(item.id)} style={styles.addAddonBtn}>
+                      <Text style={styles.addAddonBtnText}>+ Add</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1466,11 +1468,12 @@ const styles = StyleSheet.create({
   addonText: { fontSize: 12.5, color: INK, fontWeight: "700", flex: 1, minWidth: 0 },
   removeAddonBtn: { padding: 4 },
   removeAddonText: { color: CHILI, fontSize: 13, fontWeight: "800" },
-  addAddonBtn: { backgroundColor: DARK_PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, justifyContent: "center" },
+  addAddonBtn: { minWidth: 74, minHeight: 38, backgroundColor: DARK_PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   addAddonBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 12 },
-  addonInputRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  addonNameInput: { flex: 2, minWidth: 150 },
-  addonPriceInput: { flex: 1, minWidth: 86 },
+  addonInputRow: { gap: 7, marginTop: 8 },
+  addonNameInput: { width: "100%" },
+  addonPriceRow: { flexDirection: "row", gap: 7, width: "100%" },
+  addonPriceInput: { flex: 1, minWidth: 0 },
   issuesSection: { marginTop: 22, marginBottom: 10 },
   issueList: { gap: 10 },
   issueCard: { backgroundColor: "#FFF7F7", borderWidth: 1, borderColor: "#FECACA", borderRadius: 18, padding: 13 },
