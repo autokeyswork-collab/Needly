@@ -10,6 +10,8 @@ ALTER TABLE "Category"
   ADD COLUMN IF NOT EXISTS "customFields" JSONB,
   ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
 
+DROP INDEX IF EXISTS "Category_slug_key";
+
 UPDATE "Category"
 SET
   "slug" = CASE
@@ -146,6 +148,17 @@ SET
   "showOnHomepage" = true,
   "updatedAt" = NOW()
 WHERE "type" <> 'DIVISION';
+
+WITH ranked AS (
+  SELECT "id", "slug", ROW_NUMBER() OVER (PARTITION BY "slug" ORDER BY "createdAt", "id") AS rn
+  FROM "Category"
+  WHERE "slug" IS NOT NULL
+)
+UPDATE "Category" c
+SET "slug" = c."slug" || '-dedupe-' || substr(md5(c."id"), 1, 8),
+    "updatedAt" = NOW()
+FROM ranked r
+WHERE c."id" = r."id" AND r.rn > 1;
 
 UPDATE "Category" child
 SET "parentId" = NULL
