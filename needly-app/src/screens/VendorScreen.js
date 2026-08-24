@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { COLORS, fmtNaira } from "../theme/colors";
@@ -455,10 +455,12 @@ export default function VendorScreen() {
   return (
     <ScrollView
       ref={scrollRef}
-      style={styles.screen}
+      style={[styles.screen, Platform.OS === "web" && styles.webScroller]}
       contentContainerStyle={[styles.content, compact && styles.contentCompact]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled={false}
+      scrollEventThrottle={16}
     >
       <View style={[styles.shell, compact && styles.shellCompact]}>
       <View style={styles.heroStoreCard}>
@@ -803,11 +805,8 @@ export default function VendorScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={visibleOrders}
-        keyExtractor={(o) => o.id}
-        scrollEnabled={false}
-        ListEmptyComponent={
+      <View style={styles.stackedList}>
+        {visibleOrders.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyCardIcon}>📦</Text>
             <Text style={styles.emptyCardTitle}>{orderView === "ready" ? "No Ready Orders" : "No Active Orders"}</Text>
@@ -817,13 +816,11 @@ export default function VendorScreen() {
                 : "New customer orders will appear here automatically in real time."}
             </Text>
           </View>
-        }
-        contentContainerStyle={{ gap: 12, marginBottom: 20 }}
-        renderItem={({ item: o }) => {
+        ) : visibleOrders.map((o) => {
           const declining = decliningOrderId === o.id;
           const st = (o.status || "").toLowerCase();
           return (
-            <View style={styles.orderCard}>
+            <View key={o.id} style={styles.orderCard}>
               <View style={styles.orderCardHeader}>
                 <View style={styles.orderHeaderLeft}>
                   <Text numberOfLines={1} style={styles.orderId}>Order #{o.id.slice(-6)}</Text>
@@ -932,22 +929,18 @@ export default function VendorScreen() {
               )}
             </View>
           );
-        }}
-      />
+        })}
+      </View>
 
       {/* Completed History Section */}
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>Completed Orders Today ({history.length})</Text>
       </View>
-      <FlatList
-        data={history}
-        keyExtractor={(o) => o.id}
-        scrollEnabled={false}
-        contentContainerStyle={{ marginBottom: 20, gap: 6 }}
-        renderItem={({ item: o }) => {
+      <View style={[styles.stackedList, styles.historyList]}>
+        {history.map((o) => {
           const expanded = expandedHistoryId === o.id;
           return (
-            <Pressable onPress={() => setExpandedHistoryId(expanded ? null : o.id)} style={[styles.historyRow, expanded && styles.historyRowExpanded]}>
+            <Pressable key={o.id} onPress={() => setExpandedHistoryId(expanded ? null : o.id)} style={[styles.historyRow, expanded && styles.historyRowExpanded]}>
               <View style={styles.historyTopRow}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Text style={styles.historyIcon}>✓</Text>
@@ -973,8 +966,8 @@ export default function VendorScreen() {
               )}
             </Pressable>
           );
-        }}
-      />
+        })}
+      </View>
 
       {/* Product Catalog Management */}
       <View style={styles.productsHeaderRow}>
@@ -1039,17 +1032,13 @@ export default function VendorScreen() {
       )}
 
       {/* Product List Grid */}
-      <FlatList
-        data={vendorItems}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        contentContainerStyle={{ gap: 12 }}
-        renderItem={({ item }) => {
+      <View style={styles.stackedList}>
+        {vendorItems.map((item) => {
           const draft = addOnDrafts[item.id] || { name: "", price: "" };
           const isEditing = editingItemId === item.id;
           const isAvailable = item.isAvailable !== false;
           return (
-            <View style={[styles.productCard, !isAvailable && styles.productCardSoldOut]}>
+            <View key={item.id} style={[styles.productCard, !isAvailable && styles.productCardSoldOut]}>
               <View style={styles.productCardTop}>
                 <View style={styles.productTitleCluster}>
                   <Pressable onPress={() => chooseExistingProductImage(item.id)} style={styles.productThumbButton}>
@@ -1136,8 +1125,8 @@ export default function VendorScreen() {
               </View>
             </View>
           );
-        }}
-      />
+        })}
+      </View>
 
       <View
         style={styles.issuesSection}
@@ -1177,8 +1166,17 @@ export default function VendorScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F3FF" },
-  content: { paddingBottom: 72, alignItems: "center", width: "100%" },
+  screen: { flex: 1, width: "100%", backgroundColor: "#F6F3FF" },
+  webScroller: {
+    height: "100%",
+    maxHeight: "100vh",
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    touchAction: "pan-y",
+    overscrollBehaviorY: "contain",
+  },
+  content: { flexGrow: 1, paddingBottom: 72, alignItems: "center", width: "100%" },
   contentCompact: { paddingBottom: 92 },
   shell: {
     width: "100%",
@@ -1188,7 +1186,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 36,
-    overflow: "hidden",
+    overflow: "visible",
   },
   shellCompact: { paddingHorizontal: 12, paddingTop: 12 },
 
@@ -1356,6 +1354,8 @@ const styles = StyleSheet.create({
   quickIcon: { width: 46, height: 46, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   quickIconText: { fontSize: 16, fontWeight: "900" },
   quickActionLabel: { color: INK, fontSize: 12, fontWeight: "900" },
+  stackedList: { width: "100%", gap: 12, marginBottom: 20 },
+  historyList: { gap: 6 },
 
   /* Section Headers */
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" },
