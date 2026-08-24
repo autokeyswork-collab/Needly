@@ -68,6 +68,7 @@ function uniqueByCity(locations) {
 export default function CustomerAccountScreen({ navigation }) {
   const { user, logout, updateProfile } = useAuth();
   const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState(user?.phone || "");
   const [locationState, setLocationState] = useState(user?.locationState || "Ogun");
   const [locationCity, setLocationCity] = useState(user?.locationCity || "Abeokuta");
@@ -80,6 +81,7 @@ export default function CustomerAccountScreen({ navigation }) {
 
   useEffect(() => {
     setName(user?.name || "");
+    setEmail(user?.email || "");
     setPhone(user?.phone || "");
     setLocationState(user?.locationState || "Ogun");
     setLocationCity(user?.locationCity || "Abeokuta");
@@ -125,6 +127,7 @@ export default function CustomerAccountScreen({ navigation }) {
     try {
       await updateProfile({
         name,
+        email,
         phone,
         locationState,
         locationCity,
@@ -230,6 +233,19 @@ export default function CustomerAccountScreen({ navigation }) {
 
             <Field label="Full name" icon="user">
               <TextInput value={name} onChangeText={setName} placeholder="Your full name" placeholderTextColor="#9A9CB0" style={styles.input} />
+            </Field>
+
+            <Field label="Email address" icon="envelope">
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="#9A9CB0"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+              />
             </Field>
 
             <Field label="Phone number" icon="phone">

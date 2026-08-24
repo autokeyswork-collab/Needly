@@ -70,6 +70,10 @@ function normalizeAuthRole(role) {
   return allowed.includes(targetRole) ? targetRole : null;
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 function cleanRegistrationIdentity({ name, email, phone }) {
   const cleanName = String(name || "").trim();
   const cleanEmail = String(email || "").trim().toLowerCase();
@@ -78,7 +82,7 @@ function cleanRegistrationIdentity({ name, email, phone }) {
   if (!cleanName || !cleanEmail) {
     return { error: "Name and email are required" };
   }
-  if (!cleanEmail.includes("@")) {
+  if (!isValidEmail(cleanEmail)) {
     return { error: "Enter a valid email address" };
   }
 
@@ -347,7 +351,7 @@ router.post("/social", authLimiter, async (req, res) => {
   if (!targetRole) return res.status(400).json({ error: "Choose Customer, Vendor, or Rider to register" });
   const cleanEmail = String(email || "").trim().toLowerCase();
   const userName = String(name || `${providerName} User`).trim();
-  if (!cleanEmail || !cleanEmail.includes("@")) {
+  if (!isValidEmail(cleanEmail)) {
     return res.status(400).json({ error: `${providerName} did not provide a valid email. Enter your email first and try again.` });
   }
   const requiresApproval = targetRole === "VENDOR" || targetRole === "RIDER";
@@ -516,7 +520,7 @@ router.get("/me", requireAuth, async (req, res) => {
 
 /** PATCH /auth/me/profile — customer/provider self-service profile update. */
 router.patch("/me/profile", requireAuth, async (req, res) => {
-  const { name, phone, locationState, locationCity, address, avatarUrl } = req.body;
+  const { name, email, phone, locationState, locationCity, address, avatarUrl } = req.body;
   const data = {};
 
   if (name !== undefined) {
@@ -525,6 +529,18 @@ router.patch("/me/profile", requireAuth, async (req, res) => {
     data.name = clean;
   }
   if (phone !== undefined) data.phone = String(phone).trim();
+  if (email !== undefined) {
+    const cleanEmail = String(email).trim().toLowerCase();
+    if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: "Enter a valid email address" });
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: cleanEmail,
+        NOT: { id: req.user.id },
+      },
+    });
+    if (existing) return res.status(400).json({ error: "Another account already uses this email address" });
+    data.email = cleanEmail;
+  }
   if (locationState !== undefined) data.locationState = String(locationState).trim() || null;
   if (locationCity !== undefined) data.locationCity = String(locationCity).trim() || null;
   if (address !== undefined) data.address = String(address).trim() || null;

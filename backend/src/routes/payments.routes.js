@@ -28,6 +28,10 @@ function appUrl(path) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 async function getPlatformFeePercent() {
   try {
     const rule = await prisma.commissionRule.findFirst({
@@ -321,11 +325,18 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
   const delivery = calculateDeliveryFee(order);
   const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm);
   const reference = `needly_${order.id}_${Date.now()}`;
+  const customerEmail = String(order.customer.email || "").trim().toLowerCase();
+
+  if (!isValidEmail(customerEmail)) {
+    return res.status(400).json({
+      error: "Paystack requires a valid email address. Please update your email in Profile, then try payment again.",
+    });
+  }
 
   let txn;
   try {
     txn = await initializeHostedPayment({
-      email: order.customer.email,
+      email: customerEmail,
       name: order.customer.name,
       phone: order.customer.phone,
       amountNaira: split.customerAmount,

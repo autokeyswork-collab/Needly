@@ -102,6 +102,10 @@ function FieldIcon({ name }) {
   return <FontAwesome name={name} size={16} color={PURPLE} />;
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 export default function RegisterScreen({ navigation, route }) {
   const { register, socialLogin, authError } = useAuth();
   const { width, height } = useWindowDimensions();
@@ -138,7 +142,7 @@ export default function RegisterScreen({ navigation, route }) {
   const submit = async () => {
     setValidationError(null);
     if (!name.trim()) { setValidationError("Please enter your full name."); return; }
-    if (!email.trim() || !email.includes("@")) { setValidationError("Please enter a valid email address."); return; }
+    if (!isValidEmail(email)) { setValidationError("Please enter a valid email address."); return; }
     if (!password || password.length < 4) { setValidationError("Password must be at least 4 characters long."); return; }
     if (password !== confirmPassword) { setValidationError("Passwords do not match. Please check and try again."); return; }
     if (!agreeTerms) { setValidationError("You must agree to the Terms of Service to register."); return; }
@@ -197,7 +201,7 @@ export default function RegisterScreen({ navigation, route }) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
-    if (!cleanEmail || !cleanEmail.includes("@")) {
+    if (!isValidEmail(cleanEmail)) {
       setValidationError("Enter your email first so Needly can send your registration and approval emails.");
       return;
     }
