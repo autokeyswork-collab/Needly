@@ -47,6 +47,7 @@ const NAV = [
   { id: "tickets", label: "Support Tickets", icon: "💬" },
   { id: "disputes", label: "Reviews & Disputes", icon: "⚖️" },
   { id: "notifications", label: "Notifications", icon: "🔔" },
+  { id: "promotions", label: "Homepage Ads", icon: "📣" },
   { section: "REPORTS & ANALYTICS" },
   { id: "analytics", label: "Analytics", icon: "📈" },
   { id: "reports", label: "Reports", icon: "📊" },
@@ -116,7 +117,21 @@ const editFieldsMap = {
   booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
-  promotion: [["Promo Code", "code"], ["Title", "title"], ["Discount Value", "discountValue", true]],
+  promotion: [
+    ["Promo Code", "code"],
+    ["Placement", "placement"],
+    ["Admin Title", "title"],
+    ["Banner Kicker", "bannerKicker"],
+    ["Banner Title", "bannerTitle"],
+    ["Banner Body", "bannerBody"],
+    ["CTA", "bannerCta"],
+    ["Badge", "bannerBadge"],
+    ["Image URL", "bannerImageUrl"],
+    ["Destination Category", "destinationCategory"],
+    ["Location", "location"],
+    ["Display Order", "displayOrder", true],
+    ["Active", "active"],
+  ],
   ticket: [["Subject", "subject"], ["Status", "status"], ["Priority", "priority"]],
   refund: [["Status", "status"], ["Reason", "reason"]],
 };
@@ -649,6 +664,41 @@ export default function SuperAdminControlCenter({ onLogout }) {
       reload();
     } catch (err) {
       alert("Add rider failed: " + (err.message || err));
+    }
+  };
+
+  const addHomepageBanner = async () => {
+    const bannerTitle = prompt("Banner headline:", "Fresh from Abeokuta");
+    if (!bannerTitle) return;
+    const bannerKicker = prompt("Large title / category text:", "Open Market");
+    const bannerBody = prompt("Short description:", "Shop quality products from local sellers.");
+    const bannerCta = prompt("Button text:", "Shop Open Market");
+    const bannerBadge = prompt("Badge text:", "Supporting Local Abeokuta");
+    const destinationCategory = prompt("Destination category:", "Local Market");
+    const bannerImageUrl = prompt("Banner image URL. Leave empty to use the default market image:", "");
+    const location = prompt("Location control. Leave empty for all locations:", "Abeokuta");
+    const displayOrder = prompt("Display order. Lower number shows first:", "1");
+    try {
+      await SuperAdminAPI.createPromotion({
+        code: `BANNER-${Date.now()}`,
+        title: bannerTitle,
+        placement: "HOMEPAGE_CAROUSEL",
+        discountType: "PERCENT",
+        discountValue: 0,
+        bannerTitle,
+        bannerKicker: bannerKicker || bannerTitle,
+        bannerBody: bannerBody || "",
+        bannerCta: bannerCta || "Shop Now",
+        bannerBadge: bannerBadge || "",
+        bannerImageUrl: bannerImageUrl || "",
+        destinationCategory: destinationCategory || "Local Market",
+        location: location || "",
+        displayOrder: Number(displayOrder || 0),
+        active: true,
+      });
+      reload();
+    } catch (err) {
+      alert("Add homepage ad failed: " + (err.message || err));
     }
   };
 
@@ -2340,6 +2390,51 @@ export default function SuperAdminControlCenter({ onLogout }) {
         <GenericList items={notifications.map((n) => ({ ...n, recipient: n.user?.name || n.userId || "User", message: n.body || n.message }))} type="notification" fields={[{ key: "title", bold: true }, { key: "recipient", label: "Recipient" }, { key: "message", label: "Message" }, { key: "type", label: "Type" }, { key: "read", label: "Read" }]} />
       </ScrollView>
     );
+
+    if (activeTab === "promotions") {
+      const homepageAds = promotions
+        .filter((promo) => promo.placement === "HOMEPAGE_CAROUSEL")
+        .map((promo) => ({
+          ...promo,
+          displayOrder: promo.displayOrder ?? 0,
+          title: promo.title || promo.bannerTitle,
+        }));
+      const couponPromos = promotions.filter((promo) => promo.placement !== "HOMEPAGE_CAROUSEL");
+      return (
+        <ScrollView style={{ flex: 1, padding: 20 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <View>
+              <Text style={s.pageH}>Homepage Carousel Ads</Text>
+              <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Control customer homepage carousel adverts, images, destinations, order and active status.</Text>
+            </View>
+            <Pressable onPress={addHomepageBanner} style={s.btn}><Text style={s.btnTxt}>+ Add Ad Slide</Text></Pressable>
+          </View>
+          <GenericList
+            items={homepageAds}
+            type="promotion"
+            filterKey="title"
+            fields={[
+              { key: "displayOrder", label: "Order" },
+              { key: "bannerKicker", label: "Kicker", bold: true },
+              { key: "bannerTitle", label: "Headline" },
+              { key: "bannerCta", label: "CTA" },
+              { key: "destinationCategory", label: "Destination" },
+              { key: "location", label: "Location" },
+              { key: "active", label: "Active" },
+              { key: "bannerImageUrl", label: "Image URL" },
+            ]}
+          />
+          <View style={{ marginTop: 16 }}>
+            <GenericList
+              items={couponPromos}
+              type="promotion"
+              filterKey="title"
+              fields={[{ key: "code", bold: true }, { key: "title", label: "Coupon Title" }, { key: "discountValue", label: "Value" }, { key: "active", label: "Active" }]}
+            />
+          </View>
+        </ScrollView>
+      );
+    }
 
     if (activeTab === "auditLogs") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>

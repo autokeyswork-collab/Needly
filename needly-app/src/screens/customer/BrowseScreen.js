@@ -19,6 +19,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useOrders } from "../../context/OrdersContext";
 import { fmtNaira } from "../../theme/colors";
 import { usePwaInstall } from "../../utils/pwaInstall";
+import { HomeAPI } from "../../api/client";
 
 const PURPLE = "#642BE4";
 const PURPLE_DARK = "#35109B";
@@ -125,7 +126,7 @@ export default function BrowseScreen({ navigation }) {
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 22;
   const carouselWidth = shellWidth - sidePad * 2;
-  const cardWidth = carouselWidth * 0.92;
+  const cardWidth = carouselWidth * 0.96;
   const cardGap = 14;
   const snap = cardWidth + cardGap;
   const carouselRef = useRef(null);
@@ -134,6 +135,7 @@ export default function BrowseScreen({ navigation }) {
   const [query, setQuery] = useState("");
   const [dealEnd] = useState(() => Date.now() + 2 * 60 * 60 * 1000 + 18 * 60 * 1000 + 45 * 1000);
   const [now, setNow] = useState(Date.now());
+  const [remoteBanners, setRemoteBanners] = useState([]);
   const { canShowInstallButton, installApp, installLabel } = usePwaInstall();
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
@@ -182,7 +184,7 @@ export default function BrowseScreen({ navigation }) {
     return [...categoryHits, ...vendorHits, ...productHits, ...serviceHits].slice(0, 8);
   }, [query, vendors, serviceProviders]);
 
-  const slides = useMemo(() => BASE_SLIDES.map((slide) => {
+  const defaultSlides = useMemo(() => BASE_SLIDES.map((slide) => {
     if (slide.key !== "open-market") return slide;
     return {
       ...slide,
@@ -190,6 +192,33 @@ export default function BrowseScreen({ navigation }) {
       badge: `Supporting Local ${customerCity}`,
     };
   }), [customerCity]);
+
+  useEffect(() => {
+    let mounted = true;
+    HomeAPI.banners(customerCity).then((rows) => {
+      if (!mounted || !Array.isArray(rows)) return;
+      setRemoteBanners(rows);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [customerCity]);
+
+  const slides = useMemo(() => {
+    const mapped = remoteBanners
+      .filter((banner) => banner?.title || banner?.kicker)
+      .map((banner, index) => ({
+        key: banner.id || banner.code || `banner-${index}`,
+        category: banner.category || "Local Market",
+        kicker: banner.kicker || "Needly",
+        title: banner.title || banner.kicker || "Needly offer",
+        body: banner.body || "Discover trusted local products and services.",
+        cta: banner.cta || "Shop Now",
+        badge: banner.badge || "Needly advert",
+        image: banner.imageUrl ? { uri: banner.imageUrl } : (CATEGORY_IMAGES["Open Market Hero"] || CATEGORY_IMAGES["Local Market"]),
+      }));
+    return mapped.length ? mapped : defaultSlides;
+  }, [defaultSlides, remoteBanners]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -375,7 +404,7 @@ export default function BrowseScreen({ navigation }) {
             </View>
           )}
 
-          <View style={styles.carouselOuter}>
+          <View style={[styles.carouselOuter, { marginTop: shellWidth < 380 ? 20 : 24 }]}>
             <Animated.ScrollView
               ref={carouselRef}
               horizontal
@@ -398,7 +427,7 @@ export default function BrowseScreen({ navigation }) {
               scrollEventThrottle={16}
             >
               {slides.map((slide) => (
-                <Pressable key={slide.key} onPress={() => goCategory(slide.category)} style={[styles.heroCard, { width: cardWidth }]}>
+                <Pressable key={slide.key} onPress={() => goCategory(slide.category)} style={[styles.heroCard, { width: cardWidth, height: shellWidth < 380 ? 206 : 232 }]}>
                   <ImageBackground source={slide.image} style={styles.heroImage} imageStyle={styles.heroImageRadius}>
                     <View style={styles.heroOverlay} />
                     <View style={styles.heroBadge}>
@@ -599,18 +628,18 @@ const styles = StyleSheet.create({
   resultMeta: { color: MUTED, fontSize: 11.5, marginTop: 2, fontWeight: "700" },
   emptyText: { color: MUTED, fontSize: 13, padding: 12 },
   carouselOuter: { marginTop: 18 },
-  heroCard: { height: 184, borderRadius: 24, overflow: "hidden", backgroundColor: "#241147", shadowColor: "#12062B", shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 10 } },
+  heroCard: { height: 232, borderRadius: 26, overflow: "hidden", backgroundColor: "#241147", shadowColor: "#12062B", shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 11 } },
   heroImage: { flex: 1 },
   heroImageRadius: { borderRadius: 24 },
   heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-  heroBadge: { position: "absolute", top: 12, right: 12, maxWidth: 126, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 9, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5 },
-  heroBadgeText: { color: INK, fontSize: 9.5, lineHeight: 13, fontWeight: "900" },
-  heroCopy: { position: "absolute", left: 18, bottom: 18, width: "58%" },
-  heroKicker: { color: "#fff", fontSize: 21, lineHeight: 24, fontWeight: "900" },
-  heroTitle: { color: "#fff", fontSize: 13, lineHeight: 17, fontWeight: "900", marginTop: 6 },
-  heroBody: { color: "#fff", fontSize: 10.5, lineHeight: 14, fontWeight: "700", marginTop: 2 },
-  heroCta: { marginTop: 8, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
-  heroCtaText: { color: "#fff", fontSize: 10.5, fontWeight: "900" },
+  heroBadge: { position: "absolute", top: 13, right: 13, maxWidth: 150, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 },
+  heroBadgeText: { color: INK, fontSize: 10.2, lineHeight: 14, fontWeight: "900" },
+  heroCopy: { position: "absolute", left: 18, bottom: 20, width: "63%" },
+  heroKicker: { color: "#fff", fontSize: 24, lineHeight: 27, fontWeight: "900" },
+  heroTitle: { color: "#fff", fontSize: 14.5, lineHeight: 19, fontWeight: "900", marginTop: 7 },
+  heroBody: { color: "#fff", fontSize: 11.5, lineHeight: 15.5, fontWeight: "700", marginTop: 3 },
+  heroCta: { marginTop: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 19 },
+  heroCtaText: { color: "#fff", fontSize: 11.5, fontWeight: "900" },
   dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 7, marginTop: -20, marginBottom: 20 },
   dot: { width: 18, height: 8, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.86)" },
   dotActive: { width: 30, backgroundColor: PURPLE },

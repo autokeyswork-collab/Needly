@@ -1,0 +1,10 @@
+ALTER TABLE "Promotion" ADD COLUMN "placement" TEXT NOT NULL DEFAULT 'COUPON';
+ALTER TABLE "Promotion" ADD COLUMN "bannerImageUrl" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "bannerKicker" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "bannerTitle" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "bannerBody" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "bannerCta" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "bannerBadge" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "destinationCategory" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "location" TEXT;
+ALTER TABLE "Promotion" ADD COLUMN "displayOrder" INTEGER NOT NULL DEFAULT 0;

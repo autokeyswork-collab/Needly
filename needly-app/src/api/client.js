@@ -355,6 +355,11 @@ export const PaymentAPI = {
   confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),
 };
 
+/* --- Public home content --- */
+export const HomeAPI = {
+  banners: (location) => request(`/home/banners${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }).catch(() => []),
+};
+
 /* --- Customer Wallet / Needly Pay --- */
 export const WalletAPI = {
   summary: () => request("/wallet").catch(() => ({ balance: 0, transactions: [] })),

@@ -18,6 +18,7 @@ const operationalIssueRoutes = require("./routes/operationalIssues.routes");
 const reviewRoutes = require("./routes/reviews.routes");
 const bookingRoutes = require("./routes/bookings.routes");
 const notificationRoutes = require("./routes/notifications.routes");
+const homeRoutes = require("./routes/home.routes");
 const { router: walletRoutes } = require("./routes/wallet.routes");
 
 const app = express();
@@ -70,6 +71,7 @@ app.use("/operational-issues", operationalIssueRoutes);
 app.use("/reviews", reviewRoutes);
 app.use("/bookings", bookingRoutes);
 app.use("/notifications", notificationRoutes);
+app.use("/home", homeRoutes);
 
 // Fallback error handler — keeps a stray thrown error from crashing the
 // process and returns a consistent JSON shape instead of an HTML stack trace.

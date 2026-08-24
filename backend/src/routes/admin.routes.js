@@ -387,20 +387,43 @@ router.get("/promotions", async (req, res) => {
   }
 });
 
+function promotionPayload(body = {}) {
+  const placement = String(body.placement || "COUPON").trim().toUpperCase();
+  const isHomepageBanner = placement === "HOMEPAGE_CAROUSEL";
+  const data = {
+    code: String(body.code || "").trim().toUpperCase(),
+    title: String(body.title || body.bannerTitle || "").trim(),
+    discountType: String(body.discountType || "PERCENT").trim().toUpperCase(),
+    discountValue: Number(body.discountValue || 0),
+    minSpend: Number(body.minSpend || 0),
+    usageLimit: Number(body.usageLimit || 100),
+    placement,
+    bannerImageUrl: body.bannerImageUrl !== undefined ? String(body.bannerImageUrl || "").trim() || null : undefined,
+    bannerKicker: body.bannerKicker !== undefined ? String(body.bannerKicker || "").trim() || null : undefined,
+    bannerTitle: body.bannerTitle !== undefined ? String(body.bannerTitle || "").trim() || null : undefined,
+    bannerBody: body.bannerBody !== undefined ? String(body.bannerBody || "").trim() || null : undefined,
+    bannerCta: body.bannerCta !== undefined ? String(body.bannerCta || "").trim() || null : undefined,
+    bannerBadge: body.bannerBadge !== undefined ? String(body.bannerBadge || "").trim() || null : undefined,
+    destinationCategory: body.destinationCategory !== undefined ? String(body.destinationCategory || "").trim() || null : undefined,
+    location: body.location !== undefined ? String(body.location || "").trim() || null : undefined,
+    displayOrder: Number(body.displayOrder || 0),
+  };
+
+  if (body.active !== undefined) data.active = body.active === true || String(body.active).toLowerCase() === "true";
+  if (body.startDate) data.startDate = new Date(body.startDate);
+  if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
+  if (!data.code) data.code = `BANNER-${Date.now()}`;
+  if (!data.title) data.title = isHomepageBanner ? "Homepage Banner" : "";
+  return data;
+}
+
 router.post("/promotions", async (req, res) => {
-  const { code, title, discountType = "PERCENT", discountValue, minSpend = 0, usageLimit = 100 } = req.body;
-  if (!code || !title || !discountValue) return res.status(400).json({ error: "Code, title, and value required" });
+  const data = promotionPayload(req.body);
+  if (!data.code || !data.title) return res.status(400).json({ error: "Code and title are required" });
 
   try {
     const promo = await prisma.promotion.create({
-      data: {
-        code: code.trim().toUpperCase(),
-        title: title.trim(),
-        discountType,
-        discountValue: Number(discountValue),
-        minSpend: Number(minSpend),
-        usageLimit: Number(usageLimit),
-      },
+      data,
     });
     await logAction(req, { action: "Created promotion", targetType: "Promotion", targetId: promo.id, targetLabel: promo.code });
     res.status(201).json(promo);
@@ -921,7 +944,9 @@ router.patch("/commissions/:id", async (req, res) => {
 
 router.patch("/promotions/:id", async (req, res) => {
   try {
-    const updated = await prisma.promotion.update({ where: { id: req.params.id }, data: req.body });
+    const data = promotionPayload(req.body);
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const updated = await prisma.promotion.update({ where: { id: req.params.id }, data });
     await logAction(req, { action: "Updated promotion details", targetType: "Promotion", targetId: updated.id, targetLabel: updated.code });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }

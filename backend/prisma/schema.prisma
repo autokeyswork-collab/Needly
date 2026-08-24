@@ -413,6 +413,16 @@ model Promotion {
   minSpend      Int       @default(0)
   usageLimit    Int       @default(100)
   timesUsed     Int       @default(0)
+  placement     String    @default("COUPON") // COUPON, HOMEPAGE_CAROUSEL
+  bannerImageUrl String?
+  bannerKicker  String?
+  bannerTitle   String?
+  bannerBody    String?
+  bannerCta     String?
+  bannerBadge   String?
+  destinationCategory String?
+  location      String?
+  displayOrder  Int       @default(0)
   startDate     DateTime  @default(now())
   endDate       DateTime?
   active        Boolean   @default(true)
