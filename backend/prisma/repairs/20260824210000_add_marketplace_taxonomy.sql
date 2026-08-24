@@ -33,6 +33,39 @@ SET "slug" = c."slug" || '-' || c."id"
 FROM ranked r
 WHERE c."id" = r."id" AND r.rn > 1;
 
+WITH reserved_seed_slugs("id", "key", "slug") AS (
+  VALUES
+    ('div-open-market', 'open-market', 'open-market'),
+    ('div-services', 'services', 'services'),
+    ('div-rentals', 'rentals', 'rentals'),
+    ('div-jobs-gigs', 'jobs-gigs', 'jobs-gigs'),
+    ('cat-open-electronics', 'open-market-electronics', 'open-market/electronics'),
+    ('cat-open-fashion', 'open-market-fashion', 'open-market/fashion'),
+    ('cat-open-home-living', 'open-market-home-living', 'open-market/home-living'),
+    ('cat-open-food-groceries', 'open-market-food-groceries', 'open-market/food-groceries'),
+    ('cat-open-beauty', 'open-market-beauty-personal-care', 'open-market/beauty-personal-care'),
+    ('cat-open-agriculture', 'open-market-agriculture', 'open-market/agriculture'),
+    ('cat-services-home', 'services-home-services', 'services/home-services'),
+    ('cat-services-auto', 'services-automotive', 'services/automotive'),
+    ('cat-services-digital', 'services-technology-digital', 'services/technology-digital'),
+    ('cat-services-professional', 'services-professional', 'services/professional-services'),
+    ('cat-services-education', 'services-education-training', 'services/education-training'),
+    ('cat-rentals-vehicles', 'rentals-vehicles', 'rentals/vehicles'),
+    ('cat-rentals-property', 'rentals-property', 'rentals/property'),
+    ('cat-rentals-equipment', 'rentals-equipment', 'rentals/equipment'),
+    ('cat-jobs-technology', 'jobs-gigs-technology', 'jobs-gigs/technology'),
+    ('cat-jobs-delivery', 'jobs-gigs-delivery-logistics', 'jobs-gigs/delivery-logistics'),
+    ('cat-jobs-creative', 'jobs-gigs-creative', 'jobs-gigs/creative'),
+    ('cat-jobs-construction', 'jobs-gigs-construction', 'jobs-gigs/construction')
+)
+UPDATE "Category" c
+SET "slug" = c."slug" || '-legacy-' || substr(md5(c."id"), 1, 8),
+    "updatedAt" = NOW()
+FROM reserved_seed_slugs seed
+WHERE c."slug" = seed."slug"
+  AND c."id" <> seed."id"
+  AND c."key" <> seed."key";
+
 INSERT INTO "Category" (
   "id", "key", "label", "slug", "flow", "description", "icon", "imageKey", "type", "position", "active", "location", "isFeatured", "showOnHomepage", "updatedAt"
 ) VALUES
