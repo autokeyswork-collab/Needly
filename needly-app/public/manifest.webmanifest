@@ -4,11 +4,24 @@
   "description": "Needly everyday marketplace for local shopping, booking, reservations, delivery, and payments.",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#35109B",
   "theme_color": "#642BE4",
   "orientation": "portrait",
   "icons": [
+    {
+      "src": "/needly-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/needly-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "/needly-icon.svg",
       "sizes": "any",

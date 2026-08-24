@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   Animated,
-  Alert,
   Image,
   ImageBackground,
   Platform,
@@ -19,6 +18,7 @@ import { CATEGORY_IMAGES } from "../../data/customerAssets";
 import { useAuth } from "../../context/AuthContext";
 import { useOrders } from "../../context/OrdersContext";
 import { fmtNaira } from "../../theme/colors";
+import { usePwaInstall } from "../../utils/pwaInstall";
 
 const PURPLE = "#642BE4";
 const PURPLE_DARK = "#35109B";
@@ -134,8 +134,7 @@ export default function BrowseScreen({ navigation }) {
   const [query, setQuery] = useState("");
   const [dealEnd] = useState(() => Date.now() + 2 * 60 * 60 * 1000 + 18 * 60 * 1000 + 45 * 1000);
   const [now, setNow] = useState(Date.now());
-  const [installPrompt, setInstallPrompt] = useState(null);
-  const [installHidden, setInstallHidden] = useState(false);
+  const { canShowInstallButton, installApp, installLabel } = usePwaInstall();
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
   const customerName = user?.name || "Customer";
@@ -242,25 +241,6 @@ export default function BrowseScreen({ navigation }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
-    const handlePrompt = (event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-      setInstallHidden(false);
-    };
-    const handleInstalled = () => {
-      setInstallPrompt(null);
-      setInstallHidden(true);
-    };
-    window.addEventListener("beforeinstallprompt", handlePrompt);
-    window.addEventListener("appinstalled", handleInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handlePrompt);
-      window.removeEventListener("appinstalled", handleInstalled);
-    };
-  }, []);
-
   const remaining = Math.max(0, dealEnd - now);
   const displayTime = new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const hrs = String(Math.floor(remaining / 3600000)).padStart(2, "0");
@@ -270,23 +250,6 @@ export default function BrowseScreen({ navigation }) {
   const goCategory = (category) => {
     if (category === "All") return navigation.navigate("CategoryResults", { category: "Local Market" });
     navigation.navigate("CategoryResults", { category });
-  };
-
-  const installApp = async () => {
-    if (Platform.OS !== "web") return;
-    if (installPrompt) {
-      installPrompt.prompt();
-      const choice = await installPrompt.userChoice.catch(() => null);
-      if (choice?.outcome === "accepted") {
-        setInstallHidden(true);
-      }
-      setInstallPrompt(null);
-      return;
-    }
-    Alert.alert(
-      "Install Needly",
-      "On iPhone, tap Share, then Add to Home Screen. On Android, open the browser menu and tap Install app or Add to Home screen."
-    );
   };
 
   const openResult = (result) => {
@@ -313,10 +276,10 @@ export default function BrowseScreen({ navigation }) {
             <View style={styles.statusRow}>
               <Text style={styles.statusTime}>{displayTime}</Text>
               <View style={styles.statusIcons}>
-                {Platform.OS === "web" && !installHidden && (
+                {Platform.OS === "web" && canShowInstallButton && (
                   <Pressable style={styles.installPill} onPress={installApp}>
                     <Ionicons name="download-outline" size={15} color="#fff" />
-                    <Text style={styles.installText}>Install</Text>
+                    <Text style={styles.installText}>{installLabel}</Text>
                   </Pressable>
                 )}
                 <View style={[styles.liveStatusPill, !isOnline && styles.liveStatusPillOffline]}>

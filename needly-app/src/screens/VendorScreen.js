@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { COLORS, fmtNaira } from "../theme/colors";
@@ -9,6 +9,7 @@ import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { VendorAPI, WalletAPI } from "../api/client";
 import { preparePickedImageDataUrl, PRODUCT_IMAGE_LIMIT_BYTES } from "../utils/imageUpload";
+import { usePwaInstall } from "../utils/pwaInstall";
 
 const PURPLE = "#6F45E9";
 const DARK_PURPLE = "#15183F";
@@ -77,8 +78,7 @@ export default function VendorScreen() {
     || (vendors && vendors.length > 0 ? vendors[0] : null);
   const [stats, setStats] = useState(null);
   const [now, setNow] = useState(Date.now());
-  const [installPrompt, setInstallPrompt] = useState(null);
-  const [installHidden, setInstallHidden] = useState(false);
+  const { canShowInstallButton, installApp, installLabel } = usePwaInstall();
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
 
@@ -122,25 +122,6 @@ export default function VendorScreen() {
       mounted = false;
       battery?.removeEventListener("levelchange", updateBattery);
       battery?.removeEventListener("chargingchange", updateBattery);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof window === "undefined") return undefined;
-    const handlePrompt = (event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-      setInstallHidden(false);
-    };
-    const handleInstalled = () => {
-      setInstallPrompt(null);
-      setInstallHidden(true);
-    };
-    window.addEventListener("beforeinstallprompt", handlePrompt);
-    window.addEventListener("appinstalled", handleInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handlePrompt);
-      window.removeEventListener("appinstalled", handleInstalled);
     };
   }, []);
 
@@ -269,21 +250,6 @@ export default function VendorScreen() {
   const hasBankAccount = !!(activeVendor.bankName && activeVendor.bankAccountNumber && activeVendor.bankAccountName);
   const vendorNotifications = (notifications || []).slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const unreadVendorNotifications = vendorNotifications.filter((item) => !item.read).length;
-
-  const installApp = async () => {
-    if (Platform.OS !== "web") return;
-    if (installPrompt) {
-      installPrompt.prompt();
-      const choice = await installPrompt.userChoice.catch(() => null);
-      if (choice?.outcome === "accepted") setInstallHidden(true);
-      setInstallPrompt(null);
-      return;
-    }
-    Alert.alert(
-      "Install Needly",
-      "On iPhone, tap Share, then Add to Home Screen. On Android, open the browser menu and tap Install app or Add to Home screen."
-    );
-  };
 
   const scrollToSection = (section) => {
     const y = sectionOffsets.current[section] || 0;
@@ -443,10 +409,10 @@ export default function VendorScreen() {
         <View style={styles.vendorStatusRow}>
           <Text style={styles.vendorStatusTime}>{displayTime}</Text>
           <View style={styles.vendorStatusIcons}>
-            {Platform.OS === "web" && !installHidden && (
+            {Platform.OS === "web" && canShowInstallButton && (
               <Pressable style={styles.vendorInstallPill} onPress={installApp}>
                 <Ionicons name="download-outline" size={14} color="#fff" />
-                <Text style={styles.vendorStatusPillText}>Install</Text>
+                <Text style={styles.vendorStatusPillText}>{installLabel}</Text>
               </Pressable>
             )}
             <View style={[styles.vendorMiniPill, !isOnline && styles.vendorMiniPillOffline]}>

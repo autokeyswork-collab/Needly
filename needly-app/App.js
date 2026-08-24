@@ -132,6 +132,26 @@ export default function App() {
     manifest.setAttribute("href", "/manifest.webmanifest");
     if (!manifest.parentNode) document.head.appendChild(manifest);
 
+    const theme = document.querySelector('meta[name="theme-color"]') || document.createElement("meta");
+    theme.setAttribute("name", "theme-color");
+    theme.setAttribute("content", "#642BE4");
+    if (!theme.parentNode) document.head.appendChild(theme);
+
+    const appleCapable = document.querySelector('meta[name="apple-mobile-web-app-capable"]') || document.createElement("meta");
+    appleCapable.setAttribute("name", "apple-mobile-web-app-capable");
+    appleCapable.setAttribute("content", "yes");
+    if (!appleCapable.parentNode) document.head.appendChild(appleCapable);
+
+    const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]') || document.createElement("meta");
+    appleTitle.setAttribute("name", "apple-mobile-web-app-title");
+    appleTitle.setAttribute("content", "Needly");
+    if (!appleTitle.parentNode) document.head.appendChild(appleTitle);
+
+    const appleIcon = document.querySelector('link[rel="apple-touch-icon"]') || document.createElement("link");
+    appleIcon.setAttribute("rel", "apple-touch-icon");
+    appleIcon.setAttribute("href", "/needly-icon-192.png");
+    if (!appleIcon.parentNode) document.head.appendChild(appleIcon);
+
     navigator.serviceWorker.register("/service-worker.js").catch(() => {});
   }, []);
 

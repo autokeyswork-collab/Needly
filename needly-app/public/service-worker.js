@@ -1,5 +1,5 @@
-const CACHE_NAME = "needly-shell-v1";
-const SHELL_URLS = ["/", "/manifest.webmanifest", "/needly-icon.svg"];
+const CACHE_NAME = "needly-shell-v2";
+const SHELL_URLS = ["/", "/manifest.webmanifest", "/needly-icon.svg", "/needly-icon-192.png", "/needly-icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)));
