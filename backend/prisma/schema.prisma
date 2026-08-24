@@ -406,9 +406,21 @@ model Category {
   description String?
   icon        String?
   imageKey    String?
+  slug        String?  @unique
+  image       String?
+  bannerImage String?
+  type        String   @default("CATEGORY") // DIVISION, CATEGORY, SUBCATEGORY, TYPE
+  parentId    String?
+  parent      Category? @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  divisionId  String?
+  isFeatured  Boolean  @default(false)
+  showOnHomepage Boolean @default(true)
+  customFields Json?
   position    Int      @default(0)
   active      Boolean  @default(true)
   location    String?
+  deletedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

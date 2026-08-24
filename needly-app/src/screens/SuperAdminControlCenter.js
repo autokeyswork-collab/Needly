@@ -116,7 +116,7 @@ const editFieldsMap = {
   order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
   booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
-  category: [["Key", "key"], ["Label", "label"], ["Flow", "flow"], ["Description", "description"], ["Icon", "icon"], ["Image Key", "imageKey"], ["Position", "position", true], ["Location", "location"], ["Active", "active"]],
+  category: [["Key", "key"], ["Label", "label"], ["Slug", "slug"], ["Type", "type"], ["Flow", "flow"], ["Parent ID", "parentId"], ["Division ID", "divisionId"], ["Description", "description"], ["Icon", "icon"], ["Image Key", "imageKey"], ["Image URL", "image"], ["Banner URL", "bannerImage"], ["Position", "position", true], ["Featured", "isFeatured"], ["Homepage", "showOnHomepage"], ["Location", "location"], ["Active", "active"]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [
     ["Promo Code", "code"],
@@ -497,7 +497,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
         SuperAdminAPI.tickets(), SuperAdminAPI.roles(), SuperAdminAPI.refunds(),
         PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), SuperAdminAPI.notifications(),
         SuperAdminAPI.health(), SuperAdminAPI.integrations(), SuperAdminAPI.orders(),
-        SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.categories(), SuperAdminAPI.admins(),
+        SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.marketplaceCategories(), SuperAdminAPI.admins(),
         SuperAdminAPI.fraudAlerts(), SuperAdminAPI.walletTransactions(),
       ]);
 
@@ -628,25 +628,67 @@ export default function SuperAdminControlCenter({ onLogout }) {
   };
 
   const addCategory = async () => {
-    const key = prompt("Category key used by vendors/products:", "Local Market");
+    const key = prompt("Category key used by vendors/products:", "open-market-electronics");
     if (!key) return;
     const label = prompt("Customer-facing label:", key);
     if (!label) return;
+    const type = (prompt("Type: CATEGORY, SUBCATEGORY, or TYPE", "CATEGORY") || "CATEGORY").toUpperCase();
+    const divisionId = prompt("Division ID (example: div-open-market, div-services, div-rentals, div-jobs-gigs):", "div-open-market") || "";
+    const parentId = prompt("Parent ID. Use division ID for a top category, or existing category ID for subcategory:", divisionId) || "";
+    const slug = prompt("SEO slug/path:", key.toLowerCase().replace(/[^a-z0-9]+/g, "-")) || key;
     const flow = prompt("Flow: BUY, BOOK, or RESERVE", "BUY") || "BUY";
     const position = prompt("Display position:", "1");
+    const icon = prompt("Icon key:", "basket") || "";
+    const description = prompt("Description:", "") || "";
     try {
-      await SuperAdminAPI.createCategory({
+      await SuperAdminAPI.createMarketplaceCategory({
         key,
         label,
+        slug,
+        type,
         flow,
+        parentId,
+        divisionId,
+        description,
+        icon,
         imageKey: key,
         position: Number(position || 1),
+        isFeatured: true,
+        showOnHomepage: true,
         active: true,
         location: "Abeokuta",
       });
       reload();
     } catch (err) {
       alert("Add category failed: " + (err.message || err));
+    }
+  };
+
+  const addMarketplaceDivision = async () => {
+    const label = prompt("Division name:", "Open Market");
+    if (!label) return;
+    const key = prompt("Unique division key:", label.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    if (!key) return;
+    const flow = prompt("Default flow: BUY, BOOK, or RESERVE", label.toLowerCase().includes("service") ? "BOOK" : "BUY") || "BUY";
+    const position = prompt("Display position:", "1");
+    const description = prompt("Description:", "") || "";
+    try {
+      await SuperAdminAPI.createMarketplaceDivision({
+        key,
+        label,
+        slug: key,
+        flow,
+        description,
+        type: "DIVISION",
+        position: Number(position || 1),
+        isFeatured: true,
+        showOnHomepage: true,
+        active: true,
+        location: "Abeokuta",
+      });
+      reload();
+    } catch (err) {
+      alert("Add division failed: " + (err.message || err));
     }
   };
 
@@ -1968,10 +2010,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <View>
-            <Text style={s.pageH}>Marketplace Categories</Text>
-            <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Customer homepage categories are controlled from this database table.</Text>
+            <Text style={s.pageH}>Marketplace Management</Text>
+            <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Divisions, categories, subcategories, homepage visibility and ordering come from the database.</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={addMarketplaceDivision} style={s.btn}><Text style={s.btnTxt}>+ Add Division</Text></Pressable>
             <Pressable onPress={addCategory} style={s.btn}><Text style={s.btnTxt}>+ Add Category</Text></Pressable>
             <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
           </View>
@@ -1982,15 +2025,17 @@ export default function SuperAdminControlCenter({ onLogout }) {
           filterKey="name"
           fields={[
             { key: "name", bold: true },
+            { key: "type", label: "Type" },
+            { key: "slug", label: "Slug" },
             { key: "key", label: "Key" },
+            { key: "parentId", label: "Parent" },
+            { key: "divisionId", label: "Division" },
             { key: "flow", label: "Flow" },
             { key: "position", label: "Position" },
+            { key: "isFeatured", label: "Featured" },
+            { key: "showOnHomepage", label: "Homepage" },
             { key: "active", label: "Active" },
             { key: "location", label: "Location" },
-            { key: "vendors", label: "Vendors" },
-            { key: "products", label: "Products" },
-            { key: "services", label: "Services" },
-            { key: "source", label: "Source" },
           ]}
         />
       </ScrollView>

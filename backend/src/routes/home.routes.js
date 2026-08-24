@@ -30,6 +30,12 @@ function publicCategory(category) {
     description: category.description || "",
     icon: category.icon || "",
     imageKey: category.imageKey || category.key,
+    slug: category.slug || category.key,
+    parentId: category.parentId || null,
+    divisionId: category.divisionId || null,
+    type: category.type || "CATEGORY",
+    isFeatured: !!category.isFeatured,
+    showOnHomepage: !!category.showOnHomepage,
     position: category.position,
     location: category.location || "",
   };
@@ -39,6 +45,9 @@ router.get("/categories", async (req, res) => {
   const location = String(req.query.location || "").trim();
   const where = {
     active: true,
+    deletedAt: null,
+    showOnHomepage: true,
+    isFeatured: true,
     ...(location ? {
       OR: [
         { location: null },

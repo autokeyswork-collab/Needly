@@ -19,6 +19,7 @@ const reviewRoutes = require("./routes/reviews.routes");
 const bookingRoutes = require("./routes/bookings.routes");
 const notificationRoutes = require("./routes/notifications.routes");
 const homeRoutes = require("./routes/home.routes");
+const marketplaceRoutes = require("./routes/marketplace.routes");
 const { router: walletRoutes } = require("./routes/wallet.routes");
 const { cleanupExpiredPendingOrders } = require("./lib/orderInventory");
 
@@ -77,6 +78,8 @@ app.use("/reviews", reviewRoutes);
 app.use("/bookings", bookingRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/home", homeRoutes);
+app.use("/marketplace", marketplaceRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
 
 // Fallback error handler — keeps a stray thrown error from crashing the
 // process and returns a consistent JSON shape instead of an HTML stack trace.

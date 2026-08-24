@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, HomeAPI, normalizeOrder } from "../api/client";
+import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, HomeAPI, MarketplaceAPI, normalizeOrder } from "../api/client";
 import { connectSocket, subscribeToRealtimeEvents } from "../api/socket";
 import { useAuth } from "./AuthContext";
 import { countDraftCartItems, loadCustomerActivity, saveCustomerActivity } from "../utils/customerActivity";
@@ -37,7 +37,13 @@ export function OrdersProvider({ children }) {
 
   const refreshCategories = useCallback(async () => {
     try {
-      const data = await HomeAPI.categories(user?.locationCity);
+      let data;
+      try {
+        data = await HomeAPI.categories(user?.locationCity);
+      } catch (err) {
+        if (!isMissingEndpoint(err)) throw err;
+        data = await MarketplaceAPI.featuredCategories(user?.locationCity);
+      }
       setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       if (!isMissingEndpoint(err)) setSectionError("Categories", err);

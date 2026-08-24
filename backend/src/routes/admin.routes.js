@@ -404,6 +404,8 @@ function categoryPayload(body = {}) {
   const key = String(body.key || body.category || body.name || "").trim();
   const label = String(body.label || body.name || key || "").trim();
   const flow = String(body.flow || "BUY").trim().toUpperCase();
+  const slug = String(body.slug || key).trim().toLowerCase().replace(/[^a-z0-9/]+/g, "-").replace(/(^-|-$)/g, "");
+  const type = String(body.type || "CATEGORY").trim().toUpperCase();
   if (!key || !label) {
     const err = new Error("Category key and label are required");
     err.statusCode = 400;
@@ -414,9 +416,15 @@ function categoryPayload(body = {}) {
     err.statusCode = 400;
     throw err;
   }
+  if (!["DIVISION", "CATEGORY", "SUBCATEGORY", "TYPE"].includes(type)) {
+    const err = new Error("Category type must be DIVISION, CATEGORY, SUBCATEGORY, or TYPE");
+    err.statusCode = 400;
+    throw err;
+  }
   const active = body.active === undefined
     ? undefined
     : body.active === true || ["true", "yes", "1"].includes(String(body.active).trim().toLowerCase());
+  const boolField = (value) => value === true || ["true", "yes", "1"].includes(String(value).trim().toLowerCase());
   const position = body.position === undefined ? undefined : Number(body.position);
   if (position !== undefined && !Number.isFinite(position)) {
     const err = new Error("Category position must be a number");
@@ -426,10 +434,19 @@ function categoryPayload(body = {}) {
   return {
     key,
     label,
+    slug,
     flow,
+    type,
+    parentId: body.parentId === undefined ? undefined : String(body.parentId || "").trim() || null,
+    divisionId: body.divisionId === undefined ? undefined : String(body.divisionId || "").trim() || null,
     description: body.description === undefined ? undefined : String(body.description || "").trim(),
     icon: body.icon === undefined ? undefined : String(body.icon || "").trim(),
     imageKey: body.imageKey === undefined ? undefined : String(body.imageKey || key).trim(),
+    image: body.image === undefined ? undefined : String(body.image || "").trim() || null,
+    bannerImage: body.bannerImage === undefined ? undefined : String(body.bannerImage || "").trim() || null,
+    isFeatured: body.isFeatured === undefined ? undefined : boolField(body.isFeatured),
+    showOnHomepage: body.showOnHomepage === undefined ? undefined : boolField(body.showOnHomepage),
+    customFields: body.customFields === undefined ? undefined : (Array.isArray(body.customFields) ? body.customFields : []),
     position,
     active,
     location: body.location === undefined ? undefined : String(body.location || "").trim(),
@@ -445,6 +462,71 @@ router.post("/categories", async (req, res) => {
     res.status(201).json(category);
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.message || "Failed to create category" });
+  }
+});
+
+function adminCategorySelect(category) {
+  return {
+    ...category,
+    name: category.label,
+    availableLabel: category.active ? "Active" : "Inactive",
+  };
+}
+
+router.get("/marketplace/divisions", async (_req, res) => {
+  try {
+    const divisions = await prisma.category.findMany({
+      where: { type: "DIVISION", deletedAt: null },
+      include: { children: { where: { deletedAt: null }, orderBy: [{ position: "asc" }, { label: "asc" }] } },
+      orderBy: [{ position: "asc" }, { label: "asc" }],
+    });
+    res.json(divisions.map(adminCategorySelect));
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load marketplace divisions" });
+  }
+});
+
+router.post("/marketplace/divisions", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const data = categoryPayload({ ...req.body, type: "DIVISION", parentId: null });
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const division = await prisma.category.create({ data: { ...data, divisionId: null } });
+    await logAction(req, { action: "Created marketplace division", targetType: "Category", targetId: division.id, targetLabel: division.label });
+    res.status(201).json(division);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "Failed to create marketplace division" });
+  }
+});
+
+router.get("/marketplace/categories", async (req, res) => {
+  try {
+    const { divisionId, parentId, type } = req.query;
+    const categories = await prisma.category.findMany({
+      where: {
+        deletedAt: null,
+        ...(divisionId ? { divisionId: String(divisionId) } : {}),
+        ...(parentId !== undefined ? { parentId: parentId ? String(parentId) : null } : {}),
+        ...(type ? { type: String(type).toUpperCase() } : {}),
+      },
+      include: { parent: true, children: { where: { deletedAt: null }, orderBy: [{ position: "asc" }, { label: "asc" }] } },
+      orderBy: [{ type: "asc" }, { position: "asc" }, { label: "asc" }],
+      take: 2000,
+    });
+    res.json(categories.map(adminCategorySelect));
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load marketplace categories" });
+  }
+});
+
+router.post("/marketplace/categories", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const data = categoryPayload(req.body);
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const category = await prisma.category.create({ data });
+    await logAction(req, { action: "Created marketplace category", targetType: "Category", targetId: category.id, targetLabel: category.label });
+    res.status(201).json(category);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "Failed to create marketplace category" });
   }
 });
 
@@ -1055,6 +1137,60 @@ router.patch("/categories/:id", async (req, res) => {
     await logAction(req, { action: "Updated category details", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
     res.json(updated);
   } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
+});
+
+router.put("/marketplace/divisions/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const data = categoryPayload({ ...req.body, type: "DIVISION", parentId: null });
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const updated = await prisma.category.update({ where: { id: req.params.id }, data: { ...data, divisionId: null } });
+    await logAction(req, { action: "Updated marketplace division", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
+    res.json(updated);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "Failed to update marketplace division" });
+  }
+});
+
+router.put("/marketplace/categories/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const data = categoryPayload(req.body);
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const updated = await prisma.category.update({ where: { id: req.params.id }, data });
+    await logAction(req, { action: "Updated marketplace category", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
+    res.json(updated);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "Failed to update marketplace category" });
+  }
+});
+
+router.delete("/marketplace/divisions/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const updated = await prisma.category.update({
+      where: { id: req.params.id },
+      data: { active: false, showOnHomepage: false, deletedAt: new Date() },
+    });
+    await prisma.category.updateMany({
+      where: { OR: [{ divisionId: req.params.id }, { parentId: req.params.id }] },
+      data: { active: false, showOnHomepage: false },
+    });
+    await logAction(req, { action: "Deleted marketplace division", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
+    res.json({ ok: true, category: updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to delete marketplace division" });
+  }
+});
+
+router.delete("/marketplace/categories/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const updated = await prisma.category.update({
+      where: { id: req.params.id },
+      data: { active: false, showOnHomepage: false, deletedAt: new Date() },
+    });
+    await logAction(req, { action: "Deleted marketplace category", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
+    res.json({ ok: true, category: updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to delete marketplace category" });
+  }
 });
 
 router.patch("/commissions/:id", async (req, res) => {

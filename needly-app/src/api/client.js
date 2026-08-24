@@ -364,6 +364,22 @@ export const HomeAPI = {
   categories: (location) => request(`/home/categories${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
 };
 
+export const MarketplaceAPI = {
+  divisions: (location) => request(`/marketplace/divisions${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
+  categories: ({ location, divisionId, parentId, featured, homepage } = {}) => {
+    const params = new URLSearchParams();
+    if (location) params.set("location", location);
+    if (divisionId) params.set("divisionId", divisionId);
+    if (parentId !== undefined) params.set("parentId", parentId || "");
+    if (featured !== undefined) params.set("featured", String(featured));
+    if (homepage !== undefined) params.set("homepage", String(homepage));
+    const qs = params.toString();
+    return request(`/marketplace/categories${qs ? `?${qs}` : ""}`, { auth: false });
+  },
+  featuredCategories: (location) => request(`/marketplace/featured-categories${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
+  children: (id, location) => request(`/marketplace/categories/${encodeURIComponent(id)}/children${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
+};
+
 /* --- Customer Wallet / Needly Pay --- */
 export const WalletAPI = {
   summary: () => request("/wallet"),
@@ -443,6 +459,10 @@ export const SuperAdminAPI = {
   services: () => request("/admin/services"),
   categories: () => request("/admin/categories"),
   createCategory: (data) => request("/admin/categories", { method: "POST", body: data }),
+  marketplaceDivisions: () => request("/admin/marketplace/divisions"),
+  createMarketplaceDivision: (data) => request("/admin/marketplace/divisions", { method: "POST", body: data }),
+  marketplaceCategories: () => request("/admin/marketplace/categories"),
+  createMarketplaceCategory: (data) => request("/admin/marketplace/categories", { method: "POST", body: data }),
   admins: () => request("/admin/admins"),
   notifications: () => request("/admin/notifications"),
   createUser: (data) => request("/admin/users", { method: "POST", body: data }),
