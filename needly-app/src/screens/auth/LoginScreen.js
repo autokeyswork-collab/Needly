@@ -13,6 +13,7 @@ import {
   Text,
   TextInput,
   useWindowDimensions,
+  Alert,
   View,
 } from "react-native";
 import NeedlyLogo from "../../components/NeedlyLogo";
@@ -32,13 +33,6 @@ const ACCOUNT_TYPES = [
   { key: "RIDER", label: "Rider", icon: "motorbike", family: "MaterialCommunityIcons" },
   { key: "PROVIDER", label: "Provider", icon: "briefcase", family: "FontAwesome" },
 ];
-
-const SOCIAL_IDENTITIES = {
-  CUSTOMER: { name: "Ada Customer", email: "customer@demo.needly", role: "CUSTOMER" },
-  VENDOR: { name: "Mama Risi", email: "mamarisi@demo.needly", role: "VENDOR" },
-  RIDER: { name: "Tunde A.", email: "rider@demo.needly", role: "RIDER" },
-  PROVIDER: { name: "Amaka O.", email: "manager@demo.needly", role: "MANAGER" },
-};
 
 function RoleIcon({ item, color, size = 25 }) {
   if (item.family === "Ionicons") return <Ionicons name={item.icon} size={size} color={color} />;
@@ -117,13 +111,19 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleSocial = async (provider) => {
-    const identity = SOCIAL_IDENTITIES[accountType] || SOCIAL_IDENTITIES.CUSTOMER;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes("@")) {
+      Alert.alert("Email required", "Enter your real email address first, then continue with this sign-in option.");
+      return;
+    }
+    const role = accountType === "PROVIDER" ? "MANAGER" : accountType;
+    const name = cleanEmail.split("@")[0].replace(/[._-]+/g, " ").trim() || cleanEmail;
     setSocialLoading(provider);
     await socialLogin({
       provider,
-      name: provider === "google" ? identity.name : provider === "apple" ? `${identity.name} Apple` : `${identity.name} Facebook`,
-      email: provider === "google" ? identity.email : `${identity.role.toLowerCase()}.${provider}@needly.app`,
-      role: identity.role,
+      name,
+      email: cleanEmail,
+      role,
     });
     setSocialLoading(null);
   };

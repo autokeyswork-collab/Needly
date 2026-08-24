@@ -384,6 +384,7 @@ export const OperationalIssueAPI = {
 /* --- Service Bookings --- */
 export const BookingAPI = {
   create: (data) => request("/bookings", { method: "POST", body: data }),
+  services: (category) => request(`/bookings/services${category ? `?category=${encodeURIComponent(category)}` : ""}`, { auth: false }),
   mine: () => request("/bookings/mine").catch(() => []),
   updateStatus: (id, status) => request(`/bookings/${id}/status`, { method: "PATCH", body: { status } }),
   cancel: (id, reason) => request(`/bookings/${id}/cancel`, { method: "PATCH", body: { reason } }),

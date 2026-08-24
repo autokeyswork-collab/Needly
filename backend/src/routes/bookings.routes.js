@@ -5,25 +5,70 @@ const { broadcastBookingUpdate, broadcastNotification, broadcastAdminAlert } = r
 
 const router = express.Router();
 
-const DEMO_BOOKINGS = [];
+function publicService(service, provider = null) {
+  return {
+    id: service.id,
+    providerId: service.providerId,
+    providerName: provider?.name || service.providerId,
+    providerArea: provider?.area || null,
+    providerEta: provider?.eta || null,
+    providerRating: provider?.rating || null,
+    providerAddress: provider?.address || null,
+    name: service.name,
+    category: service.category,
+    price: service.price,
+    description: service.description || null,
+    emoji: service.emoji,
+    isAvailable: service.isAvailable,
+    createdAt: service.createdAt,
+  };
+}
+
+/** GET /bookings/services — database-backed service provider list. */
+router.get("/services", async (req, res) => {
+  const category = String(req.query.category || "").trim();
+  try {
+    const services = await prisma.service.findMany({
+      where: {
+        isAvailable: true,
+        ...(category ? { category } : {}),
+      },
+      orderBy: [{ category: "asc" }, { providerId: "asc" }, { createdAt: "desc" }],
+      take: 500,
+    });
+    const providerIds = Array.from(new Set(services.map((service) => service.providerId).filter(Boolean)));
+    const vendors = providerIds.length
+      ? await prisma.vendor.findMany({
+        where: { id: { in: providerIds }, owner: { approved: true, suspendedAt: null } },
+        select: { id: true, name: true, area: true, eta: true, rating: true, address: true },
+      })
+      : [];
+    const vendorsById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
+    res.json(services.map((service) => publicService(service, vendorsById.get(service.providerId))));
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load services" });
+  }
+});
 
 /** POST /bookings — Create a new service booking. */
 router.post("/", requireAuth, async (req, res) => {
   const { serviceId, providerName, address, phone, total, scheduledAt } = req.body;
 
-  if (!address || !phone || !total) {
-    return res.status(400).json({ error: "Address, phone, and total are required" });
+  if (!serviceId || !address || !phone) {
+    return res.status(400).json({ error: "Service, address, and phone are required" });
   }
 
   try {
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service || !service.isAvailable) return res.status(404).json({ error: "Service is not available" });
     const booking = await prisma.booking.create({
       data: {
         customerId: req.user.id,
-        serviceId: serviceId || "srv-default",
-        providerName: providerName || "Needly Certified Provider",
+        serviceId: service.id,
+        providerName: providerName || service.providerId,
         address,
         phone,
-        total: parseInt(total, 10),
+        total: parseInt(total || service.price, 10),
         scheduledAt: scheduledAt ? new Date(scheduledAt) : new Date(),
         status: "PENDING",
       },
@@ -38,22 +83,7 @@ router.post("/", requireAuth, async (req, res) => {
 
     return res.status(201).json(booking);
   } catch (err) {
-    // In-memory fallback
-    const mockBooking = {
-      id: `bk-${Date.now()}`,
-      customerId: req.user.id,
-      serviceId: serviceId || "srv-1",
-      providerName: providerName || "Abeokuta Auto / Home Service",
-      status: "PENDING",
-      address,
-      phone,
-      total: parseInt(total, 10),
-      scheduledAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-    DEMO_BOOKINGS.unshift(mockBooking);
-    broadcastBookingUpdate(mockBooking);
-    return res.status(201).json(mockBooking);
+    return res.status(500).json({ error: err.message || "Failed to create booking" });
   }
 });
 
@@ -71,7 +101,7 @@ router.get("/mine", requireAuth, async (req, res) => {
     }
     return res.json(bookings);
   } catch (err) {
-    return res.json(DEMO_BOOKINGS.filter((b) => req.user.role === "ADMIN" || b.customerId === req.user.id));
+    return res.status(500).json({ error: err.message || "Failed to load bookings" });
   }
 });
 
@@ -92,13 +122,7 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
     });
     return res.json(updated);
   } catch (err) {
-    const match = DEMO_BOOKINGS.find((b) => b.id === req.params.id);
-    if (match) {
-      match.status = status.toUpperCase();
-      broadcastBookingUpdate(match);
-      return res.json(match);
-    }
-    return res.json({ id: req.params.id, status: status.toUpperCase() });
+    return res.status(500).json({ error: err.message || "Failed to update booking" });
   }
 });
 
@@ -113,14 +137,7 @@ router.patch("/:id/cancel", requireAuth, async (req, res) => {
     broadcastBookingUpdate(updated);
     return res.json(updated);
   } catch (err) {
-    const match = DEMO_BOOKINGS.find((b) => b.id === req.params.id);
-    if (match) {
-      match.status = "CANCELLED";
-      match.cancelReason = reason || "Cancelled by user";
-      broadcastBookingUpdate(match);
-      return res.json(match);
-    }
-    return res.json({ id: req.params.id, status: "CANCELLED" });
+    return res.status(500).json({ error: err.message || "Failed to cancel booking" });
   }
 });
 

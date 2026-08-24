@@ -615,8 +615,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
     if (!email) return;
     const name = prompt("Admin full name:", "Needly Admin");
     try {
-      await SuperAdminAPI.createUser({ name: name || "Needly Admin", email, role: "ADMIN", password: "password123", approved: true });
-      alert("Admin created. Temporary password: password123");
+      const created = await SuperAdminAPI.createUser({ name: name || "Needly Admin", email, role: "ADMIN", approved: true });
+      alert(`Admin created.${created?.temporaryPassword ? ` Temporary password: ${created.temporaryPassword}` : ""}`);
       reload();
     } catch (err) {
       alert("Add admin failed: " + (err.message || err));
@@ -630,8 +630,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
     const category = prompt("Category:", "Local Market");
     const area = prompt("Area:", "Abeokuta");
     try {
-      await SuperAdminAPI.createVendor({ name, ownerEmail, ownerName: name, category, area, verified: true, isOpen: true });
-      alert("Vendor created. Owner temporary password is password123 if a new owner email was supplied.");
+      const created = await SuperAdminAPI.createVendor({ name, ownerEmail, ownerName: name, category, area, verified: true, isOpen: true });
+      alert(`Vendor created.${created?.temporaryPassword ? ` Owner temporary password: ${created.temporaryPassword}` : ""}`);
       reload();
     } catch (err) {
       alert("Add vendor failed: " + (err.message || err));
@@ -644,8 +644,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
     const name = prompt("Rider full name:", "Needly Rider");
     const zone = prompt("Rider zone:", "Abeokuta");
     try {
-      await SuperAdminAPI.createRider({ name: name || "Needly Rider", email, zone, verified: true, password: "password123" });
-      alert("Rider created. Temporary password: password123");
+      const created = await SuperAdminAPI.createRider({ name: name || "Needly Rider", email, zone, verified: true });
+      alert(`Rider created.${created?.temporaryPassword ? ` Temporary password: ${created.temporaryPassword}` : ""}`);
       reload();
     } catch (err) {
       alert("Add rider failed: " + (err.message || err));

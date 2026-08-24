@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import { ALL_SERVICE_PROVIDERS, AUTO_PROVIDERS } from "../../data/serviceData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
+import { useAuth } from "../../context/AuthContext";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 
 const INK = "#15183F";
@@ -17,26 +17,37 @@ export default function AutoBookingScreen({ route, navigation }) {
   const { width } = useWindowDimensions();
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
-  const providers = ALL_SERVICE_PROVIDERS.length ? ALL_SERVICE_PROVIDERS : AUTO_PROVIDERS;
-  const initialProviderId = route.params?.providerId || providers[0].id;
+  const { user } = useAuth();
+  const { serviceProviders = [], createBooking } = useOrders();
+  const providers = serviceProviders.filter((provider) => (route?.params?.category ? provider.category === route.params.category : true));
+  const initialProviderId = route?.params?.providerId || providers[0]?.id || "";
   const [providerId, setProviderId] = useState(initialProviderId);
-  const provider = providers.find((p) => p.id === providerId) || providers[0];
-  const providerCategory = provider.category || "Auto";
-  const initialServiceId = route.params?.serviceId || provider.services[0].id;
+  const provider = providers.find((p) => p.id === providerId) || providers[0] || null;
+  const providerCategory = provider?.category || route?.params?.category || "Auto";
+  const initialServiceId = route?.params?.serviceId || provider?.services?.[0]?.id || "";
   const [serviceId, setServiceId] = useState(initialServiceId);
-  const service = provider.services.find((s) => s.id === serviceId) || provider.services[0];
+  const service = provider?.services?.find((s) => s.id === serviceId) || provider?.services?.[0] || null;
   const [vehicle, setVehicle] = useState("");
   const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const { createBooking } = useOrders();
 
-  const canSubmit = vehicle.trim() && location.trim() && date.trim() && time.trim() && !submitting;
+  const canSubmit = !!service && vehicle.trim() && location.trim() && phone.trim() && date.trim() && time.trim() && !submitting;
 
   const providerOptions = useMemo(() => providers.map((p) => ({ label: `${p.name} - ${p.area}`, value: p.id })), [providers]);
+
+  useEffect(() => {
+    if (!providers.length) return;
+    const nextProvider = providers.find((p) => p.id === providerId) || providers[0];
+    if (nextProvider.id !== providerId) setProviderId(nextProvider.id);
+    if (!nextProvider.services?.some((s) => s.id === serviceId)) {
+      setServiceId(nextProvider.services?.[0]?.id || "");
+    }
+  }, [providers, providerId, serviceId]);
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -48,7 +59,7 @@ export default function AutoBookingScreen({ route, navigation }) {
         providerName: provider.name,
         category: providerCategory,
         address: location.trim(),
-        phone: "",
+        phone: phone.trim(),
         total: service.price,
         scheduledAt: new Date().toISOString(),
         notes: `Vehicle: ${vehicle.trim()} | Date: ${date.trim()} ${time.trim()} | ${notes.trim()}`.trim(),
@@ -79,6 +90,15 @@ export default function AutoBookingScreen({ route, navigation }) {
         <Text style={styles.subtitle}>Choose a trusted provider, time, and Abeokuta location.</Text>
       </View>
 
+      {!providers.length ? (
+        <View style={styles.emptyCard}>
+          <MaterialCommunityIcons name="database-search-outline" size={34} color={PURPLE} />
+          <Text style={styles.emptyTitle}>No services available yet</Text>
+          <Text style={styles.emptyText}>When Admin adds active services in the database, customers can book them here.</Text>
+        </View>
+      ) : (
+      <>
+
       <Text style={styles.label}>PROVIDER</Text>
       <View style={styles.pickerWrap}>
         <Picker
@@ -86,7 +106,7 @@ export default function AutoBookingScreen({ route, navigation }) {
           onValueChange={(value) => {
             const nextProvider = providers.find((p) => p.id === value);
             setProviderId(value);
-            setServiceId(nextProvider?.services[0]?.id);
+            setServiceId(nextProvider?.services?.[0]?.id || "");
           }}
         >
           {providerOptions.map((p) => <Picker.Item key={p.value} label={p.label} value={p.value} />)}
@@ -98,7 +118,7 @@ export default function AutoBookingScreen({ route, navigation }) {
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.providerName}>{provider.name}</Text>
-        <Text style={styles.meta}>{provider.distance} · {provider.eta} · ★ {provider.rating}</Text>
+        <Text style={styles.meta}>{[provider.area, provider.distance, provider.eta, provider.rating ? `★ ${provider.rating}` : null].filter(Boolean).join(" · ")}</Text>
         </View>
       </View>
 
@@ -124,6 +144,9 @@ export default function AutoBookingScreen({ route, navigation }) {
       <Text style={styles.label}>SERVICE LOCATION</Text>
       <TextInput value={location} onChangeText={setLocation} placeholder="Street, landmark, area in Abeokuta" style={styles.input} />
 
+      <Text style={styles.label}>PHONE NUMBER</Text>
+      <TextInput value={phone} onChangeText={setPhone} placeholder="Phone number for the provider" keyboardType="phone-pad" style={styles.input} />
+
       <View style={styles.twoCol}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>DATE</Text>
@@ -140,13 +163,15 @@ export default function AutoBookingScreen({ route, navigation }) {
 
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Estimated service cost</Text>
-        <Text style={styles.summaryPrice}>{fmtNaira(service.price)}</Text>
+      <Text style={styles.summaryPrice}>{fmtNaira(service?.price || 0)}</Text>
       </View>
 
       <Pressable disabled={!canSubmit} onPress={submit} style={[styles.submitBtn, !canSubmit && { opacity: 0.45 }]}>
         <FontAwesome name="calendar-check-o" size={16} color="#fff" />
         <Text style={styles.submitText}>Confirm booking</Text>
       </Pressable>
+      </>
+      )}
         </ScrollView>
         <CustomerBottomNav navigation={navigation} active="CustomerBookings" />
       </View>
@@ -185,4 +210,7 @@ const styles = StyleSheet.create({
   summaryPrice: { color: INK, fontSize: 18, fontWeight: "900" },
   submitBtn: { backgroundColor: PURPLE, borderRadius: 22, minHeight: 54, paddingVertical: 15, alignItems: "center", justifyContent: "center", marginTop: 14, flexDirection: "row", gap: 8 },
   submitText: { color: "#fff", fontSize: 15, fontWeight: "900" },
+  emptyCard: { alignItems: "center", borderRadius: 24, padding: 20, borderWidth: 1, borderColor: LINE, backgroundColor: "#FBFAFF" },
+  emptyTitle: { color: INK, fontSize: 17, fontWeight: "900", marginTop: 10, marginBottom: 5 },
+  emptyText: { color: MUTED, fontSize: 13, textAlign: "center", lineHeight: 19 },
 });

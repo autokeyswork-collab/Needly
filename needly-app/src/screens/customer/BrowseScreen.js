@@ -16,7 +16,6 @@ import {
 } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { CATEGORY_IMAGES } from "../../data/customerAssets";
-import { SERVICE_CATEGORIES } from "../../data/serviceData";
 import { useAuth } from "../../context/AuthContext";
 import { useOrders } from "../../context/OrdersContext";
 import { fmtNaira } from "../../theme/colors";
@@ -122,7 +121,7 @@ function IconButton({ name, family = "FontAwesome", badge, onPress }) {
 export default function BrowseScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
-  const { vendors = [], orders = [], notifications = [], loading, draftCartCount = 0, customerActivity } = useOrders();
+  const { vendors = [], serviceProviders = [], orders = [], notifications = [], loading, draftCartCount = 0, customerActivity } = useOrders();
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 22;
   const carouselWidth = shellWidth - sidePad * 2;
@@ -174,16 +173,15 @@ export default function BrowseScreen({ navigation }) {
         .filter((item) => [item.name, item.subcategory, vendor.name].filter(Boolean).some((value) => value.toLowerCase().includes(q)))
         .map((item) => ({ type: "product", item, vendor }))
     );
-    const serviceHits = Object.entries(SERVICE_CATEGORIES).flatMap(([category, providers]) =>
-      providers.flatMap((provider) => {
-        const direct = [category, provider.name, provider.area].some((value) => value.toLowerCase().includes(q));
-        const services = (provider.services || []).filter((service) => service.name.toLowerCase().includes(q));
-        if (direct) return [{ type: "service", category, provider }];
-        return services.map((service) => ({ type: "service", category, provider, service }));
-      })
-    );
+    const serviceHits = serviceProviders.flatMap((provider) => {
+      const category = provider.category || "Services";
+      const direct = [category, provider.name, provider.area].filter(Boolean).some((value) => value.toLowerCase().includes(q));
+      const services = (provider.services || []).filter((service) => service.name.toLowerCase().includes(q));
+      if (direct) return [{ type: "service", category, provider }];
+      return services.map((service) => ({ type: "service", category, provider, service }));
+    });
     return [...categoryHits, ...vendorHits, ...productHits, ...serviceHits].slice(0, 8);
-  }, [query, vendors]);
+  }, [query, vendors, serviceProviders]);
 
   const slides = useMemo(() => BASE_SLIDES.map((slide) => {
     if (slide.key !== "open-market") return slide;

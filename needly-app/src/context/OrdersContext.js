@@ -11,6 +11,7 @@ export function OrdersProvider({ children }) {
   const [vendors, setVendors] = useState([]);
   const [orders, setOrders] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [serviceProviders, setServiceProviders] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [riderData, setRiderData] = useState({ available: [], assigned: [], completedToday: [] });
   const [disputes, setDisputes] = useState([]);
@@ -24,6 +25,43 @@ export function OrdersProvider({ children }) {
       setVendors(await VendorAPI.list());
     } catch (err) {
       setError(err.message);
+    }
+  }, []);
+
+  const refreshServices = useCallback(async () => {
+    try {
+      const data = await BookingAPI.services();
+      const services = Array.isArray(data) ? data : [];
+      const byProvider = new Map();
+      services.forEach((service) => {
+        const providerId = service.providerId || service.providerName || service.id;
+        const provider = byProvider.get(providerId) || {
+          id: providerId,
+          name: service.providerName || service.providerId,
+          area: service.providerArea || "",
+          rating: service.providerRating ?? null,
+          distance: "",
+          eta: service.providerEta || "",
+          address: service.providerAddress || null,
+          category: service.category,
+          services: [],
+        };
+        provider.category = provider.category || service.category;
+        provider.services.push({
+          id: service.id,
+          name: service.name,
+          price: service.price,
+          duration: service.description || "",
+          description: service.description || "",
+          category: service.category,
+          emoji: service.emoji,
+        });
+        byProvider.set(providerId, provider);
+      });
+      setServiceProviders(Array.from(byProvider.values()));
+    } catch (err) {
+      setError(err.message);
+      setServiceProviders([]);
     }
   }, []);
 
@@ -91,13 +129,14 @@ export function OrdersProvider({ children }) {
     setLoading(true);
     await Promise.all([
       refreshVendors(),
+      refreshServices(),
       refreshOrders(),
       refreshBookings(),
       refreshNotifications(),
       refreshDisputes(),
     ]);
     setLoading(false);
-  }, [refreshVendors, refreshOrders, refreshBookings, refreshNotifications, refreshDisputes]);
+  }, [refreshVendors, refreshServices, refreshOrders, refreshBookings, refreshNotifications, refreshDisputes]);
 
   useEffect(() => {
     if (user) refresh();
@@ -338,7 +377,7 @@ export function OrdersProvider({ children }) {
       loading, error,
       vendors, refreshVendors,
       orders, riderData, refreshOrders,
-      bookings, refreshBookings, createBooking, advanceBookingStatus, cancelBooking,
+      bookings, serviceProviders, refreshBookings, refreshServices, createBooking, advanceBookingStatus, cancelBooking,
       notifications, refreshNotifications, markNotificationRead, markAllNotificationsRead,
       customerActivity, customerActivityLoaded, draftCartCount: countDraftCartItems(customerActivity),
       saveDraftCart, clearDraftCart, saveCheckoutDraft, clearCheckoutDraft,

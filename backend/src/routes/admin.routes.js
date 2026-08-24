@@ -9,6 +9,10 @@ const { INTEGRATION_CATALOG, listIntegrationSettings, upsertIntegrationSetting }
 
 const router = express.Router();
 
+function generateTempPassword() {
+  return `Nd-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36).slice(-4)}`;
+}
+
 const isMissingTableError = (err) => {
   const message = String(err?.message || "");
   return err?.code === "P2021" || /table .* does not exist|does not exist in the current database/i.test(message);
@@ -634,9 +638,10 @@ router.post("/notifications/broadcast", async (req, res) => {
 
 router.post("/users", async (req, res) => {
   try {
-    const { name, email, phone, role = "CUSTOMER", password = "password123", approved = true } = req.body || {};
+    const { name, email, phone, role = "CUSTOMER", password, approved = true } = req.body || {};
     if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
-    const passwordHash = await bcrypt.hash(String(password), 10);
+    const temporaryPassword = password || generateTempPassword();
+    const passwordHash = await bcrypt.hash(String(temporaryPassword), 10);
     const user = await prisma.user.create({
       data: {
         name: String(name).trim(),
@@ -649,7 +654,7 @@ router.post("/users", async (req, res) => {
       select: { id: true, name: true, email: true, phone: true, role: true, approved: true, createdAt: true },
     });
     await logAction(req, { action: "Created user by Super Admin", targetType: "User", targetId: user.id, targetLabel: user.email });
-    res.status(201).json(user);
+    res.status(201).json({ ...user, temporaryPassword: password ? undefined : temporaryPassword });
   } catch (err) {
     res.status(400).json({ error: err.message || "Failed to create user" });
   }
@@ -657,9 +662,10 @@ router.post("/users", async (req, res) => {
 
 router.post("/vendors", async (req, res) => {
   try {
-    const { ownerEmail, ownerName, ownerPhone, password = "password123", name, area = "Abeokuta", category = "Local Market", eta = "20-35 min", address, emoji = "🏪", verified = true, isOpen = true } = req.body || {};
+    const { ownerEmail, ownerName, ownerPhone, password, name, area = "Abeokuta", category = "Local Market", eta = "20-35 min", address, emoji = "🏪", verified = true, isOpen = true } = req.body || {};
     if (!name) return res.status(400).json({ error: "Vendor name is required" });
     let owner = null;
+    const temporaryPassword = ownerEmail && !password ? generateTempPassword() : null;
     if (ownerEmail) {
       owner = await prisma.user.upsert({
         where: { email: String(ownerEmail).trim().toLowerCase() },
@@ -670,7 +676,7 @@ router.post("/vendors", async (req, res) => {
           phone: ownerPhone || null,
           role: "VENDOR",
           approved: true,
-          passwordHash: await bcrypt.hash(String(password), 10),
+          passwordHash: await bcrypt.hash(String(password || temporaryPassword), 10),
         },
       });
     }
@@ -691,7 +697,7 @@ router.post("/vendors", async (req, res) => {
       include: { owner: true, products: true },
     });
     await logAction(req, { action: "Created vendor by Super Admin", targetType: "Vendor", targetId: vendor.id, targetLabel: vendor.name });
-    res.status(201).json(vendor);
+    res.status(201).json({ ...vendor, temporaryPassword });
   } catch (err) {
     res.status(400).json({ error: err.message || "Failed to create vendor" });
   }
@@ -699,8 +705,9 @@ router.post("/vendors", async (req, res) => {
 
 router.post("/riders", async (req, res) => {
   try {
-    const { name, email, phone, password = "password123", zone = "Abeokuta", verified = true, isOnline = false } = req.body || {};
+    const { name, email, phone, password, zone = "Abeokuta", verified = true, isOnline = false } = req.body || {};
     if (!name || !email) return res.status(400).json({ error: "Rider name and email are required" });
+    const temporaryPassword = password || generateTempPassword();
     const user = await prisma.user.upsert({
       where: { email: String(email).trim().toLowerCase() },
       update: { name, phone: phone || null, role: "RIDER", approved: true, suspendedAt: null },
@@ -710,7 +717,7 @@ router.post("/riders", async (req, res) => {
         phone: phone || null,
         role: "RIDER",
         approved: true,
-        passwordHash: await bcrypt.hash(String(password), 10),
+        passwordHash: await bcrypt.hash(String(temporaryPassword), 10),
       },
     });
     const rider = await prisma.rider.upsert({
@@ -720,7 +727,7 @@ router.post("/riders", async (req, res) => {
       include: { user: true },
     });
     await logAction(req, { action: "Created rider by Super Admin", targetType: "Rider", targetId: rider.id, targetLabel: rider.user.name });
-    res.status(201).json(rider);
+    res.status(201).json({ ...rider, temporaryPassword: password ? undefined : temporaryPassword });
   } catch (err) {
     res.status(400).json({ error: err.message || "Failed to create rider" });
   }

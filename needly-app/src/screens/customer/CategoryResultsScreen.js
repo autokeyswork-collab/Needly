@@ -1,7 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { CATEGORIES, MARKETPLACE_SHORTCUTS } from "../../data/mockData";
-import { SERVICE_CATEGORIES } from "../../data/serviceData";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { Pill } from "../../components/Pill";
 import { useOrders } from "../../context/OrdersContext";
@@ -31,13 +30,13 @@ export default function CategoryResultsScreen({ route, navigation }) {
   const { width } = useWindowDimensions();
   const category = route.params?.category || "Auto";
   const shortcut = MARKETPLACE_SHORTCUTS.find((s) => s.key === category);
-  const { vendors, loading } = useOrders();
+  const { vendors, serviceProviders = [], loading } = useOrders();
   const isBuy = CATEGORIES.includes(category);
   const compact = width < 390;
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
   const categoryVendors = vendors.filter((v) => v.category === category);
-  const providers = SERVICE_CATEGORIES[category] || [];
+  const providers = serviceProviders.filter((provider) => category === "Services" ? true : provider.category === category);
   const isOpenMarket = category === "Local Market";
   const heroImage = isOpenMarket ? CATEGORY_IMAGES["Open Market Hero"] : CATEGORY_IMAGES[category];
   const title = shortcut?.title || category;
@@ -108,7 +107,9 @@ export default function CategoryResultsScreen({ route, navigation }) {
                     <Text numberOfLines={1} style={[styles.cardTitle, compact && styles.cardTitleCompact]}>{vendor.name}</Text>
                     <Text style={[styles.openBadge, !vendor.isOpen && styles.closedBadge]}>{vendor.isOpen ? "Open" : "Closed"}</Text>
                   </View>
-                  <Text numberOfLines={1} style={[styles.meta, compact && styles.metaCompact]}>{vendor.area} · {vendor.eta} · ★ {vendor.rating || "4.5"}</Text>
+                  <Text numberOfLines={1} style={[styles.meta, compact && styles.metaCompact]}>
+                    {[vendor.area, vendor.eta, vendor.rating ? `★ ${vendor.rating}` : null].filter(Boolean).join(" · ")}
+                  </Text>
                   {vendor.address && <Text numberOfLines={2} style={[styles.address, compact && styles.addressCompact]}>📍 {vendor.address}</Text>}
                   <View style={styles.productPreviewRow}>
                     {(vendor.items || []).slice(0, 3).map((item) => (
@@ -137,7 +138,9 @@ export default function CategoryResultsScreen({ route, navigation }) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={[styles.cardTitle, compact && styles.cardTitleCompact]}>{provider.name}</Text>
-                  <Text numberOfLines={1} style={[styles.meta, compact && styles.metaCompact]}>{provider.area} · {provider.distance} · ★ {provider.rating}</Text>
+                  <Text numberOfLines={1} style={[styles.meta, compact && styles.metaCompact]}>
+                    {[provider.area, provider.distance, provider.eta, provider.rating ? `★ ${provider.rating}` : null].filter(Boolean).join(" · ")}
+                  </Text>
                   <Text numberOfLines={2} style={[styles.address, compact && styles.addressCompact]}>{provider.services.map((s) => s.name).slice(0, 3).join(", ")}</Text>
                 </View>
               </Pressable>

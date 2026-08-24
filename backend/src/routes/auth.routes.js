@@ -111,22 +111,6 @@ function normalizeRiderProfile(profile) {
   return { zone };
 }
 
-function rememberPendingUser(user, related = {}) {
-  if (!user || !(user.role === "VENDOR" || user.role === "RIDER")) return;
-  const existingIdx = IN_MEMORY_PENDING_USERS.findIndex((pending) => pending.id === user.id || pending.email === user.email);
-  if (existingIdx !== -1) IN_MEMORY_PENDING_USERS.splice(existingIdx, 1);
-  IN_MEMORY_PENDING_USERS.unshift({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    role: user.role,
-    createdAt: user.createdAt?.toISOString?.() || new Date().toISOString(),
-    vendor: related.vendor || null,
-    rider: related.rider || null,
-  });
-}
-
 async function queuePendingApprovalMail({ user, vendor, rider, provider }) {
   const roleLabel = user.role === "VENDOR" ? "vendor store" : "rider profile";
   const subject = user.role === "VENDOR"
@@ -226,49 +210,10 @@ function signToken(user) {
 
 function normalizeSessionUserRole(user) {
   if (!user) return user;
-  if (user.email === "superadmin@demo.needly") {
-    return { ...user, name: "Super Admin", role: "SUPER_ADMIN" };
-  }
   if (user.role === "CUSTOMER" && user.vendor) return { ...user, role: "VENDOR" };
   if (user.role === "CUSTOMER" && user.managedVendor) return { ...user, role: "MANAGER" };
   if (user.role === "CUSTOMER" && user.rider) return { ...user, role: "RIDER" };
   return user;
-}
-
-const IN_MEMORY_PENDING_USERS = [
-  {
-    id: "u-pending-v1",
-    name: "Bisi Akande",
-    email: "bisiamala@demo.needly",
-    phone: "08039998877",
-    role: "VENDOR",
-    createdAt: new Date().toISOString(),
-    vendor: {
-      id: "v-pending-1",
-      name: "Bisi Special Amala Spot",
-      category: "Restaurant",
-      area: "Oke-Ilewo",
-      address: "14 Lalubu Street, Oke-Ilewo, Abeokuta",
-    },
-  },
-];
-
-const DEMO_LOGIN_FALLBACKS = {
-  "customer@demo.needly": { id: "demo-customer", name: "Ada Customer", email: "customer@demo.needly", role: "CUSTOMER" },
-  "mamarisi@demo.needly": { id: "demo-vendor", name: "Mama Risi", email: "mamarisi@demo.needly", role: "VENDOR" },
-  "rider@demo.needly": { id: "demo-rider", name: "Tunde A.", email: "rider@demo.needly", role: "RIDER" },
-  "manager@demo.needly": { id: "demo-manager", name: "Amaka O.", email: "manager@demo.needly", role: "MANAGER" },
-  "admin@demo.needly": { id: "demo-admin", name: "Admin", email: "admin@demo.needly", role: "ADMIN" },
-  "superadmin@demo.needly": { id: "demo-super-admin", name: "Super Admin", email: "superadmin@demo.needly", role: "SUPER_ADMIN" },
-};
-
-function maybeDemoLogin(inputStr, password) {
-  const user = DEMO_LOGIN_FALLBACKS[inputStr];
-  if (!user || password !== "password123") return null;
-  return {
-    token: signToken(user),
-    user,
-  };
 }
 
 /**
@@ -350,7 +295,6 @@ router.post("/register", authLimiter, async (req, res) => {
     const { user, vendor, rider } = result;
 
     if (requiresApproval) {
-      rememberPendingUser(user, { vendor, rider });
       const onboardingPayment = targetRole === "VENDOR"
         ? await createVendorOnboardingPayment({ user, vendor })
         : null;
@@ -384,16 +328,6 @@ router.post("/register", authLimiter, async (req, res) => {
     return res.status(500).json({ error: "Registration failed. Please try again or contact Needly support." });
   }
 });
-
-// Fallback demo users if DB is unreachable in sandboxed local environment
-const DEMO_USERS = [
-  { id: "u-cust", name: "Amina Lawal", email: "customer@demo.needly", phone: "08032201141", role: "CUSTOMER", approved: true },
-  { id: "u-vend", name: "Risikat Adewale", email: "mamarisi@demo.needly", phone: "08032201142", role: "VENDOR", approved: true, vendor: { id: "v1", name: "Mama Risi Kitchen", area: "Central Zone", category: "Restaurant", isOpen: true, rating: 4.7 } },
-  { id: "u-rider", name: "Tunde Bakare", email: "rider@demo.needly", phone: "08032201143", role: "RIDER", approved: true, rider: { id: "r1", zone: "Central Zone", isOnline: true, rating: 4.8 } },
-  { id: "u-mgr", name: "Funmi Balogun", email: "manager@demo.needly", phone: "08032201144", role: "MANAGER", approved: true, managedVendor: { id: "v3", name: "Needly Fresh Market", area: "Central Zone", category: "Local Market", isOpen: true } },
-  { id: "u-admin", name: "Admin", email: "admin@demo.needly", phone: "08032201145", role: "ADMIN", approved: true },
-  { id: "u-super-admin", name: "Super Admin", email: "superadmin@demo.needly", phone: "08032201146", role: "SUPER_ADMIN", approved: true },
-];
 
 /**
  * POST /auth/social
@@ -483,7 +417,6 @@ router.post("/social", authLimiter, async (req, res) => {
       user = result.user;
 
       if (requiresApproval) {
-        rememberPendingUser(user, { vendor: result.vendor, rider: result.rider });
         const onboardingPayment = targetRole === "VENDOR"
           ? await createVendorOnboardingPayment({ user, vendor: result.vendor })
           : null;
@@ -543,37 +476,16 @@ router.post("/login", authLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error("Login lookup failed", err);
-    const demo = maybeDemoLogin(inputStr, password);
-    if (demo) return res.json(demo);
-    throw err;
+    return res.status(503).json({ error: "Database is unavailable. Please try again shortly." });
   }
 
   if (!user) {
-    const demo = maybeDemoLogin(inputStr, password);
-    if (demo) return res.json(demo);
     return res.status(401).json({ error: "Invalid email/phone or password" });
   }
 
-  // If user object has passwordHash, verify with bcrypt; else check default password123
   let valid = false;
   if (user.passwordHash) {
     valid = await bcrypt.compare(password, user.passwordHash).catch(() => false);
-  } else {
-    valid = password === "password123" || password === "password" || password.length >= 6;
-  }
-
-  const demoUser = DEMO_LOGIN_FALLBACKS[inputStr];
-  if (!valid && demoUser && password === "password123") {
-    valid = true;
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        name: demoUser.name,
-        role: demoUser.role,
-        approved: true,
-        suspendedAt: null,
-      },
-    });
   }
 
   if (!valid) return res.status(401).json({ error: "Invalid email/phone or password" });
@@ -660,7 +572,7 @@ router.patch("/me/password", requireAuth, async (req, res) => {
 
   const valid = user.passwordHash
     ? await bcrypt.compare(cleanCurrent, user.passwordHash).catch(() => false)
-    : cleanCurrent === "password123" || cleanCurrent === "password";
+    : false;
 
   if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
 
@@ -1018,21 +930,9 @@ router.patch("/users/:id/approve", requireAuth, requireRole("ADMIN"), async (req
       });
     }
   } catch (err) {
-    // Fallback for in-memory pending user approval
-    const memIdx = IN_MEMORY_PENDING_USERS.findIndex((u) => u.id === req.params.id);
-    if (memIdx !== -1) {
-      const [removed] = IN_MEMORY_PENDING_USERS.splice(memIdx, 1);
-      user = { ...removed, approved: true };
-      DEMO_USERS.push(user);
-    } else {
-      console.error("Approve account failed", err);
-      return res.status(500).json({ error: "Could not approve this account. Please refresh and try again." });
-    }
+    console.error("Approve account failed", err);
+    return res.status(500).json({ error: "Could not approve this account. Please refresh and try again." });
   }
-
-  // Remove from in-memory pending array if present
-  const memIdx = IN_MEMORY_PENDING_USERS.findIndex((u) => u.id === req.params.id || (user?.email && u.email === user.email));
-  if (memIdx !== -1) IN_MEMORY_PENDING_USERS.splice(memIdx, 1);
 
   await logAction(req, { action: "Approved account", targetType: user.role === "RIDER" ? "Rider" : "Vendor", targetId: user.id, targetLabel: user.name });
   broadcastProviderStatus({ userId: user.id, role: user.role, status: "approved" });
