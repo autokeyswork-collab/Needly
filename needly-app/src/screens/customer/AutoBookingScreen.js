@@ -1,14 +1,22 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { ALL_SERVICE_PROVIDERS, AUTO_PROVIDERS } from "../../data/serviceData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
+import CustomerBottomNav from "../../components/CustomerBottomNav";
 
 const INK = "#15183F";
 const PURPLE = "#6F45E9";
+const PURPLE_DARK = "#35109B";
+const MUTED = "#777991";
+const LINE = "#ECE8F7";
 
 export default function AutoBookingScreen({ route, navigation }) {
+  const { width } = useWindowDimensions();
+  const shellWidth = Math.min(width, 430);
+  const sidePad = shellWidth < 370 ? 14 : 18;
   const providers = ALL_SERVICE_PROVIDERS.length ? ALL_SERVICE_PROVIDERS : AUTO_PROVIDERS;
   const initialProviderId = route.params?.providerId || providers[0].id;
   const [providerId, setProviderId] = useState(initialProviderId);
@@ -54,10 +62,22 @@ export default function AutoBookingScreen({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.overline}>BOOK {providerCategory.toUpperCase()} SERVICE</Text>
-      <Text style={styles.title}>Find a trusted service near you</Text>
-      <Text style={styles.subtitle}>Choose a provider, service, time, and location. This creates a customer booking request inside Needly.</Text>
+    <View style={styles.page}>
+      <View style={styles.shell}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: sidePad }]} showsVerticalScrollIndicator={false}>
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <Pressable style={styles.backCircle} onPress={() => navigation.navigate("Browse")}>
+            <Text style={styles.backIcon}>‹</Text>
+          </Pressable>
+          <View style={styles.heroIcon}>
+            <MaterialCommunityIcons name="car-wrench" size={22} color="#fff" />
+          </View>
+        </View>
+        <Text style={styles.overline}>BOOK {providerCategory.toUpperCase()} SERVICE</Text>
+        <Text style={styles.title}>Book auto service</Text>
+        <Text style={styles.subtitle}>Choose a trusted provider, time, and Abeokuta location.</Text>
+      </View>
 
       <Text style={styles.label}>PROVIDER</Text>
       <View style={styles.pickerWrap}>
@@ -73,8 +93,13 @@ export default function AutoBookingScreen({ route, navigation }) {
         </Picker>
       </View>
       <View style={styles.providerCard}>
+        <View style={styles.providerIcon}>
+          <MaterialCommunityIcons name="storefront-outline" size={20} color={PURPLE} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.providerName}>{provider.name}</Text>
         <Text style={styles.meta}>{provider.distance} · {provider.eta} · ★ {provider.rating}</Text>
+        </View>
       </View>
 
       <Text style={styles.label}>SERVICE</Text>
@@ -119,25 +144,36 @@ export default function AutoBookingScreen({ route, navigation }) {
       </View>
 
       <Pressable disabled={!canSubmit} onPress={submit} style={[styles.submitBtn, !canSubmit && { opacity: 0.45 }]}>
+        <FontAwesome name="calendar-check-o" size={16} color="#fff" />
         <Text style={styles.submitText}>Confirm booking</Text>
       </Pressable>
-    </ScrollView>
+        </ScrollView>
+        <CustomerBottomNav navigation={navigation} active="CustomerBookings" />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
-  content: { padding: 18, paddingBottom: 36 },
-  overline: { color: PURPLE, fontSize: 11, fontWeight: "900", marginBottom: 8 },
-  title: { color: INK, fontSize: 25, fontWeight: "900" },
-  subtitle: { color: COLORS.mute, fontSize: 13.5, lineHeight: 19, marginTop: 6, marginBottom: 18 },
-  label: { color: COLORS.mute, fontSize: 11, fontWeight: "900", marginBottom: 7, marginTop: 12 },
+  page: { flex: 1, backgroundColor: "#ECE8F7", alignItems: "center" },
+  shell: { flex: 1, width: "100%", maxWidth: 430, backgroundColor: "#fff", overflow: "hidden" },
+  content: { paddingTop: 14, paddingBottom: 124 },
+  hero: { borderRadius: 28, padding: 16, backgroundColor: PURPLE_DARK, marginBottom: 16, overflow: "hidden" },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
+  backCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
+  backIcon: { color: "#fff", fontSize: 31, lineHeight: 31, fontWeight: "800" },
+  heroIcon: { width: 42, height: 42, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" },
+  overline: { color: "rgba(255,255,255,0.76)", fontSize: 11, fontWeight: "900", marginBottom: 7 },
+  title: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },
+  subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 13.5, lineHeight: 19, marginTop: 6 },
+  label: { color: MUTED, fontSize: 11, fontWeight: "900", marginBottom: 7, marginTop: 12 },
   pickerWrap: { borderWidth: 1, borderColor: "#ECE8F7", borderRadius: 14, overflow: "hidden", backgroundColor: "#fff" },
-  providerCard: { backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#E6DDFD", borderRadius: 16, padding: 13, marginTop: 10 },
+  providerCard: { backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#E6DDFD", borderRadius: 18, padding: 13, marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  providerIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   providerName: { color: INK, fontSize: 15, fontWeight: "900" },
   meta: { color: COLORS.mute, fontSize: 12.5, marginTop: 3 },
   serviceList: { gap: 8 },
-  serviceCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: "#ECE8F7", borderRadius: 16, padding: 13 },
+  serviceCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: LINE, borderRadius: 18, padding: 13, gap: 10 },
   serviceCardActive: { borderColor: PURPLE, backgroundColor: "#F8F5FF" },
   serviceName: { color: INK, fontSize: 14, fontWeight: "900" },
   price: { color: INK, fontSize: 13.5, fontWeight: "900" },
@@ -147,6 +183,6 @@ const styles = StyleSheet.create({
   summaryCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#E6DDFD", borderRadius: 16, padding: 14, marginTop: 16 },
   summaryLabel: { color: COLORS.mute, fontSize: 13, fontWeight: "700" },
   summaryPrice: { color: INK, fontSize: 18, fontWeight: "900" },
-  submitBtn: { backgroundColor: PURPLE, borderRadius: 18, paddingVertical: 15, alignItems: "center", marginTop: 14 },
+  submitBtn: { backgroundColor: PURPLE, borderRadius: 22, minHeight: 54, paddingVertical: 15, alignItems: "center", justifyContent: "center", marginTop: 14, flexDirection: "row", gap: 8 },
   submitText: { color: "#fff", fontSize: 15, fontWeight: "900" },
 });

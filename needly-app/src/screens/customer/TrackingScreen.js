@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { STATUS_FLOW, STATUS_LABEL } from "../../data/mockData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 import { getSocket } from "../../api/socket";
 import { PaymentAPI, ReviewAPI } from "../../api/client";
 import StarRating from "../../components/StarRating";
+import CustomerBottomNav from "../../components/CustomerBottomNav";
 
 const DISPUTE_REASONS = ["Missing item", "Wrong item", "Item damaged", "Arrived late", "Other"];
 const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
@@ -144,11 +145,16 @@ function TrackingMap({ order }) {
 
 export default function TrackingScreen({ route, navigation }) {
   const orderId = route?.params?.orderId;
+  const paymentReference = route?.params?.paymentReference;
   const { orders = [], loading, refreshOrders, raiseDispute } = useOrders();
+  const { width } = useWindowDimensions();
   const order = orders.find((o) => o.id === orderId);
+  const shellWidth = Math.min(width, 430);
+  const sidePad = shellWidth < 370 ? 14 : 18;
   const [reportOpen, setReportOpen] = useState(false);
   const [payingAgain, setPayingAgain] = useState(false);
   const [payError, setPayError] = useState(null);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [vendorStars, setVendorStars] = useState(0);
   const [riderStars, setRiderStars] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
@@ -169,6 +175,18 @@ export default function TrackingScreen({ route, navigation }) {
       socket.off("order:updated", onUpdate);
     };
   }, [orderId, refreshOrders]);
+
+  useEffect(() => {
+    const reference = paymentReference || order?.paymentReference;
+    if (!reference || order?.paymentStatus === "paid") return;
+    let active = true;
+    setVerifyingPayment(true);
+    PaymentAPI.verify(reference)
+      .then(() => refreshOrders())
+      .catch(() => {})
+      .finally(() => { if (active) setVerifyingPayment(false); });
+    return () => { active = false; };
+  }, [paymentReference, order?.paymentReference, order?.paymentStatus, refreshOrders]);
 
   if (!orderId) {
     return (
@@ -235,14 +253,32 @@ export default function TrackingScreen({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.paper }} contentContainerStyle={{ padding: 16 }}>
-      <Text style={styles.title}>Order #{order.id.slice(-6)}</Text>
-      <Text style={styles.subtitle}>{order.vendor?.name || "Needly vendor"} {"\u00B7"} {fmtNaira(order.total)}</Text>
-      {order.deliveryAddress && (
-        <Text style={styles.address}>{"\uD83D\uDCCD"} {order.deliveryAddress}</Text>
-      )}
+    <View style={styles.page}>
+      <View style={styles.shell}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: sidePad }]} showsVerticalScrollIndicator={false}>
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <Pressable style={styles.backCircle} onPress={() => navigation.navigate("CustomerOrders")}>
+                <Text style={styles.backIcon}>‹</Text>
+              </Pressable>
+              <View style={[styles.paymentMini, order.paymentStatus === "paid" && styles.paymentMiniPaid]}>
+                <Text style={[styles.paymentMiniText, order.paymentStatus === "paid" && styles.paymentMiniTextPaid]}>
+                  {order.paymentStatus === "paid" ? "Paid" : verifyingPayment ? "Verifying" : "Pending"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.title}>Track order</Text>
+            <Text style={styles.subtitle}>#{order.id.slice(-6)} · {order.vendor?.name || "Needly vendor"}</Text>
+            <View style={styles.heroTotalRow}>
+              <Text style={styles.heroTotalLabel}>Total paid</Text>
+              <Text style={styles.heroTotal}>{fmtNaira(order.customerPaidAmount || order.total)}</Text>
+            </View>
+          </View>
+          {order.deliveryAddress && (
+            <Text style={styles.address}>{"\uD83D\uDCCD"} {order.deliveryAddress}</Text>
+          )}
 
-      <View style={{ marginTop: 20 }}>
+      <View style={{ marginTop: 14 }}>
         {order.status === "cancelled" ? (
           <View style={styles.cancelledBox}>
             <Text style={{ fontWeight: "700", fontSize: 14.5, marginBottom: 6 }}>
@@ -273,11 +309,13 @@ export default function TrackingScreen({ route, navigation }) {
           </View>
         ) : awaitingPayment ? (
           <View style={styles.paymentBox}>
-            <Text style={{ fontWeight: "700", fontSize: 14.5, marginBottom: 6 }}>Awaiting payment</Text>
+            <Text style={{ fontWeight: "800", fontSize: 14.5, marginBottom: 6 }}>{verifyingPayment ? "Confirming your payment" : "Awaiting payment"}</Text>
             <Text style={{ fontSize: 13, color: COLORS.mute, marginBottom: 12 }}>
-              Your order is saved but won't reach the vendor until payment is confirmed. If the payment page didn't open or you closed it, tap below to try again.
+              {verifyingPayment
+                ? "Flutterwave or Paystack says your payment is being checked. This page will update when the backend confirms it."
+                : "Your order is saved but won't reach the vendor until payment is confirmed. If the payment page didn't open or you closed it, tap below to try again."}
             </Text>
-            <Pressable onPress={retryPayment} disabled={payingAgain} style={styles.payBtn}>
+            <Pressable onPress={retryPayment} disabled={payingAgain || verifyingPayment} style={styles.payBtn}>
               <Text style={styles.payBtnText}>{payingAgain ? "Opening\u2026" : "Complete payment"}</Text>
             </Pressable>
             {payError && <Text style={{ color: COLORS.chili, fontSize: 12.5, marginTop: 8 }}>{payError}</Text>}
@@ -376,10 +414,13 @@ export default function TrackingScreen({ route, navigation }) {
         </View>
       )}
 
-      <Pressable onPress={() => navigation.popToTop()} style={{ marginTop: 12 }}>
-        <Text style={{ color: COLORS.indigo, fontWeight: "700", fontSize: 13.5 }}>{"\u2190"} Order something else</Text>
-      </Pressable>
-    </ScrollView>
+          <Pressable onPress={() => navigation.popToTop()} style={styles.shopMoreBtn}>
+            <Text style={styles.shopMoreText}>{"\u2190"} Order something else</Text>
+          </Pressable>
+        </ScrollView>
+        <CustomerBottomNav navigation={navigation} active="CustomerOrders" />
+      </View>
+    </View>
   );
 }
 
@@ -389,11 +430,25 @@ const styles = StyleSheet.create({
   stateText: { color: COLORS.mute, fontSize: 13.5, lineHeight: 19, textAlign: "center", marginTop: 7, marginBottom: 16 },
   stateBtn: { borderRadius: 20, backgroundColor: COLORS.indigo, paddingHorizontal: 18, paddingVertical: 11 },
   stateBtnText: { color: "#fff", fontSize: 13.5, fontWeight: "800" },
-  title: { fontWeight: "800", fontSize: 19, color: COLORS.ink },
-  subtitle: { fontSize: 13.5, color: COLORS.mute, marginTop: 2, marginBottom: 2 },
-  address: { fontSize: 12.5, color: COLORS.mute, marginBottom: 6 },
-  paymentBox: { backgroundColor: "#FFF1DA", borderWidth: 1, borderColor: COLORS.mango, borderRadius: 12, padding: 14 },
-  cancelledBox: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 14 },
+  page: { flex: 1, backgroundColor: "#ECE8F7", alignItems: "center" },
+  shell: { flex: 1, width: "100%", maxWidth: 430, backgroundColor: "#FFFFFF", overflow: "hidden" },
+  content: { paddingTop: 14, paddingBottom: 124 },
+  hero: { borderRadius: 28, padding: 16, backgroundColor: "#35109B", marginBottom: 14, overflow: "hidden" },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
+  backCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
+  backIcon: { color: "#fff", fontSize: 31, lineHeight: 31, fontWeight: "800" },
+  paymentMini: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: "#FEF3C7" },
+  paymentMiniPaid: { backgroundColor: "#DCFCE7" },
+  paymentMiniText: { color: "#92400E", fontSize: 12, fontWeight: "900" },
+  paymentMiniTextPaid: { color: "#10B981" },
+  title: { fontWeight: "900", fontSize: 30, color: "#FFFFFF" },
+  subtitle: { fontSize: 13.5, color: "rgba(255,255,255,0.82)", marginTop: 4, fontWeight: "700" },
+  heroTotalRow: { marginTop: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", padding: 13, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  heroTotalLabel: { color: "rgba(255,255,255,0.74)", fontSize: 11, fontWeight: "900" },
+  heroTotal: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
+  address: { fontSize: 12.5, color: "#777991", marginBottom: 6, fontWeight: "700" },
+  paymentBox: { backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F59E0B", borderRadius: 20, padding: 14 },
+  cancelledBox: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#ECE8F7", borderRadius: 20, padding: 14 },
   tryAgainBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, alignSelf: "flex-start" },
   tryAgainBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   payBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, alignItems: "center" },
@@ -401,14 +456,14 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6 },
   connector: { width: 2, flex: 1, minHeight: 24 },
   stepText: { fontSize: 14, paddingBottom: 20 },
-  mapCard: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.line, borderRadius: 14, padding: 12, marginBottom: 16 },
+  mapCard: { backgroundColor: COLORS.panel, borderWidth: 1, borderColor: "#ECE8F7", borderRadius: 22, padding: 12, marginBottom: 16 },
   mapHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 },
   mapTitle: { color: COLORS.ink, fontWeight: "800", fontSize: 14.5 },
   mapSubtitle: { color: COLORS.mute, fontSize: 12.2, marginTop: 2 },
   mapBtn: { backgroundColor: COLORS.ink, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   mapBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   mapCanvas: {
-    height: 285, borderRadius: 12, overflow: "hidden", backgroundColor: "#E5F2E9",
+    height: 315, borderRadius: 16, overflow: "hidden", backgroundColor: "#E5F2E9",
     borderWidth: 1, borderColor: COLORS.line, position: "relative",
   },
   routeLine: { position: "absolute", left: "16%", right: "14%", top: "50%", height: 3, backgroundColor: COLORS.mango, opacity: 0.75 },
@@ -447,4 +502,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, alignSelf: "flex-start",
   },
   reportBtnText: { color: COLORS.chili, fontWeight: "700", fontSize: 13 },
+  shopMoreBtn: { marginTop: 12, marginBottom: 8, alignSelf: "flex-start" },
+  shopMoreText: { color: "#642BE4", fontWeight: "900", fontSize: 13.5 },
 });

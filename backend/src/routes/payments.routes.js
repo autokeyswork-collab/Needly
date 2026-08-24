@@ -2,7 +2,8 @@ const express = require("express");
 const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { requireAuth, requireRole } = require("../middleware/auth");
-const { getPaystackSecretKey } = require("../lib/paystack");
+const { getPaystackSecretKey, verifyTransaction } = require("../lib/paystack");
+const { verifyFlutterwaveTransactionByReference } = require("../lib/flutterwave");
 const { getAvailablePaymentGateways, initializeHostedPayment } = require("../lib/paymentGateway");
 const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
@@ -371,6 +372,47 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
   });
 
   res.json({ authorizationUrl: txn.authorization_url, gateway: txn.gateway || "paystack", reference, ...split });
+});
+
+router.post("/verify", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
+  const reference = String(req.body?.reference || "").trim();
+  if (!reference) return res.status(400).json({ error: "Payment reference is required" });
+
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { order: true },
+  });
+  if (!payment) return res.status(404).json({ error: "Payment not found" });
+  if (payment.order.customerId !== req.user.id) return res.status(403).json({ error: "Not your payment" });
+  if (payment.status === "PAID") {
+    return res.json({ status: "PAID", reference, orderId: payment.orderId });
+  }
+
+  try {
+    const gateway = String(payment.gateway || "").toLowerCase();
+    let successful = false;
+    let providerAmount = 0;
+
+    if (gateway === "flutterwave") {
+      const data = await verifyFlutterwaveTransactionByReference(reference);
+      successful = ["successful", "success"].includes(String(data.status || "").toLowerCase());
+      providerAmount = Math.round(Number(data.amount || 0));
+    } else {
+      const data = await verifyTransaction(reference);
+      successful = String(data.status || "").toLowerCase() === "success";
+      providerAmount = Math.round(Number(data.amount || 0) / 100);
+    }
+
+    if (successful && providerAmount >= Number(payment.amount || 0)) {
+      await markOrderPaymentPaid(reference, req);
+      return res.json({ status: "PAID", reference, orderId: payment.orderId });
+    }
+
+    await markOrderPaymentFailed(reference, req);
+    return res.json({ status: "FAILED", reference, orderId: payment.orderId });
+  } catch (err) {
+    return res.status(502).json({ error: err.message || "Payment verification failed" });
+  }
 });
 
 /**

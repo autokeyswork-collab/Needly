@@ -1,10 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
 import { StatusPill } from "../../components/Pill";
 import { fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
+import { PaymentAPI } from "../../api/client";
 
 const PURPLE = "#642BE4";
 const PURPLE_DARK = "#35109B";
@@ -79,11 +80,24 @@ function OrderCard({ order, featured, onPress }) {
   );
 }
 
-export default function CustomerOrdersScreen({ navigation }) {
+export default function CustomerOrdersScreen({ route, navigation }) {
   const { width } = useWindowDimensions();
-  const { orders = [], loading } = useOrders();
+  const { orders = [], loading, refreshOrders } = useOrders();
+  const [verifyingReference, setVerifyingReference] = useState(null);
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
+  const paymentReference = route?.params?.paymentReference;
+
+  useEffect(() => {
+    if (!paymentReference) return undefined;
+    let active = true;
+    setVerifyingReference(paymentReference);
+    PaymentAPI.verify(paymentReference)
+      .then(() => refreshOrders())
+      .catch(() => refreshOrders())
+      .finally(() => { if (active) setVerifyingReference(null); });
+    return () => { active = false; };
+  }, [paymentReference, refreshOrders]);
 
   const sortedOrders = useMemo(() => (
     orders.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
@@ -113,6 +127,12 @@ export default function CustomerOrdersScreen({ navigation }) {
             </View>
             <Text style={styles.heroTitle}>Orders</Text>
             <Text style={styles.heroSub}>Track deliveries, payments and past purchases.</Text>
+            {!!verifyingReference && (
+              <View style={styles.verifyPill}>
+                <Ionicons name="sync" size={14} color="#fff" />
+                <Text style={styles.verifyPillText}>Confirming payment...</Text>
+              </View>
+            )}
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>{activeOrders.length}</Text>
@@ -207,6 +227,8 @@ const styles = StyleSheet.create({
   walletPillText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   heroTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
   heroSub: { color: "rgba(255,255,255,0.82)", fontSize: 13.5, fontWeight: "700", marginTop: 4, marginBottom: 18 },
+  verifyPill: { alignSelf: "flex-start", borderRadius: 16, backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 6, marginTop: -8, marginBottom: 14 },
+  verifyPillText: { color: "#fff", fontSize: 11.5, fontWeight: "900" },
   statsRow: { flexDirection: "row", gap: 9 },
   statBox: { flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.12)" },
   statBoxWide: { flex: 1.35, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.12)" },
