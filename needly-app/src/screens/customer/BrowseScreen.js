@@ -119,6 +119,13 @@ function IconButton({ name, family = "FontAwesome", badge, onPress }) {
   );
 }
 
+function bannerImageFor(category) {
+  return CATEGORY_IMAGES[category]
+    || (category === "Local Market" ? CATEGORY_IMAGES["Open Market Hero"] : null)
+    || CATEGORY_IMAGES["Open Market Hero"]
+    || CATEGORY_IMAGES["Local Market"];
+}
+
 export default function BrowseScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
@@ -215,7 +222,7 @@ export default function BrowseScreen({ navigation }) {
         body: banner.body || "Discover trusted local products and services.",
         cta: banner.cta || "Shop Now",
         badge: banner.badge || "Needly advert",
-        image: banner.imageUrl ? { uri: banner.imageUrl } : (CATEGORY_IMAGES["Open Market Hero"] || CATEGORY_IMAGES["Local Market"]),
+        image: banner.imageUrl ? { uri: banner.imageUrl } : bannerImageFor(banner.category || "Local Market"),
       }));
     return mapped.length ? mapped : defaultSlides;
   }, [defaultSlides, remoteBanners]);
