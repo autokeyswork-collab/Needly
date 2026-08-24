@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "repair:prod-migrations": "sh scripts/repair-production-migrations.sh",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"
   },
