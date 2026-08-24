@@ -350,7 +350,7 @@ export const ReviewAPI = {
 export const PaymentAPI = {
   platformFee: () => request("/payments/platform-fee").catch(() => ({ platformFeePercent: 2.5, riderFeePercent: 5 })),
   options: () => request("/payments/options").catch(() => ({ gateways: [], defaultGateway: null })),
-  initialize: (orderId, gateway) => request("/payments/initialize", { method: "POST", body: { orderId, gateway } }),
+  initialize: (orderId, gateway, customerEmail) => request("/payments/initialize", { method: "POST", body: { orderId, gateway, customerEmail } }),
   verify: (reference) => request("/payments/verify", { method: "POST", body: { reference } }),
   confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),
 };

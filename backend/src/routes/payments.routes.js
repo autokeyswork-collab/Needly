@@ -303,6 +303,7 @@ router.get("/options", requireAuth, async (_req, res) => {
  */
 router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   const { orderId, gateway } = req.body;
+  const requestedEmail = String(req.body?.customerEmail || "").trim().toLowerCase();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { customer: true, vendor: true, payment: true },
@@ -325,12 +326,24 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
   const delivery = calculateDeliveryFee(order);
   const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm);
   const reference = `needly_${order.id}_${Date.now()}`;
-  const customerEmail = String(order.customer.email || "").trim().toLowerCase();
+  const storedEmail = String(order.customer.email || "").trim().toLowerCase();
+  const customerEmail = requestedEmail || storedEmail;
 
   if (!isValidEmail(customerEmail)) {
     return res.status(400).json({
-      error: "Paystack requires a valid email address. Please update your email in Profile, then try payment again.",
+      error: "Paystack requires a valid email address. Enter your email on this order page, then try payment again.",
     });
+  }
+
+  if (requestedEmail && requestedEmail !== storedEmail) {
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: requestedEmail,
+        NOT: { id: req.user.id },
+      },
+    });
+    if (existing) return res.status(400).json({ error: "Another account already uses this email address" });
+    await prisma.user.update({ where: { id: req.user.id }, data: { email: requestedEmail } });
   }
 
   let txn;

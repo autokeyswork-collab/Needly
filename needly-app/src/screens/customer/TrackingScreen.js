@@ -3,6 +3,7 @@ import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { STATUS_FLOW, STATUS_LABEL } from "../../data/mockData";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
+import { useAuth } from "../../context/AuthContext";
 import { getSocket } from "../../api/socket";
 import { PaymentAPI, ReviewAPI } from "../../api/client";
 import StarRating from "../../components/StarRating";
@@ -78,6 +79,10 @@ function inAbeokuta(point) {
     && longitude <= ABEOKUTA_BOUNDS.maxLng;
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 function TrackingMap({ order }) {
   const rawPoints = buildTrackingPoints(order);
   const points = {
@@ -147,6 +152,7 @@ export default function TrackingScreen({ route, navigation }) {
   const orderId = route?.params?.orderId;
   const paymentReference = route?.params?.paymentReference;
   const { orders = [], loading, refreshOrders, raiseDispute } = useOrders();
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const order = orders.find((o) => o.id === orderId);
   const shellWidth = Math.min(width, 430);
@@ -154,6 +160,7 @@ export default function TrackingScreen({ route, navigation }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [payingAgain, setPayingAgain] = useState(false);
   const [payError, setPayError] = useState(null);
+  const [paymentEmail, setPaymentEmail] = useState(user?.email || "");
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [vendorStars, setVendorStars] = useState(0);
   const [riderStars, setRiderStars] = useState(0);
@@ -217,10 +224,15 @@ export default function TrackingScreen({ route, navigation }) {
   const awaitingPayment = order.status === "placed" && order.paymentStatus !== "paid";
 
   const retryPayment = async () => {
+    const cleanPaymentEmail = paymentEmail.trim().toLowerCase();
+    if (!isValidEmail(cleanPaymentEmail)) {
+      setPayError("Enter a valid email address for Paystack.");
+      return;
+    }
     setPayingAgain(true);
     setPayError(null);
     try {
-      const { authorizationUrl } = await PaymentAPI.initialize(order.id);
+      const { authorizationUrl } = await PaymentAPI.initialize(order.id, null, cleanPaymentEmail);
       if (!/^https?:\/\//i.test(String(authorizationUrl || ""))) {
         throw new Error("Payment link was not created. Please try from your cart again.");
       }
@@ -315,7 +327,21 @@ export default function TrackingScreen({ route, navigation }) {
                 ? "Flutterwave or Paystack says your payment is being checked. This page will update when the backend confirms it."
                 : "Your order is saved but won't reach the vendor until payment is confirmed. If the payment page didn't open or you closed it, tap below to try again."}
             </Text>
-            <Pressable onPress={retryPayment} disabled={payingAgain || verifyingPayment} style={styles.payBtn}>
+            <Text style={styles.retryLabel}>Payment email</Text>
+            <TextInput
+              value={paymentEmail}
+              onChangeText={setPaymentEmail}
+              placeholder="you@example.com"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.retryEmailInput, !isValidEmail(paymentEmail) && paymentEmail.trim() && styles.retryEmailInvalid]}
+            />
+            {!isValidEmail(paymentEmail) && (
+              <Text style={{ color: COLORS.chili, fontSize: 12, fontWeight: "700", marginBottom: 8 }}>Enter a valid email for Paystack.</Text>
+            )}
+            <Pressable onPress={retryPayment} disabled={payingAgain || verifyingPayment || !isValidEmail(paymentEmail)} style={[styles.payBtn, (!isValidEmail(paymentEmail) || payingAgain || verifyingPayment) && styles.payBtnDisabled]}>
               <Text style={styles.payBtnText}>{payingAgain ? "Opening\u2026" : "Complete payment"}</Text>
             </Pressable>
             {payError && <Text style={{ color: COLORS.chili, fontSize: 12.5, marginTop: 8 }}>{payError}</Text>}
@@ -452,7 +478,22 @@ const styles = StyleSheet.create({
   tryAgainBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 16, alignSelf: "flex-start" },
   tryAgainBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   payBtn: { backgroundColor: COLORS.ink, borderRadius: 20, paddingVertical: 10, alignItems: "center" },
+  payBtnDisabled: { opacity: 0.45 },
   payBtnText: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
+  retryLabel: { color: COLORS.ink, fontSize: 12, fontWeight: "900", marginBottom: 6 },
+  retryEmailInput: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    color: COLORS.ink,
+    backgroundColor: "#fff",
+    fontSize: 13.5,
+    fontWeight: "700",
+    marginBottom: 9,
+  },
+  retryEmailInvalid: { borderColor: COLORS.chili, backgroundColor: "#FFF7F7" },
   dot: { width: 12, height: 12, borderRadius: 6 },
   connector: { width: 2, flex: 1, minHeight: 24 },
   stepText: { fontSize: 14, paddingBottom: 20 },

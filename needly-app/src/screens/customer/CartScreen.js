@@ -63,6 +63,10 @@ async function reverseGeocode(latitude, longitude) {
   }
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 export default function CartScreen({ route, navigation }) {
   const { vendorId, cart: routeCart = {} } = route.params || {};
   const {
@@ -85,6 +89,7 @@ export default function CartScreen({ route, navigation }) {
 
   const [deliveryAddress, setDeliveryAddress] = useState(checkoutDraft.deliveryAddress || "");
   const [deliveryPhone, setDeliveryPhone] = useState(checkoutDraft.deliveryPhone || user?.phone || "");
+  const [paymentEmail, setPaymentEmail] = useState(checkoutDraft.paymentEmail || user?.email || "");
   const [deliveryLocation, setDeliveryLocation] = useState(checkoutDraft.deliveryLocation || null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState(null);
@@ -118,7 +123,8 @@ export default function CartScreen({ route, navigation }) {
   const riderPayoutAmount = Math.max(0, deliveryFeeAmount - companyDeliveryFeeAmount);
   const customerTotal = total + platformFeeAmount + deliveryFeeAmount;
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
-  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && selectedGateway && itemCount > 0 && !submitting;
+  const cleanPaymentEmail = paymentEmail.trim().toLowerCase();
+  const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && isValidEmail(cleanPaymentEmail) && selectedGateway && itemCount > 0 && !submitting;
 
   useEffect(() => {
     let mounted = true;
@@ -156,18 +162,20 @@ export default function CartScreen({ route, navigation }) {
     if (!customerActivityLoaded || !draft) return;
     setDeliveryAddress((current) => current || draft.deliveryAddress || "");
     setDeliveryPhone((current) => current || draft.deliveryPhone || user?.phone || "");
+    setPaymentEmail((current) => current || draft.paymentEmail || user?.email || "");
     setDeliveryLocation((current) => current || draft.deliveryLocation || null);
-  }, [customerActivity?.checkoutDrafts, customerActivityLoaded, user?.phone, vendorId]);
+  }, [customerActivity?.checkoutDrafts, customerActivityLoaded, user?.email, user?.phone, vendorId]);
 
   useEffect(() => {
     if (!vendorId || !customerActivityLoaded) return;
     saveCheckoutDraft(vendorId, {
       deliveryAddress,
       deliveryPhone,
+      paymentEmail,
       deliveryLocation,
       paymentGateway: selectedGateway,
     });
-  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, saveCheckoutDraft, selectedGateway, vendorId]);
+  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, paymentEmail, saveCheckoutDraft, selectedGateway, vendorId]);
 
   const useCurrentLocation = () => {
     setGeoLoading(true);
@@ -211,7 +219,7 @@ export default function CartScreen({ route, navigation }) {
         deliveryPhone.trim(),
         deliveryLocation,
       );
-      const payment = await PaymentAPI.initialize(id, selectedGateway);
+      const payment = await PaymentAPI.initialize(id, selectedGateway, cleanPaymentEmail);
       const authorizationUrl = String(payment?.authorizationUrl || "").trim();
       if (!/^https?:\/\//i.test(authorizationUrl)) {
         throw new Error("Payment link was not created. Please choose another payment option or try again.");
@@ -382,6 +390,24 @@ export default function CartScreen({ route, navigation }) {
                 style={styles.phoneInput}
               />
             </View>
+
+            <Text style={styles.label}>Payment email</Text>
+            <View style={[styles.phoneWrap, !isValidEmail(cleanPaymentEmail) && paymentEmail.trim() && styles.inputInvalid]}>
+              <Ionicons name="mail" size={17} color={PURPLE} />
+              <TextInput
+                value={paymentEmail}
+                onChangeText={setPaymentEmail}
+                placeholder="Required for Paystack receipt"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.phoneInput}
+              />
+            </View>
+            {!isValidEmail(cleanPaymentEmail) && (
+              <Text style={styles.inlineError}>Enter a valid email address to continue to payment.</Text>
+            )}
           </View>
 
           <View style={[styles.sectionCard, { marginHorizontal: sidePad }]}>
@@ -422,8 +448,8 @@ export default function CartScreen({ route, navigation }) {
             </View>
           </View>
 
-          {(!deliveryAddress.trim() || !deliveryPhone.trim()) && (
-            <Text style={[styles.hint, { marginHorizontal: sidePad }]}>Add a delivery address and phone number to place your order.</Text>
+          {(!deliveryAddress.trim() || !deliveryPhone.trim() || !isValidEmail(cleanPaymentEmail)) && (
+            <Text style={[styles.hint, { marginHorizontal: sidePad }]}>Add delivery details and a valid payment email to place your order.</Text>
           )}
           {error && <Text style={[styles.error, { marginHorizontal: sidePad }]}>{error}</Text>}
           {checkoutUrl ? (
@@ -506,6 +532,7 @@ const styles = StyleSheet.create({
   label: { color: INK, fontSize: 12.5, fontWeight: "900", marginBottom: 7, marginTop: 2 },
   locationInput: { fontSize: 13.5, fontWeight: "700" },
   phoneWrap: { height: 50, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  inputInvalid: { borderColor: RED, backgroundColor: "#FFF7F7" },
   phoneInput: { flex: 1, color: INK, fontSize: 14, fontWeight: "700", outlineStyle: "none" },
   paymentOptionList: { gap: 10 },
   paymentOption: { borderRadius: 18, borderWidth: 1, borderColor: "#E5DEF5", backgroundColor: "#FFFFFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
