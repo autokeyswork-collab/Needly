@@ -253,7 +253,7 @@ export const AuthAPI = {
   },
   updateMeProfile: (fields) => request("/auth/me/profile", { method: "PATCH", body: fields }),
   changePassword: ({ currentPassword, newPassword }) => request("/auth/me/password", { method: "PATCH", body: { currentPassword, newPassword } }),
-  locations: () => request("/auth/locations", { auth: false }).catch(() => []),
+  locations: () => request("/auth/locations", { auth: false }),
   registerPushToken: (expoPushToken) => request("/auth/me/push-token", { method: "PATCH", body: { expoPushToken } }).catch(() => null),
   pendingApprovals: async () => {
     const res = await request("/auth/pending");
@@ -264,11 +264,11 @@ export const AuthAPI = {
     if (Array.isArray(res)) return res;
     return Array.isArray(res?.customers) ? res.customers : [];
   },
-  mailTray: () => request("/auth/mail-tray").catch(() => []),
+  mailTray: () => request("/auth/mail-tray"),
   approveUser: async (id) => {
     return await request(`/auth/users/${id}/approve`, { method: "PATCH" });
   },
-  suspendUser: (id) => request(`/auth/users/${id}/suspend`, { method: "PATCH" }).catch(() => ({ ok: true })),
+  suspendUser: (id) => request(`/auth/users/${id}/suspend`, { method: "PATCH" }),
   editContact: (userId, { name, email, phone, role }) => request(`/auth/users/${userId}/contact`, { method: "PATCH", body: { name, email, phone, role } }),
   getFullProfile: (userId) => request(`/auth/customers/${userId}/full-profile`),
   issueRefund: (userId, { orderId, amount, reason }) => request(`/auth/customers/${userId}/issue-refund`, { method: "POST", body: { orderId, amount, reason } }),
@@ -290,9 +290,9 @@ export const VendorAPI = {
   adminEditProfile: (vendorId, fields) => request(`/vendors/${vendorId}/admin-edit`, { method: "PATCH", body: fields }),
   setVerification: (vendorId, fields) => request(`/vendors/${vendorId}/verification`, { method: "PATCH", body: fields }),
   verify: (vendorId, fields) => request(`/vendors/${vendorId}/verification`, { method: "PATCH", body: fields }),
-  stats: () => request("/vendors/me/stats").catch(() => null),
+  stats: () => request("/vendors/me/stats"),
   setBankAccount: (vendorId, bank) => request(`/vendors/${vendorId}/bank-account`, { method: "PATCH", body: bank }),
-  toggleOpen: (vendorId) => request(`/vendors/${vendorId}/open`, { method: "PATCH" }).catch(() => ({ isOpen: true })),
+  toggleOpen: (vendorId) => request(`/vendors/${vendorId}/open`, { method: "PATCH" }),
   addProduct: (vendorId, { name, price, emoji, subcategory, imageUrl }) =>
     request(`/vendors/${vendorId}/products`, { method: "POST", body: { name, price, emoji, subcategory, imageUrl } }),
   updateProduct: (vendorId, productId, patch) =>
@@ -321,16 +321,16 @@ export const OrderAPI = {
 
 /* --- Rider --- */
 export const RiderAPI = {
-  stats: () => request("/riders/me/stats").catch(() => null),
-  toggleOnline: () => request("/riders/me/online", { method: "PATCH" }).catch(() => ({ isOnline: true })),
-  adminList: () => request("/riders").catch(() => []),
+  stats: () => request("/riders/me/stats"),
+  toggleOnline: () => request("/riders/me/online", { method: "PATCH" }),
+  adminList: () => request("/riders"),
   adminEditProfile: (riderId, fields) => request(`/riders/${riderId}/admin-edit`, { method: "PATCH", body: fields }),
   setVerification: (riderId, fields) => request(`/riders/${riderId}/verification`, { method: "PATCH", body: fields }),
   setBankAccount: (bank) => request("/riders/me/bank-account", { method: "PATCH", body: bank }),
-  balance: () => request("/riders/me/balance").catch(() => ({ available: 0, totalPending: 0 })),
-  payoutHistory: () => request("/riders/me/payouts").catch(() => []),
+  balance: () => request("/riders/me/balance"),
+  payoutHistory: () => request("/riders/me/payouts"),
   requestPayout: (amount) => request("/riders/me/payouts", { method: "POST", body: { amount } }),
-  deliveries: (period) => request(`/riders/me/deliveries?period=${period}`).catch(() => []),
+  deliveries: (period) => request(`/riders/me/deliveries?period=${period}`),
 };
 
 /* --- Payouts (admin) --- */
@@ -348,8 +348,8 @@ export const ReviewAPI = {
 
 /* --- Payments --- */
 export const PaymentAPI = {
-  platformFee: () => request("/payments/platform-fee").catch(() => ({ platformFeePercent: 2.5, riderFeePercent: 5 })),
-  options: () => request("/payments/options").catch(() => ({ gateways: [], defaultGateway: null })),
+  platformFee: () => request("/payments/platform-fee"),
+  options: () => request("/payments/options"),
   initialize: (orderId, gateway, customerEmail) => request("/payments/initialize", { method: "POST", body: { orderId, gateway, customerEmail } }),
   verify: (reference) => request("/payments/verify", { method: "POST", body: { reference } }),
   confirmVendorReceived: (orderId) => request(`/payments/${orderId}/vendor-received`, { method: "PATCH" }),
@@ -357,12 +357,13 @@ export const PaymentAPI = {
 
 /* --- Public home content --- */
 export const HomeAPI = {
-  banners: (location) => request(`/home/banners${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }).catch(() => []),
+  banners: (location) => request(`/home/banners${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
+  categories: (location) => request(`/home/categories${location ? `?location=${encodeURIComponent(location)}` : ""}`, { auth: false }),
 };
 
 /* --- Customer Wallet / Needly Pay --- */
 export const WalletAPI = {
-  summary: () => request("/wallet").catch(() => ({ balance: 0, transactions: [] })),
+  summary: () => request("/wallet"),
   initializeFunding: (amount) => request("/wallet/fund/initialize", { method: "POST", body: { amount } }),
   verifyFunding: (reference) => request("/wallet/fund/verify", { method: "POST", body: { reference } }),
   transfer: ({ recipient, amount, note }) => request("/wallet/transfer", { method: "POST", body: { recipient, amount, note } }),
@@ -390,16 +391,16 @@ export const OperationalIssueAPI = {
 export const BookingAPI = {
   create: (data) => request("/bookings", { method: "POST", body: data }),
   services: (category) => request(`/bookings/services${category ? `?category=${encodeURIComponent(category)}` : ""}`, { auth: false }),
-  mine: () => request("/bookings/mine").catch(() => []),
+  mine: () => request("/bookings/mine"),
   updateStatus: (id, status) => request(`/bookings/${id}/status`, { method: "PATCH", body: { status } }),
   cancel: (id, reason) => request(`/bookings/${id}/cancel`, { method: "PATCH", body: { reason } }),
 };
 
 /* --- Notifications --- */
 export const NotificationAPI = {
-  list: () => request("/notifications").catch(() => []),
-  markRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }).catch(() => ({ ok: true })),
-  markAllRead: () => request("/notifications/read-all", { method: "PATCH" }).catch(() => ({ ok: true })),
+  list: () => request("/notifications"),
+  markRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllRead: () => request("/notifications/read-all", { method: "PATCH" }),
 };
 
 
@@ -412,39 +413,40 @@ export const DisputeAPI = {
 
 /* --- Super Admin Central Command Center API --- */
 export const SuperAdminAPI = {
-  overview: () => request("/admin/stats/overview").catch(() => null),
+  overview: () => request("/admin/stats/overview"),
   // aliases used by SuperAdminControlCenter.js
-  stats: () => request("/admin/stats/overview").catch(() => null),
-  liveOps: () => request("/admin/live-operations").catch(() => null),
-  liveOperations: () => request("/admin/live-operations").catch(() => null),
-  health: () => request("/admin/health").catch(() => null),
-  integrations: () => request("/admin/integrations").catch(() => []),
+  stats: () => request("/admin/stats/overview"),
+  liveOps: () => request("/admin/live-operations"),
+  liveOperations: () => request("/admin/live-operations"),
+  health: () => request("/admin/health"),
+  integrations: () => request("/admin/integrations"),
   updateIntegration: ({ provider, key, value }) => request("/admin/integrations", { method: "PATCH", body: { provider, key, value } }),
-  roles: () => request("/admin/roles").catch(() => []),
+  roles: () => request("/admin/roles"),
   createRole: (data) => request("/admin/roles", { method: "POST", body: data }),
-  permissions: () => request("/admin/permissions").catch(() => []),
-  locations: () => request("/admin/locations").catch(() => []),
+  permissions: () => request("/admin/permissions"),
+  locations: () => request("/admin/locations"),
   createLocation: (data) => request("/admin/locations", { method: "POST", body: data }),
-  commissions: () => request("/admin/commissions").catch(() => []),
+  commissions: () => request("/admin/commissions"),
   createCommission: (data) => request("/admin/commissions", { method: "POST", body: data }),
-  promotions: () => request("/admin/promotions").catch(() => []),
+  promotions: () => request("/admin/promotions"),
   createPromotion: (data) => request("/admin/promotions", { method: "POST", body: data }),
-  tickets: () => request("/admin/tickets").catch(() => []),
-  refunds: () => request("/admin/refunds").catch(() => []),
-  walletTransactions: () => request("/admin/wallet-transactions").catch(() => []),
-  fraudAlerts: () => request("/admin/fraud-alerts").catch(() => []),
-  orders: () => request("/admin/orders").catch(() => []),
-  bookings: () => request("/admin/bookings").catch(() => []),
-  products: () => request("/admin/products").catch(() => []),
-  services: () => request("/admin/services").catch(() => []),
-  categories: () => request("/admin/categories").catch(() => []),
-  admins: () => request("/admin/admins").catch(() => []),
-  notifications: () => request("/admin/notifications").catch(() => []),
+  tickets: () => request("/admin/tickets"),
+  refunds: () => request("/admin/refunds"),
+  walletTransactions: () => request("/admin/wallet-transactions"),
+  fraudAlerts: () => request("/admin/fraud-alerts"),
+  orders: () => request("/admin/orders"),
+  bookings: () => request("/admin/bookings"),
+  products: () => request("/admin/products"),
+  services: () => request("/admin/services"),
+  categories: () => request("/admin/categories"),
+  createCategory: (data) => request("/admin/categories", { method: "POST", body: data }),
+  admins: () => request("/admin/admins"),
+  notifications: () => request("/admin/notifications"),
   createUser: (data) => request("/admin/users", { method: "POST", body: data }),
   createVendor: (data) => request("/admin/vendors", { method: "POST", body: data }),
   createRider: (data) => request("/admin/riders", { method: "POST", body: data }),
   broadcastNotification: (data) => request("/admin/notifications/broadcast", { method: "POST", body: data }),
-  globalSearch: (q) => request(`/admin/global-search?q=${encodeURIComponent(q)}`).catch(() => ({ orders: [], customers: [], vendors: [], riders: [] })),
+  globalSearch: (q) => request(`/admin/global-search?q=${encodeURIComponent(q)}`),
   impersonate: (targetRole, targetEmail) => request("/admin/impersonate", { method: "POST", body: { targetRole, targetEmail } }),
   updateUser: (id, data) => request(`/admin/users/${id}`, { method: "PATCH", body: data }),
   updateVendor: (id, data) => request(`/admin/vendors/${id}`, { method: "PATCH", body: data }),
@@ -453,6 +455,7 @@ export const SuperAdminAPI = {
   updateService: (id, data) => request(`/admin/services/${id}`, { method: "PATCH", body: data }),
   updateOrder: (id, data) => request(`/admin/orders/${id}`, { method: "PATCH", body: data }),
   updateBooking: (id, data) => request(`/admin/bookings/${id}`, { method: "PATCH", body: data }),
+  updateCategory: (id, data) => request(`/admin/categories/${id}`, { method: "PATCH", body: data }),
   updateLocation: (id, data) => request(`/admin/locations/${id}`, { method: "PATCH", body: data }),
   updateCommission: (id, data) => request(`/admin/commissions/${id}`, { method: "PATCH", body: data }),
   updatePromotion: (id, data) => request(`/admin/promotions/${id}`, { method: "PATCH", body: data }),

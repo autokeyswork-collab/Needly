@@ -5,6 +5,7 @@ const { sendPushNotification } = require("../lib/pushNotifications");
 const { refundTransaction } = require("../lib/paystack");
 const { logAction } = require("../lib/auditLog");
 const { createWalletCredit } = require("./wallet.routes");
+const { releaseOrderInventory } = require("../lib/orderInventory");
 
 const router = express.Router();
 
@@ -59,12 +60,15 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
 
   let total = 0;
   const orderItems = [];
+  const stockByProductId = new Map();
 
   for (const line of items) {
     const product = vendor.products.find((p) => p.id === line.productId);
     if (!product) return res.status(400).json({ error: `Product ${line.productId} not found for this vendor` });
+    if (!product.isAvailable) return res.status(400).json({ error: `${product.name} is not currently available` });
 
     const qty = Math.max(1, Number(line.qty) || 1);
+    stockByProductId.set(product.id, (stockByProductId.get(product.id) || 0) + qty);
     const chosenAddOns = (line.addOns || [])
       .map(({ id, qty: addOnQty }) => {
         const addOn = product.addOns.find((a) => a.id === id);
@@ -77,22 +81,54 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
     const name = product.name + (addOnLabel ? ` + ${addOnLabel}` : "");
 
     total += unitPrice * qty;
-    orderItems.push({ name, price: unitPrice, qty, emoji: product.emoji });
+    orderItems.push({ productId: product.id, name, price: unitPrice, qty, emoji: product.emoji });
   }
 
-  const order = await prisma.order.create({
-    data: {
-      customerId: req.user.id,
-      vendorId,
-      total,
-      deliveryAddress,
-      deliveryPhone,
-      deliveryLatitude: deliveryLatitude === undefined || deliveryLatitude === null ? null : Number(deliveryLatitude),
-      deliveryLongitude: deliveryLongitude === undefined || deliveryLongitude === null ? null : Number(deliveryLongitude),
-      items: { create: orderItems },
-    },
-    include: { items: true, vendor: true },
+  for (const [productId, qty] of stockByProductId.entries()) {
+    const product = vendor.products.find((p) => p.id === productId);
+    if (product.stock < qty) {
+      return res.status(400).json({ error: `${product.name} only has ${product.stock} left in stock` });
+    }
+  }
+
+  const order = await prisma.$transaction(async (tx) => {
+    for (const [productId, qty] of stockByProductId.entries()) {
+      const product = vendor.products.find((p) => p.id === productId);
+      const result = await tx.product.updateMany({
+        where: {
+          id: productId,
+          vendorId,
+          isAvailable: true,
+          stock: { gte: qty },
+        },
+        data: { stock: { decrement: qty } },
+      });
+      if (result.count !== 1) {
+        const err = new Error(`${product?.name || "Product"} is no longer available in the requested quantity`);
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+
+    return tx.order.create({
+      data: {
+        customerId: req.user.id,
+        vendorId,
+        total,
+        deliveryAddress,
+        deliveryPhone,
+        deliveryLatitude: deliveryLatitude === undefined || deliveryLatitude === null ? null : Number(deliveryLatitude),
+        deliveryLongitude: deliveryLongitude === undefined || deliveryLongitude === null ? null : Number(deliveryLongitude),
+        items: { create: orderItems },
+      },
+      include: { items: true, vendor: true },
+    });
+  }).catch((err) => {
+    if (err.statusCode) return { error: err.message, statusCode: err.statusCode };
+    throw err;
   });
+
+  if (order.error) return res.status(order.statusCode).json({ error: order.error });
 
   res.status(201).json(order);
 });
@@ -425,6 +461,8 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
       // from the Paystack dashboard if the API call itself failed.
     }
   }
+
+  await releaseOrderInventory(order.id);
 
   // Only when a vendor/manager declines — a customer cancelling their own
   // order doesn't need to be told why they did it.

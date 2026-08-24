@@ -34,73 +34,6 @@ const ACTIONS = [
   { key: "Wallet", icon: "credit-card", color: "#1E63E9", target: "NeedlyPay" },
 ];
 
-const CATEGORY_GRID = [
-  { label: "Open Market", category: "Local Market", image: CATEGORY_IMAGES["Local Market"] },
-  { label: "Food", category: "Restaurant", image: CATEGORY_IMAGES.Restaurant },
-  { label: "Auto", category: "Auto", image: CATEGORY_IMAGES.Auto },
-  { label: "Home Services", category: "Home Services", image: CATEGORY_IMAGES["Home Services"] },
-  { label: "Health", category: "Pharmacy", image: CATEGORY_IMAGES.Pharmacy },
-  { label: "Services", category: "Services", image: CATEGORY_IMAGES.Services || CATEGORY_IMAGES["Home Services"] },
-  { label: "Stay & Dine", category: "Stay & Dine", image: CATEGORY_IMAGES["Stay & Dine"] },
-  { label: "Learn", category: "Learn", image: CATEGORY_IMAGES.Learn },
-  { label: "Utilities", category: "Utilities", image: CATEGORY_IMAGES.Utilities },
-  { label: "Shop", category: "Supermarket", image: CATEGORY_IMAGES.Supermarket },
-  { label: "More", category: "All", more: true },
-];
-
-const BASE_SLIDES = [
-  {
-    key: "open-market",
-    category: "Local Market",
-    kicker: "Open Market",
-    title: "Fresh from Abeokuta",
-    body: "Shop quality products from local sellers.",
-    cta: "Shop Open Market",
-    badge: "Supporting Local Abeokuta",
-    image: CATEGORY_IMAGES["Open Market Hero"] || CATEGORY_IMAGES["Local Market"],
-  },
-  {
-    key: "food",
-    category: "Restaurant",
-    kicker: "Food & Restaurants",
-    title: "Your favourite meals",
-    body: "Order hot food from trusted Abeokuta vendors.",
-    cta: "Order Food",
-    badge: "Fast local delivery",
-    image: CATEGORY_IMAGES.Restaurant,
-  },
-  {
-    key: "auto",
-    category: "Auto",
-    kicker: "Auto Services",
-    title: "Fix, wash, move",
-    body: "Mechanics, car wash and driver services nearby.",
-    cta: "Book Auto",
-    badge: "Verified providers",
-    image: CATEGORY_IMAGES.Auto,
-  },
-  {
-    key: "home",
-    category: "Home Services",
-    kicker: "Home Services",
-    title: "Help at home",
-    body: "Cleaners, laundry and repairs when you need them.",
-    cta: "Book Service",
-    badge: "Home support",
-    image: CATEGORY_IMAGES["Home Services"],
-  },
-  {
-    key: "offers",
-    category: "Supermarket",
-    kicker: "Special Offers",
-    title: "Deals around you",
-    body: "Save on selected essentials and local favourites.",
-    cta: "Shop Deals",
-    badge: "Limited time",
-    image: CATEGORY_IMAGES.Supermarket,
-  },
-];
-
 function clampCount(n) {
   return n > 99 ? "99+" : String(n || 0);
 }
@@ -126,10 +59,15 @@ function bannerImageFor(category) {
     || CATEGORY_IMAGES["Local Market"];
 }
 
+function categoryImageFor(category) {
+  const key = category?.imageKey || category?.category || category?.key;
+  return CATEGORY_IMAGES[key] || CATEGORY_IMAGES[category?.category] || CATEGORY_IMAGES["Local Market"];
+}
+
 export default function BrowseScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
-  const { vendors = [], serviceProviders = [], orders = [], notifications = [], loading, draftCartCount = 0, customerActivity } = useOrders();
+  const { vendors = [], serviceProviders = [], categories = [], orders = [], notifications = [], loading, error, draftCartCount = 0, customerActivity } = useOrders();
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 22;
   const carouselWidth = shellWidth - sidePad * 2;
@@ -143,6 +81,7 @@ export default function BrowseScreen({ navigation }) {
   const [dealEnd] = useState(() => Date.now() + 2 * 60 * 60 * 1000 + 18 * 60 * 1000 + 45 * 1000);
   const [now, setNow] = useState(Date.now());
   const [remoteBanners, setRemoteBanners] = useState([]);
+  const [bannerError, setBannerError] = useState("");
   const { canShowInstallButton, installApp, installLabel } = usePwaInstall();
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [batteryLevel, setBatteryLevel] = useState(null);
@@ -170,8 +109,8 @@ export default function BrowseScreen({ navigation }) {
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const categoryHits = CATEGORY_GRID
-      .filter((item) => item.label.toLowerCase().includes(q) || item.category.toLowerCase().includes(q))
+    const categoryHits = categories
+      .filter((item) => (item.label || "").toLowerCase().includes(q) || (item.category || item.key || "").toLowerCase().includes(q))
       .map((item) => ({ type: "category", item }));
     const vendorHits = vendors
       .filter((vendor) => [vendor.name, vendor.category, vendor.area].filter(Boolean).some((value) => value.toLowerCase().includes(q)))
@@ -189,30 +128,28 @@ export default function BrowseScreen({ navigation }) {
       return services.map((service) => ({ type: "service", category, provider, service }));
     });
     return [...categoryHits, ...vendorHits, ...productHits, ...serviceHits].slice(0, 8);
-  }, [query, vendors, serviceProviders]);
-
-  const defaultSlides = useMemo(() => BASE_SLIDES.map((slide) => {
-    if (slide.key !== "open-market") return slide;
-    return {
-      ...slide,
-      title: `Fresh from ${customerCity}`,
-      badge: `Supporting Local ${customerCity}`,
-    };
-  }), [customerCity]);
+  }, [query, categories, vendors, serviceProviders]);
 
   useEffect(() => {
     let mounted = true;
-    HomeAPI.banners(customerCity).then((rows) => {
-      if (!mounted || !Array.isArray(rows)) return;
-      setRemoteBanners(rows);
-    });
+    setBannerError("");
+    HomeAPI.banners(customerCity)
+      .then((rows) => {
+        if (!mounted || !Array.isArray(rows)) return;
+        setRemoteBanners(rows);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setRemoteBanners([]);
+        setBannerError(err.message || "Could not load homepage ads");
+      });
     return () => {
       mounted = false;
     };
   }, [customerCity]);
 
   const slides = useMemo(() => {
-    const mapped = remoteBanners
+    return remoteBanners
       .filter((banner) => banner?.title || banner?.kicker)
       .map((banner, index) => ({
         key: banner.id || banner.code || `banner-${index}`,
@@ -224,10 +161,10 @@ export default function BrowseScreen({ navigation }) {
         badge: banner.badge || "Needly advert",
         image: banner.imageUrl ? { uri: banner.imageUrl } : bannerImageFor(banner.category || "Local Market"),
       }));
-    return mapped.length ? mapped : defaultSlides;
-  }, [defaultSlides, remoteBanners]);
+  }, [remoteBanners]);
 
   useEffect(() => {
+    if (!slides.length) return undefined;
     const timer = setInterval(() => {
       setActiveSlide((current) => {
         const next = (current + 1) % slides.length;
@@ -296,7 +233,7 @@ export default function BrowseScreen({ navigation }) {
     if (result.type === "service") {
       return navigation.navigate("AutoBooking", { providerId: result.provider.id, serviceId: result.service?.id });
     }
-    return goCategory(result.item.category);
+    return goCategory(result.item.category || result.item.key);
   };
 
   return (
@@ -411,61 +348,77 @@ export default function BrowseScreen({ navigation }) {
             </View>
           )}
 
-          <View style={[styles.carouselOuter, { marginTop: shellWidth < 380 ? 20 : 24 }]}>
-            <Animated.ScrollView
-              ref={carouselRef}
-              horizontal
-              pagingEnabled={false}
-              snapToInterval={snap}
-              decelerationRate="fast"
-              bounces={false}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: (shellWidth - cardWidth) / 2, gap: cardGap }}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                {
-                  useNativeDriver: false,
-                  listener: (event) => {
-                    const index = Math.round(event.nativeEvent.contentOffset.x / snap);
-                    if (index !== activeSlide) setActiveSlide(Math.max(0, Math.min(slides.length - 1, index)));
-                  },
-                }
-              )}
-              scrollEventThrottle={16}
-            >
-              {slides.map((slide) => (
-                <Pressable key={slide.key} onPress={() => goCategory(slide.category)} style={[styles.heroCard, { width: cardWidth, height: shellWidth < 380 ? 206 : 232 }]}>
-                  <ImageBackground source={slide.image} style={styles.heroImage} imageStyle={styles.heroImageRadius}>
-                    <View style={styles.heroOverlay} />
-                    <View style={styles.heroBadge}>
-                      <FontAwesome name="heart" size={16} color={PURPLE} />
-                      <Text style={styles.heroBadgeText}>{slide.badge}</Text>
-                    </View>
-                    <View style={styles.heroCopy}>
-                      <Text numberOfLines={2} style={styles.heroKicker}>{slide.kicker}</Text>
-                      <Text numberOfLines={2} style={styles.heroTitle}>{slide.title}</Text>
-                      <Text numberOfLines={2} style={styles.heroBody}>{slide.body}</Text>
-                      <Pressable style={styles.heroCta} onPress={() => goCategory(slide.category)}>
-                        <Text style={styles.heroCtaText}>{slide.cta}</Text>
-                        <FontAwesome name="arrow-right" size={15} color="#fff" />
-                      </Pressable>
-                    </View>
-                  </ImageBackground>
-                </Pressable>
-              ))}
-            </Animated.ScrollView>
-            <View style={styles.dots}>
-              {slides.map((slide, index) => (
-                <Pressable
-                  key={slide.key}
-                  onPress={() => {
-                    carouselRef.current?.scrollTo({ x: index * snap, animated: true });
-                    setActiveSlide(index);
-                  }}
-                  style={[styles.dot, activeSlide === index && styles.dotActive]}
-                />
-              ))}
+          {!!error && (
+            <View style={[styles.dataErrorCard, { marginHorizontal: sidePad }]}>
+              <Ionicons name="warning-outline" size={17} color="#B45309" />
+              <Text style={styles.dataErrorText}>{error}</Text>
             </View>
+          )}
+
+          <View style={[styles.carouselOuter, { marginTop: shellWidth < 380 ? 20 : 24 }]}>
+            {slides.length ? (
+              <>
+                <Animated.ScrollView
+                  ref={carouselRef}
+                  horizontal
+                  pagingEnabled={false}
+                  snapToInterval={snap}
+                  decelerationRate="fast"
+                  bounces={false}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: (shellWidth - cardWidth) / 2, gap: cardGap }}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                    {
+                      useNativeDriver: false,
+                      listener: (event) => {
+                        const index = Math.round(event.nativeEvent.contentOffset.x / snap);
+                        if (index !== activeSlide) setActiveSlide(Math.max(0, Math.min(slides.length - 1, index)));
+                      },
+                    }
+                  )}
+                  scrollEventThrottle={16}
+                >
+                  {slides.map((slide) => (
+                    <Pressable key={slide.key} onPress={() => goCategory(slide.category)} style={[styles.heroCard, { width: cardWidth, height: shellWidth < 380 ? 206 : 232 }]}>
+                      <ImageBackground source={slide.image} style={styles.heroImage} imageStyle={styles.heroImageRadius}>
+                        <View style={styles.heroOverlay} />
+                        <View style={styles.heroBadge}>
+                          <FontAwesome name="heart" size={16} color={PURPLE} />
+                          <Text style={styles.heroBadgeText}>{slide.badge}</Text>
+                        </View>
+                        <View style={styles.heroCopy}>
+                          <Text numberOfLines={2} style={styles.heroKicker}>{slide.kicker}</Text>
+                          <Text numberOfLines={2} style={styles.heroTitle}>{slide.title}</Text>
+                          <Text numberOfLines={2} style={styles.heroBody}>{slide.body}</Text>
+                          <Pressable style={styles.heroCta} onPress={() => goCategory(slide.category)}>
+                            <Text style={styles.heroCtaText}>{slide.cta}</Text>
+                            <FontAwesome name="arrow-right" size={15} color="#fff" />
+                          </Pressable>
+                        </View>
+                      </ImageBackground>
+                    </Pressable>
+                  ))}
+                </Animated.ScrollView>
+                <View style={styles.dots}>
+                  {slides.map((slide, index) => (
+                    <Pressable
+                      key={slide.key}
+                      onPress={() => {
+                        carouselRef.current?.scrollTo({ x: index * snap, animated: true });
+                        setActiveSlide(index);
+                      }}
+                      style={[styles.dot, activeSlide === index && styles.dotActive]}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View style={[styles.noAdsCard, { width: cardWidth, height: shellWidth < 380 ? 206 : 232 }]}>
+                <Text style={styles.noAdsTitle}>No active adverts</Text>
+                <Text style={styles.noAdsText}>{bannerError || "Add active homepage carousel ads from Super Admin."}</Text>
+              </View>
+            )}
           </View>
 
           <View style={[styles.actionCard, { marginHorizontal: sidePad }]}>
@@ -505,18 +458,20 @@ export default function BrowseScreen({ navigation }) {
           </View>
 
           <View style={[styles.categoryPanel, { marginHorizontal: sidePad }]}>
-            {CATEGORY_GRID.map((item) => (
-              <Pressable key={item.label} style={styles.categoryItem} onPress={() => goCategory(item.category)}>
+            {categories.map((item) => (
+              <Pressable key={item.id || item.key} style={styles.categoryItem} onPress={() => goCategory(item.category || item.key)}>
                 <View style={styles.categoryIconCircle}>
-                  {item.more ? (
-                    <MaterialCommunityIcons name="dots-grid" size={36} color={PURPLE} />
-                  ) : (
-                    <Image source={item.image} style={styles.categoryImage} resizeMode="cover" />
-                  )}
+                  <Image source={categoryImageFor(item)} style={styles.categoryImage} resizeMode="cover" />
                 </View>
                 <Text numberOfLines={2} style={styles.categoryLabel}>{item.label}</Text>
               </Pressable>
             ))}
+            {categories.length === 0 && (
+              <View style={styles.emptyCategories}>
+                <Text style={styles.emptyCategoriesTitle}>No active categories</Text>
+                <Text style={styles.emptyCategoriesText}>Create categories in Super Admin to show them here.</Text>
+              </View>
+            )}
           </View>
 
           <View style={[styles.flashCard, { marginHorizontal: sidePad }]}>
@@ -634,7 +589,12 @@ const styles = StyleSheet.create({
   resultTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
   resultMeta: { color: MUTED, fontSize: 11.5, marginTop: 2, fontWeight: "700" },
   emptyText: { color: MUTED, fontSize: 13, padding: 12 },
+  dataErrorCard: { marginTop: 12, borderRadius: 16, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA", padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
+  dataErrorText: { color: "#92400E", fontSize: 11.5, fontWeight: "800", flex: 1 },
   carouselOuter: { marginTop: 18 },
+  noAdsCard: { alignSelf: "center", borderRadius: 26, backgroundColor: "#F8F5FF", borderWidth: 1, borderColor: "#E7DDFF", alignItems: "center", justifyContent: "center", padding: 22 },
+  noAdsTitle: { color: INK, fontSize: 17, fontWeight: "900", marginBottom: 6 },
+  noAdsText: { color: MUTED, fontSize: 12.5, lineHeight: 18, fontWeight: "700", textAlign: "center" },
   heroCard: { height: 232, borderRadius: 26, overflow: "hidden", backgroundColor: "#241147", shadowColor: "#12062B", shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 11 } },
   heroImage: { flex: 1 },
   heroImageRadius: { borderRadius: 24 },
@@ -670,6 +630,9 @@ const styles = StyleSheet.create({
   categoryIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#F2F6F9", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
   categoryImage: { width: "112%", height: "112%" },
   categoryLabel: { color: INK, fontSize: 11.5, lineHeight: 14, fontWeight: "900", textAlign: "center", minHeight: 28 },
+  emptyCategories: { width: "100%", alignItems: "center", paddingHorizontal: 18, paddingVertical: 12 },
+  emptyCategoriesTitle: { color: INK, fontSize: 14, fontWeight: "900" },
+  emptyCategoriesText: { color: MUTED, fontSize: 12, lineHeight: 17, marginTop: 4, textAlign: "center", fontWeight: "700" },
   flashCard: { marginTop: 18, minHeight: 104, borderRadius: 18, backgroundColor: "#19042E", flexDirection: "row", alignItems: "center", padding: 14, gap: 10, overflow: "hidden" },
   flashLeft: { width: "29%", alignItems: "center" },
   flashDealRow: { flexDirection: "row", alignItems: "center" },

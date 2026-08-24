@@ -8,6 +8,7 @@ const { logAction } = require("../lib/auditLog");
 const { broadcastProviderStatus, broadcastAdminAlert } = require("../sockets/orderSocket");
 const { appUrl, escapeHtml, sendMail } = require("../lib/mailer");
 const { initializeHostedPayment } = require("../lib/paymentGateway");
+const { getJwtSecret } = require("../lib/jwtSecret");
 
 const router = express.Router();
 const confirmationMailTray = [];
@@ -207,7 +208,7 @@ const authLimiter = rateLimit({
 function signToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, email: user.email, name: user.name },
-    process.env.JWT_SECRET || "fallback_secret_key_12345",
+    getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
 }
@@ -704,40 +705,18 @@ router.get("/customers", requireAuth, requireRole("ADMIN"), async (req, res) => 
         },
       },
       orderBy: { createdAt: "desc" },
-    }).catch(async (err) => {
-      console.error("Customer order/payment summary query failed", err);
-      return prisma.order.findMany({
-        where: { customerId: { in: customerIds } },
-        select: {
-          id: true,
-          customerId: true,
-          total: true,
-          status: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "desc" },
-      }).catch((fallbackErr) => {
-        console.error("Customer order summary fallback failed", fallbackErr);
-        return [];
-      });
     }) : [];
 
-    const bookingsByCustomer = customerIds.length && prisma.booking ? await prisma.booking.groupBy({
+    const bookingsByCustomer = customerIds.length ? await prisma.booking.groupBy({
       by: ["customerId"],
       where: { customerId: { in: customerIds } },
       _count: { _all: true },
-    }).catch((err) => {
-      console.error("Customer booking count query failed", err);
-      return [];
     }) : [];
 
-    const reviewsByCustomer = customerIds.length && prisma.review ? await prisma.review.groupBy({
+    const reviewsByCustomer = customerIds.length ? await prisma.review.groupBy({
       by: ["customerId"],
       where: { customerId: { in: customerIds } },
       _count: { _all: true },
-    }).catch((err) => {
-      console.error("Customer review count query failed", err);
-      return [];
     }) : [];
 
     const bookingCountByCustomer = Object.fromEntries(bookingsByCustomer.map((row) => [row.customerId, row._count?._all || 0]));

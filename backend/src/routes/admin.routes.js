@@ -5,12 +5,33 @@ const prisma = require("../lib/prisma");
 const { requireAuth, requireRole, requirePermission } = require("../middleware/auth");
 const { logAction } = require("../lib/auditLog");
 const { broadcastContactUpdate, broadcastContactSettings } = require("../sockets/orderSocket");
-const { INTEGRATION_CATALOG, listIntegrationSettings, upsertIntegrationSetting } = require("../lib/integrationSettings");
+const { INTEGRATION_CATALOG, getIntegrationValue, listIntegrationSettings, upsertIntegrationSetting } = require("../lib/integrationSettings");
+const { getAvailablePaymentGateways } = require("../lib/paymentGateway");
+const { getJwtSecret } = require("../lib/jwtSecret");
 
 const router = express.Router();
 
 function generateTempPassword() {
   return `Nd-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36).slice(-4)}`;
+}
+
+function startOfDay(date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function addDays(date, days) {
+  const value = new Date(date);
+  value.setDate(value.getDate() + days);
+  return value;
+}
+
+function percentageChange(current, previous) {
+  if (!previous && !current) return "0%";
+  if (!previous) return "+100%";
+  const change = ((current - previous) / previous) * 100;
+  return `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
 }
 
 const isMissingTableError = (err) => {
@@ -39,6 +60,11 @@ router.get("/stats/overview", async (req, res) => {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const yesterdayStart = addDays(todayStart, -1);
+    const weekStart = addDays(todayStart, -6);
+    const previousWeekStart = addDays(weekStart, -7);
+    const monthStart = startOfDay(new Date(todayStart.getFullYear(), todayStart.getMonth(), 1));
+    const previousMonthStart = startOfDay(new Date(todayStart.getFullYear(), todayStart.getMonth() - 1, 1));
 
     const [
       totalCustomers,
@@ -59,6 +85,11 @@ router.get("/stats/overview", async (req, res) => {
       payouts,
       openTicketsCount,
       pendingRefundsCount,
+      ordersYesterday,
+      ordersThisWeek,
+      ordersPreviousWeek,
+      ordersThisMonth,
+      ordersPreviousMonth,
     ] = await Promise.all([
       prisma.user.count({ where: { role: "CUSTOMER" } }),
       prisma.user.count({ where: { role: "CUSTOMER", approved: true, suspendedAt: null } }),
@@ -78,6 +109,11 @@ router.get("/stats/overview", async (req, res) => {
       prisma.payout.findMany({ select: { amount: true, status: true, riderId: true } }),
       prisma.supportTicket ? emptyIfMissingTable(prisma.supportTicket.count({ where: { status: { in: ["OPEN", "ASSIGNED", "WAITING"] } } }), 0) : Promise.resolve(0),
       prisma.refund ? emptyIfMissingTable(prisma.refund.count({ where: { status: "REQUESTED" } }), 0) : Promise.resolve(0),
+      prisma.order.count({ where: { createdAt: { gte: yesterdayStart, lt: todayStart } } }),
+      prisma.order.count({ where: { createdAt: { gte: weekStart } } }),
+      prisma.order.count({ where: { createdAt: { gte: previousWeekStart, lt: weekStart } } }),
+      prisma.order.count({ where: { createdAt: { gte: monthStart } } }),
+      prisma.order.count({ where: { createdAt: { gte: previousMonthStart, lt: monthStart } } }),
     ]);
 
     const grossRevenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -119,9 +155,9 @@ router.get("/stats/overview", async (req, res) => {
       pendingRefundsCount,
       openTicketsCount,
       comparisons: {
-        todayVsYesterday: "+12.4%",
-        thisWeekVsLastWeek: "+18.2%",
-        thisMonthVsLastMonth: "+24.5%",
+        todayVsYesterday: percentageChange(ordersToday, ordersYesterday),
+        thisWeekVsLastWeek: percentageChange(ordersThisWeek, ordersPreviousWeek),
+        thisMonthVsLastMonth: percentageChange(ordersThisMonth, ordersPreviousMonth),
       },
     });
   } catch (err) {
@@ -191,19 +227,45 @@ router.get("/live-operations", async (req, res) => {
  * Returns platform system health status for backend services.
  */
 router.get("/health", async (req, res) => {
+  const checks = {};
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.databaseHealth = "Operational";
+  } catch (err) {
+    checks.databaseHealth = "Down";
+  }
+
+  const [smtpHost, smtpUser, smtpPass, brevoApiKey, googleClientId, appleClientId, facebookAppId, paymentGateways] = await Promise.all([
+    getIntegrationValue("brevo", "SMTP_HOST"),
+    getIntegrationValue("brevo", "SMTP_USER"),
+    getIntegrationValue("brevo", "SMTP_PASS"),
+    getIntegrationValue("brevo", "BREVO_API_KEY"),
+    getIntegrationValue("social", "GOOGLE_CLIENT_ID"),
+    getIntegrationValue("social", "APPLE_CLIENT_ID"),
+    getIntegrationValue("social", "FACEBOOK_APP_ID"),
+    getAvailablePaymentGateways().catch(() => []),
+  ]);
+
+  const emailConfigured = !!brevoApiKey || !!(smtpHost && smtpUser && smtpPass);
+  const paymentConfigured = paymentGateways.some((gateway) => gateway.enabled);
+  const realtimeReady = !!req.app.get("io");
+  const anyDown = checks.databaseHealth !== "Operational";
+
   res.json({
-    status: "OPERATIONAL",
+    status: anyDown ? "DEGRADED" : "OPERATIONAL",
     apiHealth: "Operational",
-    databaseHealth: "Operational",
-    storageHealth: "Operational",
+    databaseHealth: checks.databaseHealth,
+    storageHealth: "Not configured",
     backgroundJobs: "Operational",
-    emailService: "Operational",
-    smsService: "Degraded",
-    paymentGateway: "Operational",
-    googleAuthService: "Operational",
-    appleAuthService: "Operational",
-    facebookAuthService: "Operational",
-    realtimeSockets: "Operational",
+    emailService: emailConfigured ? "Configured" : "Not configured",
+    smsService: "Not configured",
+    paymentGateway: paymentConfigured ? "Configured" : "Not configured",
+    paymentGateways,
+    googleAuthService: googleClientId ? "Configured" : "Not configured",
+    appleAuthService: appleClientId ? "Configured" : "Not configured",
+    facebookAuthService: facebookAppId ? "Configured" : "Not configured",
+    realtimeSockets: realtimeReady ? "Operational" : "Not initialized",
     lastCheckedAt: new Date().toISOString(),
   });
 });
@@ -335,6 +397,54 @@ router.post("/locations", async (req, res) => {
     res.status(201).json(loc);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+function categoryPayload(body = {}) {
+  const key = String(body.key || body.category || body.name || "").trim();
+  const label = String(body.label || body.name || key || "").trim();
+  const flow = String(body.flow || "BUY").trim().toUpperCase();
+  if (!key || !label) {
+    const err = new Error("Category key and label are required");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!["BUY", "BOOK", "RESERVE"].includes(flow)) {
+    const err = new Error("Category flow must be BUY, BOOK, or RESERVE");
+    err.statusCode = 400;
+    throw err;
+  }
+  const active = body.active === undefined
+    ? undefined
+    : body.active === true || ["true", "yes", "1"].includes(String(body.active).trim().toLowerCase());
+  const position = body.position === undefined ? undefined : Number(body.position);
+  if (position !== undefined && !Number.isFinite(position)) {
+    const err = new Error("Category position must be a number");
+    err.statusCode = 400;
+    throw err;
+  }
+  return {
+    key,
+    label,
+    flow,
+    description: body.description === undefined ? undefined : String(body.description || "").trim(),
+    icon: body.icon === undefined ? undefined : String(body.icon || "").trim(),
+    imageKey: body.imageKey === undefined ? undefined : String(body.imageKey || key).trim(),
+    position,
+    active,
+    location: body.location === undefined ? undefined : String(body.location || "").trim(),
+  };
+}
+
+router.post("/categories", async (req, res) => {
+  try {
+    const data = categoryPayload(req.body);
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const category = await prisma.category.create({ data });
+    await logAction(req, { action: "Created category", targetType: "Category", targetId: category.id, targetLabel: category.label });
+    res.status(201).json(category);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.message || "Failed to create category" });
   }
 });
 
@@ -585,29 +695,40 @@ router.get("/services", async (_req, res) => {
 
 router.get("/categories", async (_req, res) => {
   try {
-    const [vendorGroups, productGroups, serviceGroups] = await Promise.all([
+    const [categories, vendorGroups, productGroups, serviceGroups] = await Promise.all([
+      prisma.category.findMany({ orderBy: [{ position: "asc" }, { label: "asc" }] }),
       prisma.vendor.groupBy({ by: ["category"], _count: { _all: true } }),
       prisma.product.groupBy({ by: ["subcategory"], _count: { _all: true } }),
       emptyIfMissingTable(prisma.service.groupBy({ by: ["category"], _count: { _all: true } }), []),
     ]);
-    const byName = new Map();
+    const byName = new Map(categories.map((category) => [category.key, {
+      ...category,
+      name: category.label,
+      vendors: 0,
+      products: 0,
+      services: 0,
+      source: "Category",
+      availableLabel: category.active ? "Active" : "Inactive",
+    }]));
     vendorGroups.forEach((row) => {
       const name = row.category || "Marketplace";
-      byName.set(name, { id: `vendor-${name}`, name, vendors: row._count._all, products: 0, services: 0, source: "Vendor" });
+      const existing = byName.get(name) || { id: `derived-vendor-${name}`, key: name, label: name, name, vendors: 0, products: 0, services: 0, source: "Derived", active: true };
+      existing.vendors += row._count._all;
+      byName.set(name, existing);
     });
     productGroups.filter((row) => row.subcategory).forEach((row) => {
       const name = row.subcategory;
-      const existing = byName.get(name) || { id: `product-${name}`, name, vendors: 0, products: 0, services: 0, source: "Product" };
+      const existing = byName.get(name) || { id: `derived-product-${name}`, key: name, label: name, name, vendors: 0, products: 0, services: 0, source: "Derived", active: true };
       existing.products += row._count._all;
       byName.set(name, existing);
     });
     serviceGroups.forEach((row) => {
       const name = row.category || "Services";
-      const existing = byName.get(name) || { id: `service-${name}`, name, vendors: 0, products: 0, services: 0, source: "Service" };
+      const existing = byName.get(name) || { id: `derived-service-${name}`, key: name, label: name, name, vendors: 0, products: 0, services: 0, source: "Derived", active: true };
       existing.services += row._count._all;
       byName.set(name, existing);
     });
-    res.json(Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    res.json(Array.from(byName.values()).sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || a.name.localeCompare(b.name)));
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to load categories" });
   }
@@ -814,7 +935,7 @@ router.get("/global-search", async (req, res) => {
 
     res.json({ orders, customers, vendors, riders });
   } catch (err) {
-    res.json({ orders: [], customers: [], vendors: [], riders: [] });
+    res.status(500).json({ error: err.message || "Failed to run global search" });
   }
 });
 
@@ -843,7 +964,7 @@ router.post("/impersonate", async (req, res) => {
         isImpersonating: true,
         impersonatedBy: req.user.email,
       },
-      process.env.JWT_SECRET || "fallback_secret_key_12345",
+      getJwtSecret(),
       { expiresIn: "1h" }
     );
     await logAction(req, {
@@ -924,6 +1045,16 @@ router.patch("/locations/:id", async (req, res) => {
     await logAction(req, { action: "Updated location details", targetType: "Location", targetId: updated.id, targetLabel: updated.name });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.patch("/categories/:id", async (req, res) => {
+  try {
+    const data = categoryPayload(req.body);
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const updated = await prisma.category.update({ where: { id: req.params.id }, data });
+    await logAction(req, { action: "Updated category details", targetType: "Category", targetId: updated.id, targetLabel: updated.label });
+    res.json(updated);
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
 });
 
 router.patch("/commissions/:id", async (req, res) => {

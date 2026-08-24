@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
-import { STATUS_FLOW, STATUS_LABEL } from "../../data/mockData";
+import { STATUS_FLOW, STATUS_LABEL } from "../../data/appConstants";
 import { COLORS, fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 import { useAuth } from "../../context/AuthContext";
@@ -190,7 +190,7 @@ export default function TrackingScreen({ route, navigation }) {
     setVerifyingPayment(true);
     PaymentAPI.verify(reference)
       .then(() => refreshOrders())
-      .catch(() => {})
+      .catch((err) => setPayError(err.message || "Payment verification failed. Please try again."))
       .finally(() => { if (active) setVerifyingPayment(false); });
     return () => { active = false; };
   }, [paymentReference, order?.paymentReference, order?.paymentStatus, refreshOrders]);

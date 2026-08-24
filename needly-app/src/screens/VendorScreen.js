@@ -18,6 +18,44 @@ const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
 const INK = "#11123A";
 const MUTED = "#747792";
+
+const PRODUCT_EMOJI_RULES = [
+  { emoji: "🍚", words: ["rice", "jollof", "fried rice", "ofada", "basmati"] },
+  { emoji: "🍲", words: ["soup", "stew", "egusi", "efo", "okra", "ogbono", "pepper soup"] },
+  { emoji: "🍗", words: ["chicken", "turkey", "wings"] },
+  { emoji: "🥩", words: ["beef", "meat", "suya", "asun", "goat"] },
+  { emoji: "🐟", words: ["fish", "catfish", "tilapia", "croaker"] },
+  { emoji: "🍔", words: ["burger", "sandwich"] },
+  { emoji: "🍕", words: ["pizza"] },
+  { emoji: "🥖", words: ["bread", "loaf", "agege"] },
+  { emoji: "🥚", words: ["egg"] },
+  { emoji: "🥬", words: ["vegetable", "ugu", "green", "lettuce", "cabbage"] },
+  { emoji: "🍅", words: ["tomato", "tomatoes"] },
+  { emoji: "🌶️", words: ["pepper", "chilli", "chili"] },
+  { emoji: "🧅", words: ["onion", "onions"] },
+  { emoji: "🍌", words: ["banana", "plantain"] },
+  { emoji: "🍊", words: ["orange", "tangerine"] },
+  { emoji: "🍎", words: ["apple"] },
+  { emoji: "🍍", words: ["pineapple"] },
+  { emoji: "🥭", words: ["mango"] },
+  { emoji: "🫘", words: ["beans", "ewa"] },
+  { emoji: "🌽", words: ["corn", "maize"] },
+  { emoji: "🥔", words: ["yam", "potato"] },
+  { emoji: "🧴", words: ["oil", "palm oil", "groundnut oil"] },
+  { emoji: "💊", words: ["drug", "medicine", "tablet", "capsule", "paracetamol"] },
+  { emoji: "🧼", words: ["soap", "detergent", "cleaner", "wash"] },
+  { emoji: "🧻", words: ["tissue", "toilet roll"] },
+  { emoji: "🍼", words: ["milk", "baby food"] },
+  { emoji: "🍽️", words: ["meal", "food", "plate"] },
+];
+
+function suggestProductEmoji(name = "") {
+  const text = String(name).trim().toLowerCase();
+  if (!text) return "🍽️";
+  const match = PRODUCT_EMOJI_RULES.find((rule) => rule.words.some((word) => text.includes(word)));
+  return match?.emoji || "🛍️";
+}
+
 async function pickResizedProductImage() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
@@ -75,7 +113,7 @@ export default function VendorScreen() {
   const activeVendor = (vendors || []).find((v) => v.id === myVendorId)
     || user?.vendor
     || user?.managedVendor
-    || (vendors && vendors.length > 0 ? vendors[0] : null);
+    || null;
   const [stats, setStats] = useState(null);
   const [now, setNow] = useState(Date.now());
   const { canShowInstallButton, installApp, installLabel } = usePwaInstall();
@@ -83,7 +121,9 @@ export default function VendorScreen() {
   const [batteryLevel, setBatteryLevel] = useState(null);
 
   useEffect(() => {
-    VendorAPI.stats().then(setStats).catch(() => {});
+    VendorAPI.stats()
+      .then(setStats)
+      .catch((err) => setActionError(err.message || "Could not load vendor stats."));
   }, []);
 
   useEffect(() => {
@@ -131,6 +171,7 @@ export default function VendorScreen() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newEmoji, setNewEmoji] = useState("🍽️");
+  const [emojiEdited, setEmojiEdited] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState("");
   const [addOnDrafts, setAddOnDrafts] = useState({});
   const [actionError, setActionError] = useState(null);
@@ -163,7 +204,8 @@ export default function VendorScreen() {
     try {
       const next = await WalletAPI.summary();
       setWallet(next || { balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
-    } catch (_) {
+    } catch (err) {
+      setActionError(err.message || "Could not load wallet balance.");
       setWallet({ balance: 0, available: 0, pendingDebitAmount: 0, transactions: [] });
     } finally {
       setWalletLoading(false);
@@ -360,6 +402,13 @@ export default function VendorScreen() {
     }
   };
 
+  const updateNewProductName = (value) => {
+    setNewName(value);
+    if (!emojiEdited) {
+      setNewEmoji(suggestProductEmoji(value));
+    }
+  };
+
   const submitNewProduct = async () => {
     setActionError(null);
     const price = parseInt(newPrice, 10);
@@ -382,6 +431,7 @@ export default function VendorScreen() {
       setNewName("");
       setNewPrice("");
       setNewEmoji("🍽️");
+      setEmojiEdited(false);
       setNewImageUrl("");
       setShowAddForm(false);
     } catch (err) {
@@ -403,8 +453,14 @@ export default function VendorScreen() {
   };
 
   return (
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.shell}>
+    <ScrollView
+      ref={scrollRef}
+      style={styles.screen}
+      contentContainerStyle={[styles.content, compact && styles.contentCompact]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={[styles.shell, compact && styles.shellCompact]}>
       <View style={styles.heroStoreCard}>
         <View style={styles.vendorStatusRow}>
           <Text style={styles.vendorStatusTime}>{displayTime}</Text>
@@ -446,7 +502,7 @@ export default function VendorScreen() {
             </View>
           </View>
 
-          <View style={styles.vendorRightCluster}>
+          <View style={[styles.vendorRightCluster, compact && styles.vendorRightClusterCompact]}>
             <View style={styles.vendorHeaderIconButton}>
               <FontAwesome name="shopping-bag" size={20} color={PURPLE} />
               {!!queue.length && (
@@ -496,7 +552,7 @@ export default function VendorScreen() {
           </View>
           <Switch
             value={!!activeVendor.isOpen}
-              onValueChange={() => toggleVendorOpen(activeVendorId)}
+            onValueChange={() => toggleVendorOpen(activeVendorId)}
             trackColor={{ true: EMERALD, false: "#475569" }}
             thumbColor="#ffffff"
           />
@@ -711,9 +767,9 @@ export default function VendorScreen() {
             { label: "This week", data: stats.week, color: "#059669" },
             { label: "This month", data: stats.month, color: "#D97706" },
           ].map((s) => (
-            <View key={s.label} style={styles.statCard}>
+            <View key={s.label} style={[styles.statCard, statsCompact && styles.statCardCompact]}>
               <Text style={styles.statLabel}>{s.label.toUpperCase()}</Text>
-              <Text style={styles.statValue}>{fmtNaira(s.data?.revenue || 0)}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statValue}>{fmtNaira(s.data?.revenue || 0)}</Text>
               <Text style={styles.statSub}>{s.data?.orders || 0} order{s.data?.orders === 1 ? "" : "s"}</Text>
             </View>
           ))}
@@ -769,8 +825,8 @@ export default function VendorScreen() {
           return (
             <View style={styles.orderCard}>
               <View style={styles.orderCardHeader}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={styles.orderId}>Order #{o.id.slice(-6)}</Text>
+                <View style={styles.orderHeaderLeft}>
+                  <Text numberOfLines={1} style={styles.orderId}>Order #{o.id.slice(-6)}</Text>
                   <Text style={styles.orderTimeText}>
                     {new Date(o.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </Text>
@@ -791,10 +847,10 @@ export default function VendorScreen() {
               </View>
 
               <View style={styles.orderCardFooter}>
-                <View>
+                <View style={styles.orderTotalBlock}>
                   <Text style={styles.totalLabel}>VENDOR AMOUNT</Text>
                   <Text style={styles.totalValue}>{fmtNaira(o.vendorAmount || o.total)}</Text>
-                  <Text style={styles.paymentSplitNote}>
+                  <Text style={styles.paymentSplitNote} numberOfLines={3}>
                     Customer paid {fmtNaira(o.customerPaidAmount || o.total)}
                     {!!o.platformFeeAmount && ` · Fee ${fmtNaira(o.platformFeeAmount)}`}
                     {!!(o.riderPayoutAmount || o.deliveryFeeAmount) && ` · Rider ${fmtNaira(o.riderPayoutAmount || o.deliveryFeeAmount)}`}
@@ -922,7 +978,7 @@ export default function VendorScreen() {
 
       {/* Product Catalog Management */}
       <View style={styles.productsHeaderRow}>
-        <View onLayout={(event) => { sectionOffsets.current.menu = event.nativeEvent.layout.y; }}>
+        <View style={{ flex: 1, minWidth: 0 }} onLayout={(event) => { sectionOffsets.current.menu = event.nativeEvent.layout.y; }}>
           <Text style={styles.sectionTitle}>Product Catalog</Text>
           <Text style={styles.sectionSubTitle}>{vendorItems.length} active menu items</Text>
         </View>
@@ -951,18 +1007,21 @@ export default function VendorScreen() {
           </Pressable>
           <TextInput
             value={newName}
-            onChangeText={setNewName}
+            onChangeText={updateNewProductName}
             placeholder="Product Name (e.g. Special Fried Rice)"
             placeholderTextColor="#94A3B8"
             style={styles.input}
           />
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={styles.productInputRow}>
             <TextInput
               value={newEmoji}
-              onChangeText={setNewEmoji}
+              onChangeText={(value) => {
+                setEmojiEdited(true);
+                setNewEmoji(value);
+              }}
               placeholder="Emoji"
               placeholderTextColor="#94A3B8"
-              style={[styles.input, { width: 70, textAlign: "center" }]}
+              style={[styles.input, styles.emojiInput]}
             />
             <TextInput
               value={newPrice}
@@ -970,7 +1029,7 @@ export default function VendorScreen() {
               placeholder="Price in Naira (₦)"
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
-              style={[styles.input, { flex: 1 }]}
+              style={[styles.input, styles.priceInput]}
             />
           </View>
           <Pressable onPress={submitNewProduct} disabled={savingProduct} style={[styles.saveProductBtn, savingProduct && styles.saveProductBtnDisabled]}>
@@ -992,7 +1051,7 @@ export default function VendorScreen() {
           return (
             <View style={[styles.productCard, !isAvailable && styles.productCardSoldOut]}>
               <View style={styles.productCardTop}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                <View style={styles.productTitleCluster}>
                   <Pressable onPress={() => chooseExistingProductImage(item.id)} style={styles.productThumbButton}>
                     {item.imageUrl ? (
                       <Image source={{ uri: item.imageUrl }} style={styles.productThumbImage} resizeMode="cover" />
@@ -1003,8 +1062,8 @@ export default function VendorScreen() {
                       <Text style={styles.productThumbEditText}>+</Text>
                     </View>
                   </Pressable>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.productName}>{item.name}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={2} style={styles.productName}>{item.name}</Text>
 
                     {isEditing ? (
                       <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginTop: 4 }}>
@@ -1027,7 +1086,7 @@ export default function VendorScreen() {
                 </View>
 
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[styles.availabilityLabel, { color: isAvailable ? EMERALD : CHILI }]}>
+                  <Text numberOfLines={1} style={[styles.availabilityLabel, { color: isAvailable ? EMERALD : CHILI }]}>
                     {isAvailable ? "AVAILABLE" : "SOLD OUT"}
                   </Text>
                   <Switch
@@ -1052,13 +1111,13 @@ export default function VendorScreen() {
                   </View>
                 ))}
 
-                <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+                <View style={styles.addonInputRow}>
                   <TextInput
                     value={draft.name}
                     onChangeText={(text) => setDraft(item.id, { name: text })}
                     placeholder="Add-on (e.g. Extra Cheese)"
                     placeholderTextColor="#94A3B8"
-                    style={[styles.miniInput, { flex: 2 }]}
+                    style={[styles.miniInput, styles.addonNameInput]}
                   />
                   <TextInput
                     value={draft.price}
@@ -1066,7 +1125,7 @@ export default function VendorScreen() {
                     placeholder="₦ Price"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
-                    style={[styles.miniInput, { flex: 1 }]}
+                    style={[styles.miniInput, styles.addonPriceInput]}
                   />
                   <Pressable onPress={() => submitAddOn(item.id)} style={styles.addAddonBtn}>
                     <Text style={styles.addAddonBtnText}>+ Add</Text>
@@ -1117,7 +1176,8 @@ export default function VendorScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F6F3FF" },
-  content: { paddingBottom: 72, alignItems: "center" },
+  content: { paddingBottom: 72, alignItems: "center", width: "100%" },
+  contentCompact: { paddingBottom: 92 },
   shell: {
     width: "100%",
     maxWidth: 430,
@@ -1126,7 +1186,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 36,
+    overflow: "hidden",
   },
+  shellCompact: { paddingHorizontal: 12, paddingTop: 12 },
 
   noStoreContainer: { flex: 1, backgroundColor: "#F8FAFC", padding: 24, alignItems: "center", justifyContent: "center" },
   noStoreIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 16 },
@@ -1141,8 +1203,8 @@ const styles = StyleSheet.create({
   /* Hero Banner */
   heroStoreCard: {
     backgroundColor: PURPLE,
-    borderRadius: 30,
-    padding: 18,
+    borderRadius: 26,
+    padding: 14,
     marginBottom: 16,
     shadowColor: PURPLE,
     shadowOpacity: 0.28,
@@ -1150,9 +1212,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 7,
   },
-  vendorStatusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 13 },
+  vendorStatusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 13, flexWrap: "wrap" },
   vendorStatusTime: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  vendorStatusIcons: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, justifyContent: "flex-end" },
+  vendorStatusIcons: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1, justifyContent: "flex-end", flexWrap: "wrap" },
   vendorInstallPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.16)", paddingHorizontal: 8, height: 28, borderRadius: 14 },
   vendorMiniPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 28, borderRadius: 14 },
   vendorMiniPillOffline: { backgroundColor: "rgba(239,68,68,0.28)" },
@@ -1164,23 +1226,24 @@ const styles = StyleSheet.create({
   vendorAvatarInitialsText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   vendorIdentity: { flex: 1, minWidth: 0, gap: 5 },
   vendorPersonPill: { alignSelf: "flex-start", maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, height: 34, borderRadius: 17 },
-  vendorPersonText: { color: "#fff", fontSize: 13, fontWeight: "900", maxWidth: 132 },
+  vendorPersonText: { color: "#fff", fontSize: 12.5, fontWeight: "900", maxWidth: 112 },
   vendorEyebrow: { color: "rgba(255,255,255,0.82)", fontSize: 11.5, fontWeight: "900" },
   vendorTopActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   liveDot: { width: 7, height: 7, borderRadius: 4 },
   liveBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   vendorRightCluster: { flexDirection: "row", alignItems: "center", gap: 7 },
-  vendorHeaderIconButton: { width: 40, height: 40, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.94)", alignItems: "center", justifyContent: "center" },
+  vendorRightClusterCompact: { gap: 5 },
+  vendorHeaderIconButton: { width: 36, height: 36, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.94)", alignItems: "center", justifyContent: "center" },
   vendorBadge: { position: "absolute", top: -5, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#FF3657", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   vendorBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   logoutBtn: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   logoutBtnText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   heroTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
   heroVendorInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  storeAvatarWrap: { width: 56, height: 56, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: "rgba(255,255,255,0.22)" },
+  storeAvatarWrap: { width: 52, height: 52, borderRadius: 21, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 4, borderColor: "rgba(255,255,255,0.22)" },
   storeAvatarText: { fontSize: 29 },
-  vendorStorePanel: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 10 },
+  vendorStorePanel: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 9 },
   vendorStoreCopy: { flex: 1, minWidth: 0 },
   heroStoreName: { fontSize: 18, fontWeight: "900", color: "#ffffff", marginBottom: 5 },
   heroMetaRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
@@ -1190,7 +1253,7 @@ const styles = StyleSheet.create({
   heroStatusWrap: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   statusIndicatorDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
   heroStatusText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginBottom: 4 },
-  heroSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 18, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 12 },
+  heroSummaryRow: { flexDirection: "row", alignItems: "center", marginTop: 14, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 20, paddingVertical: 10 },
   heroSummaryItem: { flex: 1, alignItems: "center" },
   heroSummaryValue: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
   heroSummaryLabel: { color: "rgba(255,255,255,0.78)", fontSize: 11, fontWeight: "800", marginTop: 1 },
@@ -1245,8 +1308,8 @@ const styles = StyleSheet.create({
   walletReceiveBox: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 12, marginBottom: 12 },
   walletReceiveTitle: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "900" },
   walletReceiveText: { color: "rgba(255,255,255,0.72)", fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
-  walletWithdrawRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  withdrawInput: { flex: 1, minHeight: 44, borderColor: "rgba(255,255,255,0.22)", backgroundColor: "rgba(255,255,255,0.96)" },
+  walletWithdrawRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  withdrawInput: { flex: 1, minWidth: 150, minHeight: 44, borderColor: "rgba(255,255,255,0.22)", backgroundColor: "rgba(255,255,255,0.96)" },
   withdrawBtn: { minHeight: 44, borderRadius: 14, backgroundColor: PURPLE, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   withdrawBtnDisabled: { opacity: 0.52 },
   withdrawBtnText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" },
@@ -1261,8 +1324,9 @@ const styles = StyleSheet.create({
   walletTxAmountDebit: { color: "#FCA5A5" },
 
   /* Stats Grid */
-  statGrid: { flexDirection: "row", gap: 9, marginBottom: 14 },
-  statCard: { flex: 1, backgroundColor: "#ffffff", borderRadius: 18, borderWidth: 1, borderColor: "#EEEAF8", padding: 11, shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 14 },
+  statCard: { flex: 1, minWidth: 98, backgroundColor: "#ffffff", borderRadius: 18, borderWidth: 1, borderColor: "#EEEAF8", padding: 11, shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  statCardCompact: { minWidth: "31%", padding: 9 },
   statLabel: { fontSize: 9.5, fontWeight: "900", color: MUTED, marginBottom: 4 },
   statValue: { fontSize: 14.5, fontWeight: "900", color: INK },
   statSub: { fontSize: 10.5, color: MUTED, marginTop: 2, fontWeight: "700" },
@@ -1285,14 +1349,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   quickActionCardCompact: { paddingHorizontal: 10, rowGap: 12, columnGap: 8 },
-  quickActionItem: { flexGrow: 1, flexBasis: 0, minWidth: 68, alignItems: "center", gap: 7 },
+  quickActionItem: { flexGrow: 1, flexBasis: "22%", minWidth: 64, alignItems: "center", gap: 7 },
   quickActionItemCompact: { flexBasis: "47%", minWidth: 0 },
   quickIcon: { width: 46, height: 46, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   quickIconText: { fontSize: 16, fontWeight: "900" },
   quickActionLabel: { color: INK, fontSize: 12, fontWeight: "900" },
 
   /* Section Headers */
-  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" },
   sectionTitle: { fontSize: 17, fontWeight: "900", color: INK },
   sectionSubTitle: { fontSize: 12, color: MUTED, marginTop: 2, fontWeight: "700" },
   badgePill: { backgroundColor: "#F4EDFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
@@ -1311,7 +1375,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, gap: 12,
     shadowColor: PURPLE, shadowOpacity: 0.07, shadowRadius: 13, shadowOffset: { width: 0, height: 7 }, elevation: 3,
   },
-  orderCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingBottom: 10 },
+  orderCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingBottom: 10, gap: 8 },
+  orderHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   orderId: { fontWeight: "900", fontSize: 14.5, color: INK },
   orderTimeText: { fontSize: 11, color: MUTED, fontWeight: "700" },
 
@@ -1323,9 +1388,10 @@ const styles = StyleSheet.create({
   itemPriceText: { fontSize: 13, fontWeight: "800", color: "#334155" },
 
   orderCardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", flexWrap: "wrap" },
+  orderTotalBlock: { flex: 1, minWidth: 165 },
   totalLabel: { fontSize: 9.5, fontWeight: "900", color: MUTED },
   totalValue: { fontSize: 16.5, fontWeight: "900", color: INK },
-  paymentSplitNote: { color: MUTED, fontSize: 10.5, fontWeight: "700", marginTop: 3, maxWidth: 190 },
+  paymentSplitNote: { color: MUTED, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
   orderActionRow: { flexDirection: "row", gap: 8, flexShrink: 1 },
   orderActionRowCompact: { width: "100%", justifyContent: "flex-end" },
 
@@ -1358,7 +1424,7 @@ const styles = StyleSheet.create({
   historyDetailItem: { fontSize: 12, color: "#334155" },
 
   /* Product Catalog */
-  productsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 14 },
+  productsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 24, marginBottom: 14 },
   addProductBtn: { backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 15 },
   addProductBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 12.5 },
 
@@ -1372,6 +1438,9 @@ const styles = StyleSheet.create({
   productImageBadge: { position: "absolute", right: 10, bottom: 10, backgroundColor: PURPLE, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   productImageBadgeText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "900" },
   input: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, backgroundColor: "#ffffff", color: INK },
+  productInputRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  emojiInput: { width: 70, textAlign: "center" },
+  priceInput: { flex: 1, minWidth: 180 },
   miniInput: { borderWidth: 1, borderColor: "#DDD6FE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: "#ffffff", color: INK },
   saveProductBtn: { backgroundColor: DARK_PURPLE, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
   saveProductBtnDisabled: { opacity: 0.62 },
@@ -1379,7 +1448,8 @@ const styles = StyleSheet.create({
 
   productCard: { backgroundColor: "#ffffff", borderRadius: 24, borderWidth: 1, borderColor: "#EEEAF8", padding: 15, shadowColor: PURPLE, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   productCardSoldOut: { opacity: 0.6, backgroundColor: "#F8FAFC" },
-  productCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  productCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  productTitleCluster: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
   productThumbButton: { width: 48, height: 48, borderRadius: 16 },
   productThumbImage: { width: 48, height: 48, borderRadius: 16, backgroundColor: "#F4EDFF" },
   productThumbEdit: { position: "absolute", right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: PURPLE, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" },
@@ -1393,11 +1463,14 @@ const styles = StyleSheet.create({
   addonsBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   addonsHeaderTitle: { fontSize: 10, fontWeight: "900", color: MUTED, marginBottom: 6 },
   addonRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 3, backgroundColor: "#F7F3FF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  addonText: { fontSize: 12.5, color: INK, fontWeight: "700" },
+  addonText: { fontSize: 12.5, color: INK, fontWeight: "700", flex: 1, minWidth: 0 },
   removeAddonBtn: { padding: 4 },
   removeAddonText: { color: CHILI, fontSize: 13, fontWeight: "800" },
   addAddonBtn: { backgroundColor: DARK_PURPLE, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, justifyContent: "center" },
   addAddonBtnText: { color: "#ffffff", fontWeight: "800", fontSize: 12 },
+  addonInputRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  addonNameInput: { flex: 2, minWidth: 150 },
+  addonPriceInput: { flex: 1, minWidth: 86 },
   issuesSection: { marginTop: 22, marginBottom: 10 },
   issueList: { gap: 10 },
   issueCard: { backgroundColor: "#FFF7F7", borderWidth: 1, borderColor: "#FECACA", borderRadius: 18, padding: 13 },

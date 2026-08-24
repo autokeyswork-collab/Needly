@@ -1,8 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { CATEGORIES, MARKETPLACE_SHORTCUTS } from "../../data/mockData";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
-import { Pill } from "../../components/Pill";
 import { useOrders } from "../../context/OrdersContext";
 import { CATEGORY_AVATAR_IMAGES, CATEGORY_IMAGES } from "../../data/customerAssets";
 import { fmtNaira } from "../../theme/colors";
@@ -26,23 +24,28 @@ const CATEGORY_AVATARS = {
   Grills: "🍖",
 };
 
+function categoryImageFor(category) {
+  const key = category?.imageKey || category?.category || category?.key;
+  return CATEGORY_IMAGES[key] || CATEGORY_IMAGES[category?.category] || CATEGORY_IMAGES.Restaurant;
+}
+
 export default function CategoryResultsScreen({ route, navigation }) {
   const { width } = useWindowDimensions();
   const category = route.params?.category || "Auto";
-  const shortcut = MARKETPLACE_SHORTCUTS.find((s) => s.key === category);
-  const { vendors, serviceProviders = [], loading } = useOrders();
-  const isBuy = CATEGORIES.includes(category);
+  const { vendors, serviceProviders = [], categories = [], loading, error } = useOrders();
+  const selectedCategory = categories.find((item) => item.key === category || item.category === category);
+  const isBuy = selectedCategory ? selectedCategory.flow !== "BOOK" : vendors.some((vendor) => vendor.category === category);
   const compact = width < 390;
   const shellWidth = Math.min(width, 430);
   const sidePad = shellWidth < 370 ? 14 : 18;
-  const categoryVendors = vendors.filter((v) => v.category === category);
-  const providers = serviceProviders.filter((provider) => category === "Services" ? true : provider.category === category);
+  const categoryVendors = category === "All" ? vendors : vendors.filter((v) => v.category === category);
+  const providers = category === "All" ? serviceProviders : serviceProviders.filter((provider) => category === "Services" ? true : provider.category === category);
   const isOpenMarket = category === "Local Market";
-  const heroImage = isOpenMarket ? CATEGORY_IMAGES["Open Market Hero"] : CATEGORY_IMAGES[category];
-  const title = shortcut?.title || category;
+  const heroImage = isOpenMarket ? CATEGORY_IMAGES["Open Market Hero"] : categoryImageFor(selectedCategory);
+  const title = selectedCategory?.label || category;
   const subtitle = isOpenMarket
     ? "Fresh produce, foodstuff and trusted local sellers around Abeokuta."
-    : shortcut?.subtitle;
+    : selectedCategory?.description || "Browse live Needly vendors and providers in this category.";
 
   return (
     <View style={styles.screen}>
@@ -59,7 +62,7 @@ export default function CategoryResultsScreen({ route, navigation }) {
             </View>
           </View>
           <View style={styles.heroCopy}>
-            <Text style={styles.overline}>{shortcut?.flow || "BROWSE"}</Text>
+            <Text style={styles.overline}>{selectedCategory?.flow || "BROWSE"}</Text>
             <Text numberOfLines={2} adjustsFontSizeToFit style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
             <Text numberOfLines={3} style={[styles.subtitle, compact && styles.subtitleCompact]}>{subtitle}</Text>
           </View>
@@ -74,6 +77,12 @@ export default function CategoryResultsScreen({ route, navigation }) {
               <Text style={styles.marketInfoTitle}>Fresh from Abeokuta markets</Text>
               <Text style={styles.marketInfoSub}>Tap a seller to view tomatoes, peppers, garri, yam, eggs and more.</Text>
             </View>
+          </View>
+        )}
+
+        {!!error && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
@@ -217,4 +226,6 @@ const styles = StyleSheet.create({
   emptyTitle: { color: INK, fontSize: 15, fontWeight: "900", marginTop: 6, marginBottom: 4 },
   empty: { color: "#77778D", fontSize: 13, textAlign: "center", lineHeight: 18 },
   comingSoonCard: { borderWidth: 1, borderColor: "#E6DDFD", borderRadius: 18, padding: 16, backgroundColor: "#F8F5FF" },
+  errorCard: { borderWidth: 1, borderColor: "#FED7AA", backgroundColor: "#FFF7ED", borderRadius: 16, padding: 12, marginBottom: 12 },
+  errorText: { color: "#92400E", fontSize: 12, lineHeight: 17, fontWeight: "800" },
 });

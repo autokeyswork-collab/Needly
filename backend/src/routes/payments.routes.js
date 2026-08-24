@@ -9,6 +9,7 @@ const { getIntegrationValue } = require("../lib/integrationSettings");
 const { sendPushNotification } = require("../lib/pushNotifications");
 const { broadcastAdminAlert, broadcastNotification } = require("../sockets/orderSocket");
 const { createWalletCredit, findCompanyWalletUser, handleFlutterwaveWalletWebhook } = require("./wallet.routes");
+const { reserveOrderInventory, releaseOrderInventory } = require("../lib/orderInventory");
 
 const router = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 2.5;
@@ -140,6 +141,8 @@ async function markOrderPaymentPaid(reference, req) {
   if (!payment || payment.status === "PAID") return payment;
 
   await prisma.$transaction(async (tx) => {
+    await reserveOrderInventory(payment.orderId, tx);
+
     await tx.payment.update({
       where: { reference },
       data: { status: "PAID", paidAt: new Date() },
@@ -250,9 +253,13 @@ async function markOrderPaymentPaid(reference, req) {
 async function markOrderPaymentFailed(reference, req) {
   const payment = await prisma.payment.findUnique({ where: { reference }, include: { order: true } });
   if (!payment || payment.status === "PAID" || payment.status === "REFUNDED") return payment;
-  const updated = await prisma.payment.update({
-    where: { reference },
-    data: { status: "FAILED" },
+  const updated = await prisma.$transaction(async (tx) => {
+    const failed = await tx.payment.update({
+      where: { reference },
+      data: { status: "FAILED" },
+    });
+    await releaseOrderInventory(payment.orderId, tx);
+    return failed;
   });
   const io = req.app.get("io");
   if (io && payment.orderId) {
@@ -265,9 +272,13 @@ async function markOrderPaymentFailed(reference, req) {
 async function markOrderPaymentReversed(reference, req) {
   const payment = await prisma.payment.findUnique({ where: { reference }, include: { order: true } });
   if (!payment || payment.status === "REFUNDED") return payment;
-  const updated = await prisma.payment.update({
-    where: { reference },
-    data: { status: "REFUNDED", refundedAt: new Date() },
+  const updated = await prisma.$transaction(async (tx) => {
+    const refunded = await tx.payment.update({
+      where: { reference },
+      data: { status: "REFUNDED", refundedAt: new Date() },
+    });
+    await releaseOrderInventory(payment.orderId, tx);
+    return refunded;
   });
   const io = req.app.get("io");
   if (io && payment.orderId) {
@@ -320,6 +331,16 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
     // Clear it so a fresh attempt with a new reference can go out —
     // Paystack references aren't meant to be reused across attempts.
     await prisma.payment.delete({ where: { id: order.payment.id } });
+  }
+
+  if (order.inventoryReleasedAt) {
+    try {
+      await reserveOrderInventory(order.id);
+    } catch (err) {
+      return res.status(err.statusCode || 409).json({
+        error: err.message || "One or more products are no longer available in the requested quantity",
+      });
+    }
   }
 
   const platformFeePercent = await getPlatformFeePercent();

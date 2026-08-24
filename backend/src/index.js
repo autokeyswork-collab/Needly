@@ -20,6 +20,7 @@ const bookingRoutes = require("./routes/bookings.routes");
 const notificationRoutes = require("./routes/notifications.routes");
 const homeRoutes = require("./routes/home.routes");
 const { router: walletRoutes } = require("./routes/wallet.routes");
+const { cleanupExpiredPendingOrders } = require("./lib/orderInventory");
 
 const app = express();
 
@@ -29,10 +30,14 @@ const app = express();
 // to no origins (same-origin/native-app requests only, which don't send
 // an Origin header) if the env var isn't set, rather than defaulting open.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+const devOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?$/;
 app.use(cors({
   origin(origin, callback) {
-    // Always allow requests during dev/local testing
-    return callback(null, true);
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!isProduction && devOriginPattern.test(origin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} is not allowed by CORS`));
   },
 }));
 
@@ -88,3 +93,17 @@ const PORT = process.env.PORT || 4000;
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Needly backend listening on http://0.0.0.0:${PORT}`);
 });
+
+async function runPendingOrderCleanup() {
+  try {
+    const result = await cleanupExpiredPendingOrders();
+    if (result.released) {
+      console.log(`Released inventory for ${result.released} expired pending order(s)`);
+    }
+  } catch (err) {
+    console.error("Pending order cleanup failed", err.message);
+  }
+}
+
+runPendingOrderCleanup();
+setInterval(runPendingOrderCleanup, Number(process.env.PENDING_ORDER_CLEANUP_INTERVAL_MS || 15 * 60 * 1000));

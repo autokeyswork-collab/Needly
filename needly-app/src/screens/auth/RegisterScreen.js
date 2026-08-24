@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -19,6 +19,7 @@ import { useAuth } from "../../context/AuthContext";
 import NeedlyLogo from "../../components/NeedlyLogo";
 import LocationAutocomplete from "../../components/LocationAutocomplete";
 import { LOGIN_HERO_MARKET } from "../../data/customerAssets";
+import { HomeAPI } from "../../api/client";
 
 const ROLES = [
   { value: "CUSTOMER", label: "Customer", sub: "Shop & order", icon: "person", family: "Ionicons" },
@@ -26,31 +27,6 @@ const ROLES = [
   { value: "RIDER", label: "Rider", sub: "Deliver & earn", icon: "motorbike", family: "MaterialCommunityIcons" },
 ];
 
-const VENDOR_CATEGORIES = [
-  "Local Market",
-  "Restaurant",
-  "Supermarket",
-  "Pharmacy",
-  "Gas & Water",
-  "Services",
-  "Home Services",
-  "Auto",
-  "Laundry",
-  "Beauty & Wellness",
-  "Electronics",
-  "Fashion",
-  "Bakery",
-  "Grills",
-  "Frozen Foods",
-  "Baby & Kids",
-  "Pet Supplies",
-  "Stationery",
-  "Tutors",
-  "Transport",
-  "Stay & Dine",
-  "Events & Rentals",
-  "Repairs",
-];
 const ABEOKUTA_AREAS = [
   "Oke-Ilewo",
   "Ibara",
@@ -138,6 +114,30 @@ export default function RegisterScreen({ navigation, route }) {
   const [submitting, setSubmitting] = useState(false);
   const [pendingMessage, setPendingMessage] = useState(null);
   const [onboardingPayment, setOnboardingPayment] = useState(null);
+  const [vendorCategories, setVendorCategories] = useState([]);
+  const [categoryLoadError, setCategoryLoadError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    HomeAPI.categories("Abeokuta")
+      .then((items) => {
+        if (cancelled) return;
+        const labels = (Array.isArray(items) ? items : [])
+          .filter((item) => item?.flow !== "RESERVE")
+          .map((item) => item.key || item.category || item.label)
+          .filter(Boolean);
+        setVendorCategories(labels);
+        if (labels.length && !labels.includes(vendorCategory)) {
+          setVendorCategory(labels[0]);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setCategoryLoadError(err.message || "Could not load vendor categories.");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const categoryOptions = useMemo(() => vendorCategories.length ? vendorCategories : [vendorCategory].filter(Boolean), [vendorCategories, vendorCategory]);
 
   const submit = async () => {
     setValidationError(null);
@@ -149,6 +149,7 @@ export default function RegisterScreen({ navigation, route }) {
 
     if (role === "VENDOR") {
       if (!businessName.trim()) { setValidationError("Please enter your store or business name."); return; }
+      if (!vendorCategories.length) { setValidationError(categoryLoadError || "Store categories could not be loaded. Please try again."); return; }
       if (!vendorAddress.trim()) { setValidationError("Please enter your business street address."); return; }
     }
 
@@ -211,6 +212,7 @@ export default function RegisterScreen({ navigation, route }) {
     }
     if (role === "VENDOR") {
       if (!businessName.trim()) { setValidationError("Please enter your store or business name."); return; }
+      if (!vendorCategories.length) { setValidationError(categoryLoadError || "Store categories could not be loaded. Please try again."); return; }
       if (!vendorAddress.trim()) { setValidationError("Please enter your business street address."); return; }
     }
 
@@ -510,7 +512,12 @@ export default function RegisterScreen({ navigation, route }) {
               {categoryOpen && (
                 <View style={styles.dropdownMenu}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                    {VENDOR_CATEGORIES.map((cat) => (
+                    {categoryLoadError && (
+                      <View style={styles.dropdownOption}>
+                        <Text style={styles.dropdownOptionText}>{categoryLoadError}</Text>
+                      </View>
+                    )}
+                    {categoryOptions.map((cat) => (
                       <Pressable
                         key={cat}
                         onPress={() => {

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, normalizeOrder } from "../api/client";
+import { VendorAPI, OrderAPI, DisputeAPI, BookingAPI, NotificationAPI, PaymentAPI, HomeAPI, normalizeOrder } from "../api/client";
 import { connectSocket, subscribeToRealtimeEvents } from "../api/socket";
 import { useAuth } from "./AuthContext";
 import { countDraftCartItems, loadCustomerActivity, saveCustomerActivity } from "../utils/customerActivity";
@@ -13,6 +13,7 @@ export function OrdersProvider({ children }) {
   const [bookings, setBookings] = useState([]);
   const [serviceProviders, setServiceProviders] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [riderData, setRiderData] = useState({ available: [], assigned: [], completedToday: [] });
   const [disputes, setDisputes] = useState([]);
   const [customerActivity, setCustomerActivity] = useState({ draftCarts: {}, checkoutDrafts: {}, updatedAt: null });
@@ -27,6 +28,16 @@ export function OrdersProvider({ children }) {
       setError(err.message);
     }
   }, []);
+
+  const refreshCategories = useCallback(async () => {
+    try {
+      const data = await HomeAPI.categories(user?.locationCity);
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message);
+      setCategories([]);
+    }
+  }, [user?.locationCity]);
 
   const refreshServices = useCallback(async () => {
     try {
@@ -129,6 +140,7 @@ export function OrdersProvider({ children }) {
     setLoading(true);
     await Promise.all([
       refreshVendors(),
+      refreshCategories(),
       refreshServices(),
       refreshOrders(),
       refreshBookings(),
@@ -136,7 +148,7 @@ export function OrdersProvider({ children }) {
       refreshDisputes(),
     ]);
     setLoading(false);
-  }, [refreshVendors, refreshServices, refreshOrders, refreshBookings, refreshNotifications, refreshDisputes]);
+  }, [refreshVendors, refreshCategories, refreshServices, refreshOrders, refreshBookings, refreshNotifications, refreshDisputes]);
 
   useEffect(() => {
     if (user) refresh();
@@ -376,6 +388,7 @@ export function OrdersProvider({ children }) {
     <OrdersContext.Provider value={{
       loading, error,
       vendors, refreshVendors,
+      categories, refreshCategories,
       orders, riderData, refreshOrders,
       bookings, serviceProviders, refreshBookings, refreshServices, createBooking, advanceBookingStatus, cancelBooking,
       notifications, refreshNotifications, markNotificationRead, markAllNotificationsRead,

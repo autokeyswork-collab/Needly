@@ -57,7 +57,7 @@ export default function ManagerScreen() {
   const managedVendorId = user?.managedVendor?.id;
   const managedVendor = (vendors || []).find((v) => v.id === managedVendorId)
     || user?.managedVendor
-    || (vendors && vendors.length > 0 ? vendors.find((v) => v.category === "Local Market") || vendors[0] : null);
+    || null;
   const [actionError, setActionError] = useState(null);
   const [stats, setStats] = useState(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -65,7 +65,9 @@ export default function ManagerScreen() {
   const [declineOtherNote, setDeclineOtherNote] = useState(null);
 
   useEffect(() => {
-    VendorAPI.stats().then(setStats).catch(() => {});
+    VendorAPI.stats()
+      .then(setStats)
+      .catch((err) => setActionError(err.message || "Could not load vendor stats."));
   }, []);
 
   const acceptOrder = async (orderId) => {

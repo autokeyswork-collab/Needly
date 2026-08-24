@@ -1,6 +1,6 @@
 import React from "react";
 import { Text, View } from "react-native";
-import { STATUS_LABEL } from "../data/mockData";
+import { STATUS_LABEL } from "../data/appConstants";
 
 const TONES = {
   neutral: { bg: "#EFEADB", fg: "#10231B" },

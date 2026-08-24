@@ -20,6 +20,45 @@ function publicBanner(promotion) {
   };
 }
 
+function publicCategory(category) {
+  return {
+    id: category.id,
+    key: category.key,
+    label: category.label,
+    category: category.key,
+    flow: category.flow,
+    description: category.description || "",
+    icon: category.icon || "",
+    imageKey: category.imageKey || category.key,
+    position: category.position,
+    location: category.location || "",
+  };
+}
+
+router.get("/categories", async (req, res) => {
+  const location = String(req.query.location || "").trim();
+  const where = {
+    active: true,
+    ...(location ? {
+      OR: [
+        { location: null },
+        { location: "" },
+        { location: { equals: location, mode: "insensitive" } },
+      ],
+    } : {}),
+  };
+
+  try {
+    const categories = await prisma.category.findMany({
+      where,
+      orderBy: [{ position: "asc" }, { label: "asc" }],
+    });
+    res.json(categories.map(publicCategory));
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load homepage categories" });
+  }
+});
+
 router.get("/banners", async (req, res) => {
   const now = new Date();
   const location = String(req.query.location || "").trim();

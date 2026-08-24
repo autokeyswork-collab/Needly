@@ -116,6 +116,7 @@ const editFieldsMap = {
   order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
   booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
+  category: [["Key", "key"], ["Label", "label"], ["Flow", "flow"], ["Description", "description"], ["Icon", "icon"], ["Image Key", "imageKey"], ["Position", "position", true], ["Location", "location"], ["Active", "active"]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [
     ["Promo Code", "code"],
@@ -490,7 +491,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
     try {
       const rs = await Promise.allSettled([
         SuperAdminAPI.stats(), SuperAdminAPI.liveOps(), AuthAPI.customers(),
-        VendorAPI.adminList().catch(() => VendorAPI.list()),
+        VendorAPI.adminList(),
         RiderAPI.adminList(), SuperAdminAPI.bookings(), SuperAdminAPI.locations(),
         SuperAdminAPI.commissions(), SuperAdminAPI.promotions(),
         SuperAdminAPI.tickets(), SuperAdminAPI.roles(), SuperAdminAPI.refunds(),
@@ -600,6 +601,7 @@ export default function SuperAdminControlCenter({ onLogout }) {
       else if (type === "order") await SuperAdminAPI.updateOrder(id, editForm);
       else if (type === "booking") await SuperAdminAPI.updateBooking(id, editForm);
       else if (type === "location") await SuperAdminAPI.updateLocation(id, editForm);
+      else if (type === "category") await SuperAdminAPI.updateCategory(id, editForm);
       else if (type === "commission") await SuperAdminAPI.updateCommission(id, editForm);
       else if (type === "promotion") await SuperAdminAPI.updatePromotion(id, editForm);
       else if (type === "ticket") await SuperAdminAPI.updateTicket(id, editForm);
@@ -622,6 +624,29 @@ export default function SuperAdminControlCenter({ onLogout }) {
       reload();
     } catch (err) {
       alert("Add zone failed: " + (err.message || err));
+    }
+  };
+
+  const addCategory = async () => {
+    const key = prompt("Category key used by vendors/products:", "Local Market");
+    if (!key) return;
+    const label = prompt("Customer-facing label:", key);
+    if (!label) return;
+    const flow = prompt("Flow: BUY, BOOK, or RESERVE", "BUY") || "BUY";
+    const position = prompt("Display position:", "1");
+    try {
+      await SuperAdminAPI.createCategory({
+        key,
+        label,
+        flow,
+        imageKey: key,
+        position: Number(position || 1),
+        active: true,
+        location: "Abeokuta",
+      });
+      reload();
+    } catch (err) {
+      alert("Add category failed: " + (err.message || err));
     }
   };
 
@@ -952,9 +977,13 @@ export default function SuperAdminControlCenter({ onLogout }) {
                   ))}
                   {canEdit && (
                     <View style={s.sheetActionCell}>
-                      <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
-                        <Text style={s.editBtnTxt}>Edit</Text>
-                      </Pressable>
+                      {item.source === "Derived" ? (
+                        <Text style={{ color: TEXT_SUB, fontSize: 10, fontWeight: "700", textAlign: "center" }}>Configure first</Text>
+                      ) : (
+                        <Pressable onPress={() => startEdit(type, item)} style={s.editBtn}>
+                          <Text style={s.editBtnTxt}>Edit</Text>
+                        </Pressable>
+                      )}
                     </View>
                   )}
                 </View>
@@ -1938,8 +1967,14 @@ export default function SuperAdminControlCenter({ onLogout }) {
     if (activeTab === "categories") return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <Text style={s.pageH}>Marketplace Categories</Text>
-          <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+          <View>
+            <Text style={s.pageH}>Marketplace Categories</Text>
+            <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Customer homepage categories are controlled from this database table.</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={addCategory} style={s.btn}><Text style={s.btnTxt}>+ Add Category</Text></Pressable>
+            <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+          </View>
         </View>
         <GenericList
           items={categories}
@@ -1947,6 +1982,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
           filterKey="name"
           fields={[
             { key: "name", bold: true },
+            { key: "key", label: "Key" },
+            { key: "flow", label: "Flow" },
+            { key: "position", label: "Position" },
+            { key: "active", label: "Active" },
+            { key: "location", label: "Location" },
             { key: "vendors", label: "Vendors" },
             { key: "products", label: "Products" },
             { key: "services", label: "Services" },

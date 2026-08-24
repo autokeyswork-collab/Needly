@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { Picker } from "@react-native-picker/picker";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
-import { STATUS_FLOW, STATUS_LABEL } from "../data/mockData";
+import { STATUS_FLOW, STATUS_LABEL } from "../data/appConstants";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { AuthAPI, VendorAPI, RiderAPI, OrderAPI, AuditAPI, PayoutAPI, OperationalIssueAPI, normalizeOrder } from "../api/client";

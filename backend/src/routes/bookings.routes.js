@@ -1,6 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
-const { requireAuth } = require("../middleware/auth");
+const { requireAuth, requireRole } = require("../middleware/auth");
 const { broadcastBookingUpdate, broadcastNotification, broadcastAdminAlert } = require("../sockets/orderSocket");
 
 const router = express.Router();
@@ -22,6 +22,28 @@ function publicService(service, provider = null) {
     isAvailable: service.isAvailable,
     createdAt: service.createdAt,
   };
+}
+
+const BOOKING_STATUSES = new Set(["PENDING", "ACCEPTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
+
+async function canManageBooking(user, booking) {
+  if (!user || !booking) return false;
+  if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") return true;
+
+  const providerId = booking.service?.providerId;
+  if (!providerId) return false;
+
+  if (user.role === "VENDOR") {
+    const vendor = await prisma.vendor.findUnique({ where: { id: providerId }, select: { ownerId: true } });
+    return vendor?.ownerId === user.id;
+  }
+
+  if (user.role === "MANAGER") {
+    const vendor = await prisma.vendor.findUnique({ where: { id: providerId }, select: { managerId: true } });
+    return vendor?.managerId === user.id;
+  }
+
+  return false;
 }
 
 /** GET /bookings/services — database-backed service provider list. */
@@ -51,7 +73,7 @@ router.get("/services", async (req, res) => {
 });
 
 /** POST /bookings — Create a new service booking. */
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   const { serviceId, providerName, address, phone, total, scheduledAt } = req.body;
 
   if (!serviceId || !address || !phone) {
@@ -91,8 +113,19 @@ router.post("/", requireAuth, async (req, res) => {
 router.get("/mine", requireAuth, async (req, res) => {
   try {
     let bookings = [];
-    if (req.user.role === "ADMIN") {
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") {
       bookings = await prisma.booking.findMany({ orderBy: { createdAt: "desc" } });
+    } else if (req.user.role === "VENDOR" || req.user.role === "MANAGER") {
+      const vendor = req.user.role === "VENDOR"
+        ? await prisma.vendor.findUnique({ where: { ownerId: req.user.id } })
+        : await prisma.vendor.findUnique({ where: { managerId: req.user.id } });
+      bookings = vendor
+        ? await prisma.booking.findMany({
+          where: { service: { providerId: vendor.id } },
+          include: { service: true, customer: { select: { id: true, name: true, phone: true, email: true } } },
+          orderBy: { createdAt: "desc" },
+        })
+        : [];
     } else {
       bookings = await prisma.booking.findMany({
         where: { customerId: req.user.id },
@@ -107,13 +140,23 @@ router.get("/mine", requireAuth, async (req, res) => {
 
 /** PATCH /bookings/:id/status — Transition booking status. */
 router.patch("/:id/status", requireAuth, async (req, res) => {
-  const { status } = req.body;
+  const status = String(req.body?.status || "").trim().toUpperCase();
   if (!status) return res.status(400).json({ error: "Status is required" });
+  if (!BOOKING_STATUSES.has(status)) return res.status(400).json({ error: "Unsupported booking status" });
 
   try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { service: true },
+    });
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+    if (!(await canManageBooking(req.user, booking))) {
+      return res.status(403).json({ error: "Not authorized to update this booking" });
+    }
+
     const updated = await prisma.booking.update({
       where: { id: req.params.id },
-      data: { status: status.toUpperCase() },
+      data: { status },
     });
     broadcastBookingUpdate(updated);
     broadcastNotification(updated.customerId, {
@@ -130,6 +173,21 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
 router.patch("/:id/cancel", requireAuth, async (req, res) => {
   const { reason } = req.body;
   try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { service: true },
+    });
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
+    const isCustomerOwner = req.user.role === "CUSTOMER" && booking.customerId === req.user.id;
+    const isManager = await canManageBooking(req.user, booking);
+    if (!isCustomerOwner && !isManager) {
+      return res.status(403).json({ error: "Not authorized to cancel this booking" });
+    }
+    if (booking.status === "COMPLETED" || booking.status === "CANCELLED") {
+      return res.status(400).json({ error: `Booking can no longer be cancelled (status: ${booking.status})` });
+    }
+
     const updated = await prisma.booking.update({
       where: { id: req.params.id },
       data: { status: "CANCELLED", cancelReason: reason || "Cancelled by user" },

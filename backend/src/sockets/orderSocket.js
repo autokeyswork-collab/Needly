@@ -1,6 +1,7 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
+const { getJwtSecret } = require("../lib/jwtSecret");
 
 let ioInstance = null;
 
@@ -14,7 +15,7 @@ function setupSockets(httpServer) {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Missing auth token"));
     try {
-      socket.user = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret_key_12345");
+      socket.user = jwt.verify(token, getJwtSecret());
       next();
     } catch (err) {
       next(new Error("Invalid auth token"));

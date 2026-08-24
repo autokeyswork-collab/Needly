@@ -1,7 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key_12345";
+const { getJwtSecret } = require("../lib/jwtSecret");
 
 /**
  * Verifies the JWT on every protected route and attaches `req.user`.
@@ -16,7 +15,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: "Missing auth token" });
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, getJwtSecret());
     const user = await prisma.user.findUnique({ where: { id: payload.id }, select: { approved: true } });
     if (!user) return res.status(401).json({ error: "Invalid or expired token" });
     if (!user.approved) return res.status(403).json({ error: "Your account has been suspended" });

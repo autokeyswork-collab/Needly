@@ -142,6 +142,7 @@ model Product {
   isAvailable Boolean        @default(true)
   createdAt   DateTime       @default(now())
   addOns      ProductAddOn[]
+  orderItems  OrderItem[]
 }
 
 model ProductAddOn {
@@ -201,6 +202,7 @@ model Order {
   deliveryPhone     String
   deliveryLatitude  Float?
   deliveryLongitude Float?
+  inventoryReleasedAt DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   items             OrderItem[]
@@ -214,6 +216,8 @@ model OrderItem {
   id      String  @id @default(cuid())
   orderId String
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product Product? @relation(fields: [productId], references: [id])
   name    String
   price   Int
   qty     Int
@@ -392,6 +396,21 @@ model Location {
   deliveryFee Int      @default(500)
   maxDistance Int      @default(25)
   createdAt   DateTime @default(now())
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  flow        String   @default("BUY") // BUY, BOOK, RESERVE
+  description String?
+  icon        String?
+  imageKey    String?
+  position    Int      @default(0)
+  active      Boolean  @default(true)
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model CommissionRule {

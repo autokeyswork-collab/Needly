@@ -1,6 +1,5 @@
 import React from "react";
 import { Text, View } from "react-native";
-import { CATEGORY_TINT } from "../data/mockData";
 
 export default function Thumb({ emoji, category, size = 44 }) {
   return (
