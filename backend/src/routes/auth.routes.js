@@ -1132,94 +1132,10 @@ router.get("/customers/:id/full-profile", requireAuth, requireRole("ADMIN"), asy
           },
           orderBy: { createdAt: "desc" },
         },
-        reviews: { include: { vendor: true } },
-        bookings: { include: { service: true } },
       },
     });
 
-    if (!user || orders.length === 0) {
-      // Demo reconciliation fallback for contacts
-      return res.json({
-        user: {
-          id: id,
-          name: user?.name || "Customer Account",
-          email: user?.email || "customer@demo.needly",
-          phone: user?.phone || "08030001122",
-          role: "CUSTOMER",
-          approved: true,
-          createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
-        },
-        reconciliation: {
-          totalOrders: 4,
-          totalPaid: 145500,
-          totalPending: 8500,
-          totalRefunded: 12000,
-          orderBreakdown: [
-            {
-              id: "ORD-99101",
-              status: "DELIVERED",
-              total: 85000,
-              paymentStatus: "PAID",
-              paymentReference: "pay_pstk_882910129",
-              paidAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-              vendorName: "Mama Risi Kitchen",
-              vendorEmoji: "🍽️",
-              itemsCount: 3,
-              items: [{ name: "Jollof Rice Special", qty: 2, price: 25000 }, { name: "Grilled Chicken & Plantain", qty: 1, price: 35000 }],
-              createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-            },
-            {
-              id: "ORD-98442",
-              status: "DELIVERED",
-              total: 48500,
-              paymentStatus: "PAID",
-              paymentReference: "pay_pstk_771920441",
-              paidAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-              vendorName: "GreenMart Supermarket",
-              vendorEmoji: "🛒",
-              itemsCount: 5,
-              items: [{ name: "Golden Penny Flour (5kg)", qty: 2, price: 18000 }, { name: "Peak Milk Powder", qty: 3, price: 10166 }],
-              createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-            },
-            {
-              id: "ORD-97012",
-              status: "IN_TRANSIT",
-              total: 8500,
-              paymentStatus: "PENDING",
-              paymentReference: "pay_pending_3391",
-              paidAt: null,
-              vendorName: "HealthPlus Pharmacy",
-              vendorEmoji: "💊",
-              itemsCount: 2,
-              items: [{ name: "Vitamin C Syrup", qty: 2, price: 4250 }],
-              createdAt: new Date(Date.now() - 1 * 3600000).toISOString(),
-            },
-            {
-              id: "ORD-95110",
-              status: "CANCELLED",
-              total: 12000,
-              paymentStatus: "REFUNDED",
-              paymentReference: "pay_refunded_1092",
-              paidAt: new Date(Date.now() - 40 * 86400000).toISOString(),
-              refundedAt: new Date(Date.now() - 39 * 86400000).toISOString(),
-              vendorName: "Mama Risi Kitchen",
-              vendorEmoji: "🍽️",
-              itemsCount: 1,
-              items: [{ name: "Egusi Soup & Pounded Yam", qty: 1, price: 12000 }],
-              createdAt: new Date(Date.now() - 40 * 86400000).toISOString(),
-            },
-          ],
-        },
-        vendorTransactions: [
-          { vendorId: "v-1", name: "Mama Risi Kitchen", emoji: "🍽️", ordersCount: 2, totalSpent: 97000, topItems: ["Jollof Rice Special (2x)", "Grilled Chicken (1x)"], lastOrderAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-          { vendorId: "v-2", name: "GreenMart Supermarket", emoji: "🛒", ordersCount: 1, totalSpent: 48500, topItems: ["Peak Milk Powder (3x)", "Golden Penny Flour (2x)"], lastOrderAt: new Date(Date.now() - 14 * 86400000).toISOString() },
-          { vendorId: "v-3", name: "HealthPlus Pharmacy", emoji: "💊", ordersCount: 1, totalSpent: 8500, topItems: ["Vitamin C Syrup (2x)"], lastOrderAt: new Date(Date.now() - 1 * 3600000).toISOString() },
-        ],
-        disputes: [
-          { id: "dsp-101", orderId: "ORD-95110", vendorName: "Mama Risi Kitchen", reason: "Wrong item delivered", status: "RESOLVED", totalAmount: 12000, createdAt: new Date(Date.now() - 39 * 86400000).toISOString() },
-        ],
-      });
-    }
+    if (!user) return res.status(404).json({ error: "Customer not found" });
 
     // 1. Reconciliation metrics
     const orders = user.orders || [];

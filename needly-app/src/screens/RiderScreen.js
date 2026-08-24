@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { FlatList, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { COLORS, fmtNaira } from "../theme/colors";
 import { Pill, StatusPill } from "../components/Pill";
 import { useOrders } from "../context/OrdersContext";
@@ -15,6 +15,8 @@ const CHILI = "#EF4444";
 export default function RiderScreen() {
   const { riderData, advanceOrder, claimOrder } = useOrders();
   const { user, refreshMe } = useAuth();
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
   const { available, assigned, completedToday } = riderData;
   const [stats, setStats] = useState(null);
   const [togglingOnline, setTogglingOnline] = useState(false);
@@ -147,14 +149,14 @@ export default function RiderScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
       {/* Rider Hero Profile Banner */}
-      <View style={styles.profileCard}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+      <View style={[styles.profileCard, compact && styles.profileCardCompact]}>
+        <View style={styles.profileIdentity}>
           <View style={styles.riderAvatarWrap}>
             <Text style={{ fontSize: 28 }}>🛵</Text>
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.profileText}>
             <Text style={styles.riderName} numberOfLines={1}>{user?.name || "Rider Partner"}</Text>
             <View style={styles.badgeRow}>
               <View style={styles.riderTag}>
@@ -170,7 +172,7 @@ export default function RiderScreen() {
         <Pressable
           onPress={toggleOnline}
           disabled={togglingOnline}
-          style={[styles.onlineBtn, { backgroundColor: isOnline ? EMERALD : "rgba(255,255,255,0.15)" }]}
+          style={[styles.onlineBtn, compact && styles.onlineBtnCompact, { backgroundColor: isOnline ? EMERALD : "rgba(255,255,255,0.15)" }]}
         >
           <Text style={styles.onlineBtnText}>{isOnline ? "● ONLINE" : "○ OFFLINE"}</Text>
         </Pressable>
@@ -216,7 +218,7 @@ export default function RiderScreen() {
       {/* Performance Metrics Cards */}
       <View style={styles.statGrid}>
         {statCards.map((s) => (
-          <Pressable key={s.key} onPress={() => selectPeriod(s.key)} style={[styles.statCard, selectedPeriod === s.key && styles.statCardActive]}>
+          <Pressable key={s.key} onPress={() => selectPeriod(s.key)} style={[styles.statCard, compact && styles.statCardCompact, selectedPeriod === s.key && styles.statCardActive]}>
             <Text style={styles.statLabel}>{s.label.toUpperCase()}</Text>
             <Text style={styles.statCount}>{s.data ? s.data.completed : "0"}</Text>
             <Text style={styles.statEarnings}>{s.data ? fmtNaira(s.data.earnings) : "₦0"}</Text>
@@ -508,23 +510,28 @@ export default function RiderScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 16, paddingBottom: 60 },
+  content: { width: "100%", maxWidth: 430, alignSelf: "center", padding: 16, paddingBottom: 60 },
+  contentCompact: { paddingHorizontal: 12 },
 
   /* Hero Rider Profile */
   profileCard: {
-    backgroundColor: DARK_NAVY, borderRadius: 24, padding: 18, marginBottom: 16,
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    shadowColor: DARK_NAVY, shadowOpacity: 0.28, shadowRadius: 14, elevation: 6,
+    backgroundColor: PURPLE, borderRadius: 28, padding: 18, marginBottom: 14,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12,
+    shadowColor: PURPLE, shadowOpacity: 0.25, shadowRadius: 16, elevation: 6,
   },
-  riderAvatarWrap: { width: 48, height: 48, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
-  riderName: { color: "#ffffff", fontWeight: "900", fontSize: 17, marginBottom: 4 },
-  badgeRow: { flexDirection: "row", gap: 6, alignItems: "center" },
-  riderTag: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  profileCardCompact: { alignItems: "flex-start", flexDirection: "column" },
+  profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  profileText: { flex: 1, minWidth: 0 },
+  riderAvatarWrap: { width: 52, height: 52, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  riderName: { color: "#ffffff", fontWeight: "900", fontSize: 18, marginBottom: 5 },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" },
+  riderTag: { backgroundColor: "rgba(255,255,255,0.16)", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
   riderTagText: { color: "rgba(255,255,255,0.88)", fontSize: 11, fontWeight: "700" },
-  ratingTag: { backgroundColor: "#FEF3C7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  ratingTag: { backgroundColor: "#FEF3C7", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
   ratingTagText: { color: "#92400E", fontSize: 11, fontWeight: "900" },
 
-  onlineBtn: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
+  onlineBtn: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9, flexShrink: 0 },
+  onlineBtnCompact: { alignSelf: "stretch", alignItems: "center" },
   onlineBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 12, letterSpacing: 0.5 },
 
   statusToggleCard: {
@@ -542,8 +549,9 @@ const styles = StyleSheet.create({
   goOnlineBtnText: { color: "#ffffff", fontWeight: "900", fontSize: 13 },
 
   /* Performance Metrics Grid */
-  statGrid: { flexDirection: "row", gap: 8, marginBottom: 6 },
-  statCard: { flex: 1, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 18, padding: 12 },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
+  statCard: { flex: 1, minWidth: 108, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 18, padding: 12 },
+  statCardCompact: { minWidth: "31%", paddingHorizontal: 10 },
   statCardActive: { borderColor: PURPLE, borderWidth: 2, backgroundColor: "#F8FAFC" },
   tapHint: { fontSize: 11, color: "#64748B", marginBottom: 16, fontStyle: "italic" },
   statLabel: { fontSize: 10, color: "#64748B", marginBottom: 4, letterSpacing: 0.5, fontWeight: "800" },
