@@ -607,6 +607,7 @@ router.get("/locations", async (req, res) => {
     });
     return res.json(locations);
   } catch (err) {
+    if (err?.code === "P2021" || err?.code === "P1014") return res.json([]);
     return res.status(503).json({ error: "Could not load active service locations" });
   }
 });
