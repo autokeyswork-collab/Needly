@@ -605,49 +605,10 @@ router.get("/locations", async (req, res) => {
       where: { active: true },
       orderBy: [{ type: "asc" }, { name: "asc" }],
     });
-    if (locations.length) return res.json(locations);
+    return res.json(locations);
   } catch (err) {
-    // Fall back below; the marketplace can still run before locations are seeded.
+    return res.status(503).json({ error: "Could not load active service locations" });
   }
-  res.json([
-    { id: "abia-umuahia", state: "Abia", name: "Umuahia", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "adamawa-yola", state: "Adamawa", name: "Yola", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "akwa-ibom-uyo", state: "Akwa Ibom", name: "Uyo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "anambra-awka", state: "Anambra", name: "Awka", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "bauchi-bauchi", state: "Bauchi", name: "Bauchi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "bayelsa-yenagoa", state: "Bayelsa", name: "Yenagoa", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "benue-makurdi", state: "Benue", name: "Makurdi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "borno-maiduguri", state: "Borno", name: "Maiduguri", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "cross-river-calabar", state: "Cross River", name: "Calabar", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "delta-asaba", state: "Delta", name: "Asaba", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "ebonyi-abakaliki", state: "Ebonyi", name: "Abakaliki", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "edo-benin-city", state: "Edo", name: "Benin City", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "ekiti-ado-ekiti", state: "Ekiti", name: "Ado-Ekiti", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "enugu-enugu", state: "Enugu", name: "Enugu", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "fct-abuja", state: "FCT", name: "Abuja", type: "CITY", active: true, deliveryFee: 1000, maxDistance: 35 },
-    { id: "gombe-gombe", state: "Gombe", name: "Gombe", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "imo-owerri", state: "Imo", name: "Owerri", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "jigawa-dutse", state: "Jigawa", name: "Dutse", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "kaduna-kaduna", state: "Kaduna", name: "Kaduna", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "kano-kano", state: "Kano", name: "Kano", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "katsina-katsina", state: "Katsina", name: "Katsina", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "kebbi-birnin-kebbi", state: "Kebbi", name: "Birnin Kebbi", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "kogi-lokoja", state: "Kogi", name: "Lokoja", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "kwara-ilorin", state: "Kwara", name: "Ilorin", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "lagos-lagos", state: "Lagos", name: "Lagos", type: "CITY", active: true, deliveryFee: 900, maxDistance: 30 },
-    { id: "nasarawa-lafia", state: "Nasarawa", name: "Lafia", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "niger-minna", state: "Niger", name: "Minna", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "ogun-abeokuta", state: "Ogun", name: "Abeokuta", type: "CITY", active: true, deliveryFee: 500, maxDistance: 25 },
-    { id: "ondo-akure", state: "Ondo", name: "Akure", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "osun-osogbo", state: "Osun", name: "Osogbo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "oyo-ibadan", state: "Oyo", name: "Ibadan", type: "CITY", active: true, deliveryFee: 800, maxDistance: 30 },
-    { id: "plateau-jos", state: "Plateau", name: "Jos", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "rivers-port-harcourt", state: "Rivers", name: "Port Harcourt", type: "CITY", active: true, deliveryFee: 1000, maxDistance: 35 },
-    { id: "sokoto-sokoto", state: "Sokoto", name: "Sokoto", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "taraba-jalingo", state: "Taraba", name: "Jalingo", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "yobe-damaturu", state: "Yobe", name: "Damaturu", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-    { id: "zamfara-gusau", state: "Zamfara", name: "Gusau", type: "CITY", active: true, deliveryFee: 900, maxDistance: 25 },
-  ]);
 });
 
 /** GET /auth/pending — admin-only list of vendor/rider accounts awaiting approval. */
