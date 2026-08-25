@@ -116,7 +116,7 @@ const editFieldsMap = {
   order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
   booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
   location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
-  category: [["Key", "key"], ["Label", "label"], ["Slug", "slug"], ["Type", "type"], ["Flow", "flow"], ["Parent ID", "parentId"], ["Division ID", "divisionId"], ["Description", "description"], ["Icon", "icon"], ["Image Key", "imageKey"], ["Image URL", "image"], ["Banner URL", "bannerImage"], ["Position", "position", true], ["Featured", "isFeatured"], ["Homepage", "showOnHomepage"], ["Location", "location"], ["Active", "active"]],
+  category: [["Key", "key"], ["Label", "label"], ["Slug", "slug"], ["Type", "type"], ["Flow", "flow"], ["Parent ID", "parentId"], ["Division ID", "divisionId"], ["Description", "description"], ["Icon", "icon"], ["Image URL", "image"], ["Banner URL", "bannerImage"], ["Image Key", "imageKey"], ["Position", "position", true], ["Featured", "isFeatured"], ["Homepage", "showOnHomepage"], ["Location", "location"], ["Active", "active"]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [
     ["Promo Code", "code"],
@@ -2619,7 +2619,13 @@ export default function SuperAdminControlCenter({ onLogout }) {
             {(editFieldsMap[editingItem?.type] || []).map(([label, field, num]) => (
               <View key={field} style={{ marginBottom: 12 }}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: TEXT_SUB, marginBottom: 4 }}>{label}</Text>
-                <TextInput value={String(editForm[field] || "")} onChangeText={(t) => setEditForm((d) => ({ ...d, [field]: num ? Number(t) : t }))} keyboardType={num ? "numeric" : "default"} style={s.minput} />
+                <TextInput
+                  value={String(editForm[field] || "")}
+                  onChangeText={(t) => setEditForm((d) => ({ ...d, [field]: num ? Number(t) : t }))}
+                  keyboardType={num ? "numeric" : "default"}
+                  placeholder={field === "image" || field === "bannerImage" || field === "bannerImageUrl" ? "Paste image URL" : ""}
+                  style={s.minput}
+                />
               </View>
             ))}
           </ScrollView>
