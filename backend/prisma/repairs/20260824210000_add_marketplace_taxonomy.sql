@@ -1,3 +1,21 @@
+CREATE TABLE IF NOT EXISTS "Category" (
+  "id" TEXT NOT NULL,
+  "key" TEXT NOT NULL,
+  "label" TEXT NOT NULL,
+  "flow" TEXT NOT NULL DEFAULT 'BUY',
+  "description" TEXT,
+  "icon" TEXT,
+  "imageKey" TEXT,
+  "position" INTEGER NOT NULL DEFAULT 0,
+  "active" BOOLEAN NOT NULL DEFAULT true,
+  "location" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Category_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "Category_key_key" ON "Category"("key");
+
 ALTER TABLE "Category"
   ADD COLUMN IF NOT EXISTS "slug" TEXT,
   ADD COLUMN IF NOT EXISTS "image" TEXT,
@@ -65,8 +83,7 @@ SET "slug" = c."slug" || '-legacy-' || substr(md5(c."id"), 1, 8),
     "updatedAt" = NOW()
 FROM reserved_seed_slugs seed
 WHERE c."slug" = seed."slug"
-  AND c."id" <> seed."id"
-  AND c."key" <> seed."key";
+  AND c."id" <> seed."id";
 
 INSERT INTO "Category" (
   "id", "key", "label", "slug", "flow", "description", "icon", "imageKey", "type", "position", "active", "location", "isFeatured", "showOnHomepage", "updatedAt"
