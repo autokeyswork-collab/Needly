@@ -55,8 +55,8 @@ services:
       - key: ALLOWED_AREAS
         value: Abeokuta,Adigbe,Panseke,Oke-Ilewo,Lafenwa,Kuto,Omida
       - key: AUTO_SEED_DEMO
-        value: "true"
+        value: "false"
       - key: RIDER_PAYOUT_PER_DELIVERY
         value: "600"
       - key: ALLOWED_ORIGINS
-        value: "*"
+        value: https://needly-frontend-seven.vercel.app,https://needly-frontend-git-main-autokeys.vercel.app
