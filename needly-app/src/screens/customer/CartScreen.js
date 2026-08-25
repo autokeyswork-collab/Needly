@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import { fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 import { useAuth } from "../../context/AuthContext";
@@ -177,9 +178,51 @@ export default function CartScreen({ route, navigation }) {
     });
   }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, paymentEmail, saveCheckoutDraft, selectedGateway, vendorId]);
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     setGeoLoading(true);
     setGeoError(null);
+
+    if (Platform.OS !== "web") {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          setGeoError("Location permission is needed to calculate rider cost.");
+          return;
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+        setDeliveryLocation(nextLocation);
+
+        const places = await Location.reverseGeocodeAsync(nextLocation);
+        const place = places?.[0];
+        const nativeAddress = [
+          place?.name,
+          place?.street,
+          place?.district,
+          place?.city,
+          place?.region,
+        ].filter(Boolean).join(", ");
+        if (nativeAddress) {
+          setDeliveryAddress(nativeAddress);
+        } else {
+          const address = await reverseGeocode(nextLocation.latitude, nextLocation.longitude);
+          if (address) setDeliveryAddress(address);
+        }
+      } catch (err) {
+        setGeoError(err.message || "Could not get your GPS location.");
+      } finally {
+        setGeoLoading(false);
+      }
+      return;
+    }
+
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGeoError("GPS is not available on this device or browser.");
       setGeoLoading(false);
