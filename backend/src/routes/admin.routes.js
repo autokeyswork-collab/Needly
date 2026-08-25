@@ -387,11 +387,11 @@ router.get("/locations", async (req, res) => {
 });
 
 router.post("/locations", async (req, res) => {
-  const { name, type = "CITY", deliveryFee = 500, maxDistance = 25 } = req.body;
+  const { name, state = "Ogun", type = "CITY", deliveryFee = 500, maxDistance = 25 } = req.body;
   if (!name) return res.status(400).json({ error: "Location name is required" });
   try {
     const loc = await prisma.location.create({
-      data: { name: name.trim(), type, deliveryFee: Number(deliveryFee), maxDistance: Number(maxDistance) },
+      data: { name: name.trim(), state: String(state || "Ogun").trim() || "Ogun", type, deliveryFee: Number(deliveryFee), maxDistance: Number(maxDistance) },
     });
     await logAction(req, { action: "Added location", targetType: "Location", targetId: loc.id, targetLabel: loc.name });
     res.status(201).json(loc);

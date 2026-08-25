@@ -387,6 +387,7 @@ model UserRole {
 
 model Location {
   id          String   @id @default(cuid())
+  state       String   @default("Ogun")
   name        String
   type        String   @default("CITY") // CITY, ZONE, AREA
   parentId    String?
