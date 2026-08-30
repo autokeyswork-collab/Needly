@@ -94,7 +94,14 @@ INSERT INTO "Category" (
   ('div-jobs-gigs', 'jobs-gigs', 'Jobs & Gigs', 'jobs-gigs', 'BOOK', 'Find employment, freelance work and task-based opportunities.', 'briefcase', 'Jobs', 'DIVISION', 4, true, 'Abeokuta', true, true, NOW())
 ON CONFLICT ("key") DO UPDATE SET
   "label" = EXCLUDED."label",
-  "slug" = EXCLUDED."slug",
+  "slug" = CASE
+    WHEN NOT EXISTS (
+      SELECT 1 FROM "Category" other
+      WHERE other."slug" = EXCLUDED."slug"
+        AND other."id" <> "Category"."id"
+    ) THEN EXCLUDED."slug"
+    ELSE "Category"."slug"
+  END,
   "flow" = EXCLUDED."flow",
   "description" = EXCLUDED."description",
   "icon" = EXCLUDED."icon",
@@ -130,7 +137,14 @@ INSERT INTO "Category" (
   ('cat-jobs-construction', 'jobs-gigs-construction', 'Construction', 'jobs-gigs/construction', 'BOOK', 'Skilled trades and construction tasks.', 'hammer', 'Home Services', 'CATEGORY', 'div-jobs-gigs', 'div-jobs-gigs', 4, true, 'Abeokuta', false, true, '[]'::jsonb, NOW())
 ON CONFLICT ("key") DO UPDATE SET
   "label" = EXCLUDED."label",
-  "slug" = EXCLUDED."slug",
+  "slug" = CASE
+    WHEN NOT EXISTS (
+      SELECT 1 FROM "Category" other
+      WHERE other."slug" = EXCLUDED."slug"
+        AND other."id" <> "Category"."id"
+    ) THEN EXCLUDED."slug"
+    ELSE "Category"."slug"
+  END,
   "flow" = EXCLUDED."flow",
   "description" = EXCLUDED."description",
   "icon" = EXCLUDED."icon",

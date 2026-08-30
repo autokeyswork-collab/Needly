@@ -11,6 +11,7 @@ enum UserRoleType {
   CUSTOMER
   VENDOR
   RIDER
+  AGENT
   MANAGER
   ADMIN
   SUPER_ADMIN
@@ -63,6 +64,7 @@ model User {
   vendor            Vendor?            @relation("VendorOwner")
   managedVendor     Vendor?            @relation("VendorManager")
   rider             Rider?
+  agent             Agent?
   orders            Order[]            @relation("CustomerOrders")
   operationalIssues OperationalIssue[]
   reviews           Review[]           @relation("CustomerReviews")
@@ -176,6 +178,43 @@ model Rider {
   payouts           Payout[]
 }
 
+model Hub {
+  id          String   @id @default(cuid())
+  name        String
+  area        String   @default("Abeokuta")
+  address     String
+  latitude    Float?
+  longitude   Float?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agents      Agent[]
+  orders      Order[]
+}
+
+model Agent {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id])
+  hubId             String?
+  hub               Hub?     @relation(fields: [hubId], references: [id])
+  zone              String   @default("Abeokuta")
+  isOnline          Boolean  @default(false)
+  latitude          Float?
+  longitude         Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  idType            String?
+  idNumber          String?
+  verified          Boolean  @default(false)
+  verifiedAt        DateTime?
+  verificationNotes String?
+  orders            Order[]
+}
+
 model Payout {
   id          String    @id @default(cuid())
   riderId     String
@@ -195,6 +234,14 @@ model Order {
   vendor            Vendor             @relation(fields: [vendorId], references: [id])
   riderId           String?
   rider             Rider?             @relation(fields: [riderId], references: [id])
+  agentId           String?
+  agent             Agent?             @relation(fields: [agentId], references: [id])
+  hubId             String?
+  hub               Hub?               @relation(fields: [hubId], references: [id])
+  fulfillmentType   String             @default("DIRECT")
+  agentPickupStatus String             @default("NOT_REQUIRED")
+  agentPickedUpAt   DateTime?
+  hubReceivedAt     DateTime?
   status            OrderStatus        @default(PLACED)
   cancelReason      String?
   total             Int

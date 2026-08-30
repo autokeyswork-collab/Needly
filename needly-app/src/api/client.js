@@ -152,6 +152,17 @@ export function normalizeOrder(o) {
     riderName: o.rider?.user?.name || null,
     riderLatitude: o.rider?.latitude ?? null,
     riderLongitude: o.rider?.longitude ?? null,
+    fulfillmentType: o.fulfillmentType || "DIRECT",
+    agentPickupStatus: o.agentPickupStatus || "NOT_REQUIRED",
+    agentName: o.agent?.user?.name || null,
+    hub: o.hub ? {
+      id: o.hub.id,
+      name: o.hub.name,
+      area: o.hub.area,
+      address: o.hub.address,
+      latitude: o.hub.latitude ?? null,
+      longitude: o.hub.longitude ?? null,
+    } : null,
     customerName: o.customer?.name || null,
     deliveryLatitude: o.deliveryLatitude ?? null,
     deliveryLongitude: o.deliveryLongitude ?? null,
@@ -199,6 +210,7 @@ function parseJwtRole(token) {
     if (parts.length < 2) {
       if (token.includes("vendor")) return "VENDOR";
       if (token.includes("rider")) return "RIDER";
+      if (token.includes("agent")) return "AGENT";
       if (token.includes("manager")) return "MANAGER";
       if (token.includes("admin")) return "ADMIN";
       return "CUSTOMER";
@@ -216,6 +228,7 @@ function parseJwtRole(token) {
   } catch (e) {
     if (token.includes("vendor")) return "VENDOR";
     if (token.includes("rider")) return "RIDER";
+    if (token.includes("agent")) return "AGENT";
     if (token.includes("manager")) return "MANAGER";
     if (token.includes("admin")) return "ADMIN";
     return "CUSTOMER";
@@ -310,16 +323,25 @@ export const VendorAPI = {
 
 /* --- Orders --- */
 export const OrderAPI = {
-  place: async ({ vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude }) =>
-    normalizeOrder(await request("/orders", { method: "POST", body: { vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude } })),
+  place: async ({ vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude, useAgentHub, hubId }) =>
+    normalizeOrder(await request("/orders", { method: "POST", body: { vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude, useAgentHub, hubId } })),
   mine: (filters) => {
     const qs = filters ? `?${new URLSearchParams(filters).toString()}` : "";
     return request(`/orders/mine${qs}`);
   },
   advance: async (orderId) => normalizeOrder(await request(`/orders/${orderId}/status`, { method: "PATCH" })),
   claim: async (orderId) => normalizeOrder(await request(`/orders/${orderId}/claim`, { method: "POST" })),
+  agentClaim: async (orderId) => normalizeOrder(await request(`/orders/${orderId}/agent-claim`, { method: "POST" })),
+  agentStatus: async (orderId, agentPickupStatus) => normalizeOrder(await request(`/orders/${orderId}/agent-status`, { method: "PATCH", body: { agentPickupStatus } })),
   cancel: async (orderId, reason) => normalizeOrder(await request(`/orders/${orderId}/cancel`, { method: "POST", body: { reason } })),
   unassign: async (orderId) => normalizeOrder(await request(`/orders/${orderId}/unassign`, { method: "POST" })),
+};
+
+export const AgentAPI = {
+  me: () => request("/agents/me"),
+  stats: () => request("/agents/me/stats"),
+  toggleOnline: () => request("/agents/me/online", { method: "PATCH" }),
+  hubs: () => request("/agents/hubs"),
 };
 
 /* --- Rider --- */
@@ -463,6 +485,10 @@ export const SuperAdminAPI = {
   createMarketplaceDivision: (data) => request("/admin/marketplace/divisions", { method: "POST", body: data }),
   marketplaceCategories: () => request("/admin/marketplace/categories"),
   createMarketplaceCategory: (data) => request("/admin/marketplace/categories", { method: "POST", body: data }),
+  hubs: () => request("/admin/hubs"),
+  createHub: (data) => request("/admin/hubs", { method: "POST", body: data }),
+  agents: () => request("/admin/agents"),
+  createAgent: (data) => request("/admin/agents", { method: "POST", body: data }),
   admins: () => request("/admin/admins"),
   notifications: () => request("/admin/notifications"),
   createUser: (data) => request("/admin/users", { method: "POST", body: data }),
@@ -474,6 +500,8 @@ export const SuperAdminAPI = {
   updateUser: (id, data) => request(`/admin/users/${id}`, { method: "PATCH", body: data }),
   updateVendor: (id, data) => request(`/admin/vendors/${id}`, { method: "PATCH", body: data }),
   updateRider: (id, data) => request(`/admin/riders/${id}`, { method: "PATCH", body: data }),
+  updateHub: (id, data) => request(`/admin/hubs/${id}`, { method: "PATCH", body: data }),
+  updateAgent: (id, data) => request(`/admin/agents/${id}`, { method: "PATCH", body: data }),
   updateProduct: (id, data) => request(`/admin/products/${id}`, { method: "PATCH", body: data }),
   updateService: (id, data) => request(`/admin/services/${id}`, { method: "PATCH", body: data }),
   updateOrder: (id, data) => request(`/admin/orders/${id}`, { method: "PATCH", body: data }),

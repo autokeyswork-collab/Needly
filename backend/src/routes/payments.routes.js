@@ -63,7 +63,8 @@ function distanceKm(fromLat, fromLng, toLat, toLng) {
 }
 
 function calculateDeliveryFee(order) {
-  const km = distanceKm(order.vendor?.latitude, order.vendor?.longitude, order.deliveryLatitude, order.deliveryLongitude);
+  const pickup = order.fulfillmentType === "AGENT_HUB" && order.hub ? order.hub : order.vendor;
+  const km = distanceKm(pickup?.latitude, pickup?.longitude, order.deliveryLatitude, order.deliveryLongitude);
   if (!km) {
     return {
       deliveryFeeAmount: DEFAULT_DELIVERY_MIN_FEE,
@@ -317,7 +318,7 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
   const requestedEmail = String(req.body?.customerEmail || "").trim().toLowerCase();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { customer: true, vendor: true, payment: true },
+    include: { customer: true, vendor: true, hub: true, payment: true },
   });
   if (!order) return res.status(404).json({ error: "Order not found" });
   if (order.customerId !== req.user.id) return res.status(403).json({ error: "Not your order" });

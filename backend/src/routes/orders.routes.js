@@ -10,6 +10,37 @@ const { releaseOrderInventory } = require("../lib/orderInventory");
 const router = express.Router();
 
 const RIDER_PAYOUT = Number(process.env.RIDER_PAYOUT_PER_DELIVERY || 600);
+const DIRECT_FULFILLMENT = "DIRECT";
+const AGENT_HUB_FULFILLMENT = "AGENT_HUB";
+const AGENT_STATUS = {
+  NOT_REQUIRED: "NOT_REQUIRED",
+  PENDING: "PENDING",
+  ASSIGNED: "ASSIGNED",
+  COLLECTING: "COLLECTING",
+  AT_HUB: "AT_HUB",
+};
+
+const ORDER_INCLUDE = {
+  items: true,
+  vendor: true,
+  hub: true,
+  agent: { include: { user: true, hub: true } },
+  rider: { include: { user: true } },
+  dispute: true,
+  payment: true,
+  review: true,
+};
+
+function riderReadyWhere(extra = {}) {
+  return {
+    status: "READY",
+    ...extra,
+    OR: [
+      { fulfillmentType: DIRECT_FULFILLMENT },
+      { fulfillmentType: AGENT_HUB_FULFILLMENT, agentPickupStatus: AGENT_STATUS.AT_HUB },
+    ],
+  };
+}
 
 // Valid forward transitions and which role is allowed to make them.
 // (CANCELLED is handled separately by the /cancel route below, since it
@@ -37,7 +68,7 @@ function emit(req, room, event, payload) {
  * cart math because there was nothing else touching it; a real API can't.
  */
 router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
-  const { vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude } = req.body;
+  const { vendorId, items, deliveryAddress, deliveryPhone, deliveryLatitude, deliveryLongitude, fulfillmentType, useAgentHub, hubId } = req.body;
   if (!vendorId || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "vendorId and a non-empty items array are required" });
   }
@@ -57,6 +88,15 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
   if (!vendor.isOpen) return res.status(400).json({ error: "This vendor is currently closed" });
   const vendorSuspended = (vendor.owner && !vendor.owner.approved) || (vendor.manager && !vendor.manager.approved);
   if (vendorSuspended) return res.status(400).json({ error: "This vendor is currently unavailable" });
+
+  const needsAgentHub = useAgentHub === true || String(fulfillmentType || "").toUpperCase() === AGENT_HUB_FULFILLMENT;
+  let selectedHub = null;
+  if (needsAgentHub) {
+    selectedHub = hubId
+      ? await prisma.hub.findFirst({ where: { id: hubId, active: true } })
+      : await prisma.hub.findFirst({ where: { active: true }, orderBy: { createdAt: "asc" } });
+    if (!selectedHub) return res.status(400).json({ error: "No active Needly hub is available for this order yet" });
+  }
 
   let total = 0;
   const orderItems = [];
@@ -114,6 +154,9 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
       data: {
         customerId: req.user.id,
         vendorId,
+        fulfillmentType: needsAgentHub ? AGENT_HUB_FULFILLMENT : DIRECT_FULFILLMENT,
+        agentPickupStatus: needsAgentHub ? AGENT_STATUS.PENDING : AGENT_STATUS.NOT_REQUIRED,
+        hubId: selectedHub?.id || null,
         total,
         deliveryAddress,
         deliveryPhone,
@@ -121,7 +164,7 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
         deliveryLongitude: deliveryLongitude === undefined || deliveryLongitude === null ? null : Number(deliveryLongitude),
         items: { create: orderItems },
       },
-      include: { items: true, vendor: true },
+      include: ORDER_INCLUDE,
     });
   }).catch((err) => {
     if (err.statusCode) return { error: err.message, statusCode: err.statusCode };
@@ -145,7 +188,7 @@ router.get("/mine", requireAuth, async (req, res) => {
   if (role === "CUSTOMER") {
     const orders = await prisma.order.findMany({
       where: { customerId: id },
-      include: { items: true, vendor: true, rider: { include: { user: true } }, dispute: true, payment: true, review: true },
+      include: ORDER_INCLUDE,
       orderBy: { createdAt: "desc" },
     });
     return res.json(orders);
@@ -163,7 +206,7 @@ router.get("/mine", requireAuth, async (req, res) => {
       // stays visible for the vendor's own records instead of vanishing
       // the instant they decline it.
       where: { vendorId: vendor.id, payment: { status: { in: ["PAID", "REFUNDED"] } } },
-      include: { items: true, dispute: true, payment: true },
+      include: ORDER_INCLUDE,
       orderBy: { createdAt: "desc" },
     });
     return res.json(orders);
@@ -183,11 +226,11 @@ router.get("/mine", requireAuth, async (req, res) => {
 
     const assigned = await prisma.order.findMany({
       where: { riderId: rider?.id, status: { in: ["READY", "PICKED_UP"] } },
-      include: { items: true, vendor: true, rider: { include: { user: true } } },
+      include: ORDER_INCLUDE,
     });
     const available = await prisma.order.findMany({
-      where: { status: "READY", riderId: null },
-      include: { items: true, vendor: true },
+      where: riderReadyWhere({ riderId: null }),
+      include: ORDER_INCLUDE,
     });
 
     // Real "today" stats — replaces the seed-baseline + live-session-data
@@ -198,7 +241,7 @@ router.get("/mine", requireAuth, async (req, res) => {
     startOfToday.setHours(0, 0, 0, 0);
     const completedToday = await prisma.order.findMany({
       where: { riderId: rider?.id, status: "DELIVERED", updatedAt: { gte: startOfToday } },
-      include: { items: true, vendor: true, rider: { include: { user: true } } },
+      include: ORDER_INCLUDE,
       orderBy: { updatedAt: "desc" },
     });
 
@@ -209,12 +252,49 @@ router.get("/mine", requireAuth, async (req, res) => {
     });
   }
 
+  if (role === "AGENT") {
+    const agent = await prisma.agent.findUnique({ where: { userId: id }, include: { hub: true } });
+    if (!agent) return res.json({ assigned: [], available: [], completedToday: [], agent: null });
+
+    const assigned = await prisma.order.findMany({
+      where: {
+        agentId: agent.id,
+        fulfillmentType: AGENT_HUB_FULFILLMENT,
+        agentPickupStatus: { in: [AGENT_STATUS.ASSIGNED, AGENT_STATUS.COLLECTING] },
+        status: { in: ["ACCEPTED", "READY"] },
+      },
+      include: ORDER_INCLUDE,
+      orderBy: { createdAt: "desc" },
+    });
+    const available = agent.isOnline
+      ? await prisma.order.findMany({
+          where: {
+            fulfillmentType: AGENT_HUB_FULFILLMENT,
+            agentId: null,
+            agentPickupStatus: AGENT_STATUS.PENDING,
+            status: { in: ["ACCEPTED", "READY"] },
+            payment: { status: "PAID" },
+          },
+          include: ORDER_INCLUDE,
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const completedToday = await prisma.order.findMany({
+      where: { agentId: agent.id, agentPickupStatus: AGENT_STATUS.AT_HUB, hubReceivedAt: { gte: startOfToday } },
+      include: ORDER_INCLUDE,
+      orderBy: { hubReceivedAt: "desc" },
+    });
+    return res.json({ assigned, available, completedToday, agent });
+  }
+
   if (role === "MANAGER") {
     const vendor = await prisma.vendor.findUnique({ where: { managerId: id } });
     if (!vendor) return res.json([]);
     const orders = await prisma.order.findMany({
       where: { vendorId: vendor.id, payment: { status: { in: ["PAID", "REFUNDED"] } } },
-      include: { items: true, vendor: true, rider: { include: { user: true } }, dispute: true, payment: true },
+      include: ORDER_INCLUDE,
       orderBy: { createdAt: "desc" },
     });
     return res.json(orders);
@@ -266,7 +346,7 @@ router.get("/mine", requireAuth, async (req, res) => {
   const where = and.length ? { AND: and } : {};
   const orders = await prisma.order.findMany({
     where,
-    include: { items: true, vendor: true, rider: { include: { user: true } }, dispute: true, payment: true, customer: { select: { id: true, name: true, phone: true } } },
+    include: { ...ORDER_INCLUDE, customer: { select: { id: true, name: true, phone: true } } },
     orderBy: { createdAt: "desc" },
   });
   res.json(orders);
@@ -302,6 +382,9 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
   if (req.user.role === "RIDER") {
     const rider = await prisma.rider.findUnique({ where: { userId: req.user.id } });
     if (order.riderId !== rider?.id) return res.status(403).json({ error: "This delivery isn't assigned to you" });
+    if (order.fulfillmentType === AGENT_HUB_FULFILLMENT && order.agentPickupStatus !== AGENT_STATUS.AT_HUB) {
+      return res.status(400).json({ error: "This order is not ready at the Needly hub yet" });
+    }
   }
 
   // Payment-first, enforced at the point of action — not just hidden from
@@ -319,7 +402,7 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
   const updated = await prisma.order.update({
     where: { id: order.id },
     data: { status: rule.next },
-    include: { items: true, customer: true, vendor: true, rider: { include: { user: true } } },
+    include: { ...ORDER_INCLUDE, customer: true },
   });
 
   // Real-time push to whoever's watching this order right now...
@@ -336,6 +419,20 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
   // Dispatch: the moment an order goes READY, tell every online rider in
   // this vendor's area — first to claim it via POST /orders/:id/claim wins.
   if (updated.status === "READY") {
+    if (updated.fulfillmentType === AGENT_HUB_FULFILLMENT && updated.agentPickupStatus !== AGENT_STATUS.AT_HUB) {
+      const onlineAgents = await prisma.agent.findMany({
+        where: { isOnline: true },
+        include: { user: true },
+      });
+      const tokens = onlineAgents.map((a) => a.user.expoPushToken).filter(Boolean);
+      emit(req, "agents:online", "agent-order:available", updated);
+      sendPushNotification(tokens, {
+        title: "Hub collection needed",
+        body: `${updated.vendor.name} has an order for hub consolidation.`,
+        data: { orderId: updated.id, type: "agent-hub-collection" },
+      });
+      return res.json(updated);
+    }
     const onlineRiders = await prisma.rider.findMany({
       where: { isOnline: true },
       include: { user: true },
@@ -365,7 +462,7 @@ router.post("/:id/claim", requireAuth, requireRole("RIDER"), async (req, res) =>
   }
 
   const result = await prisma.order.updateMany({
-    where: { id: req.params.id, status: "READY", riderId: null },
+    where: riderReadyWhere({ id: req.params.id, riderId: null }),
     data: { riderId: rider.id },
   });
 
@@ -398,6 +495,87 @@ router.post("/:id/claim", requireAuth, requireRole("RIDER"), async (req, res) =>
   }
   emit(req, `order:${order.id}`, "order:updated", order);
   res.json(order);
+});
+
+router.post("/:id/agent-claim", requireAuth, requireRole("AGENT"), async (req, res) => {
+  const agent = await prisma.agent.findUnique({ where: { userId: req.user.id }, include: { hub: true } });
+  if (!agent) return res.status(400).json({ error: "Agent profile not found" });
+  if (!agent.isOnline) return res.status(403).json({ error: "Go online before accepting hub collection jobs" });
+
+  const result = await prisma.order.updateMany({
+    where: {
+      id: req.params.id,
+      fulfillmentType: AGENT_HUB_FULFILLMENT,
+      agentPickupStatus: AGENT_STATUS.PENDING,
+      agentId: null,
+      status: { in: ["ACCEPTED", "READY"] },
+      payment: { status: "PAID" },
+    },
+    data: {
+      agentId: agent.id,
+      hubId: agent.hubId || undefined,
+      agentPickupStatus: AGENT_STATUS.ASSIGNED,
+    },
+  });
+
+  if (result.count === 0) {
+    return res.status(409).json({ error: "This hub collection was already claimed or is not ready for an agent" });
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: req.params.id },
+    include: ORDER_INCLUDE,
+  });
+  emit(req, `order:${order.id}`, "order:updated", order);
+  res.json(order);
+});
+
+router.patch("/:id/agent-status", requireAuth, requireRole("AGENT", "ADMIN"), async (req, res) => {
+  const nextStatus = String(req.body?.agentPickupStatus || req.body?.status || "").trim().toUpperCase();
+  const allowed = [AGENT_STATUS.COLLECTING, AGENT_STATUS.AT_HUB];
+  if (!allowed.includes(nextStatus)) {
+    return res.status(400).json({ error: "agentPickupStatus must be COLLECTING or AT_HUB" });
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: req.params.id },
+    include: { agent: true, vendor: true },
+  });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (order.fulfillmentType !== AGENT_HUB_FULFILLMENT) {
+    return res.status(400).json({ error: "This order does not require a Needly hub agent" });
+  }
+
+  if (req.user.role === "AGENT") {
+    const agent = await prisma.agent.findUnique({ where: { userId: req.user.id } });
+    if (!agent || order.agentId !== agent.id) return res.status(403).json({ error: "This hub collection is not assigned to you" });
+  }
+
+  const data = { agentPickupStatus: nextStatus };
+  if (nextStatus === AGENT_STATUS.COLLECTING) data.agentPickedUpAt = new Date();
+  if (nextStatus === AGENT_STATUS.AT_HUB) {
+    data.hubReceivedAt = new Date();
+    data.status = "READY";
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data,
+    include: ORDER_INCLUDE,
+  });
+
+  emit(req, `order:${order.id}`, "order:updated", updated);
+  if (nextStatus === AGENT_STATUS.AT_HUB) {
+    emit(req, "riders:online", "order:available", updated);
+    const onlineRiders = await prisma.rider.findMany({ where: { isOnline: true }, include: { user: true } });
+    sendPushNotification(onlineRiders.map((r) => r.user.expoPushToken).filter(Boolean), {
+      title: "New hub delivery available",
+      body: `${updated.hub?.name || "Needly hub"} has an order ready for customer delivery.`,
+      data: { orderId: updated.id, type: "hub-delivery" },
+    });
+  }
+
+  res.json(updated);
 });
 
 /**

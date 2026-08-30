@@ -218,6 +218,7 @@ function normalizeSessionUserRole(user) {
   if (user.role === "CUSTOMER" && user.vendor) return { ...user, role: "VENDOR" };
   if (user.role === "CUSTOMER" && user.managedVendor) return { ...user, role: "MANAGER" };
   if (user.role === "CUSTOMER" && user.rider) return { ...user, role: "RIDER" };
+  if (user.role === "CUSTOMER" && user.agent) return { ...user, role: "AGENT" };
   return user;
 }
 
@@ -364,7 +365,7 @@ router.post("/social", authLimiter, async (req, res) => {
   try {
     let user = await prisma.user.findFirst({
       where: { email: cleanEmail },
-      include: { vendor: true, managedVendor: true, rider: true },
+      include: { vendor: true, managedVendor: true, rider: true, agent: { include: { hub: true } } },
     });
 
     if (user) {
@@ -477,7 +478,7 @@ router.post("/login", authLimiter, async (req, res) => {
           { phone: phoneClean },
         ],
       },
-      include: { vendor: true, managedVendor: true, rider: true },
+      include: { vendor: true, managedVendor: true, rider: true, agent: { include: { hub: true } } },
     });
   } catch (err) {
     console.error("Login lookup failed", err);
@@ -511,7 +512,7 @@ router.post("/login", authLimiter, async (req, res) => {
 router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    include: { vendor: true, managedVendor: true, rider: true },
+    include: { vendor: true, managedVendor: true, rider: true, agent: { include: { hub: true } } },
   });
   if (!user) return res.status(404).json({ error: "User not found" });
   const normalizedUser = normalizeSessionUserRole(user);
@@ -564,7 +565,7 @@ router.patch("/me/profile", requireAuth, async (req, res) => {
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data,
-      include: { vendor: true, managedVendor: true, rider: true },
+      include: { vendor: true, managedVendor: true, rider: true, agent: { include: { hub: true } } },
     });
     const normalizedUser = normalizeSessionUserRole(user);
     const { passwordHash, ...safeUser } = normalizedUser;

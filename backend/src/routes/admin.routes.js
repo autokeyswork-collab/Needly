@@ -73,6 +73,8 @@ router.get("/stats/overview", async (req, res) => {
       activeVendors,
       pendingVendors,
       totalRiders,
+      totalAgents,
+      onlineAgents,
       onlineRiders,
       totalProviders,
       ordersToday,
@@ -97,6 +99,8 @@ router.get("/stats/overview", async (req, res) => {
       prisma.vendor.count({ where: { isOpen: true } }),
       prisma.user.count({ where: { role: "VENDOR", approved: false, suspendedAt: null } }),
       prisma.rider.count(),
+      prisma.agent.count(),
+      prisma.agent.count({ where: { isOnline: true } }),
       prisma.rider.count({ where: { isOnline: true } }),
       prisma.user.count({ where: { role: "MANAGER" } }),
       prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
@@ -138,6 +142,8 @@ router.get("/stats/overview", async (req, res) => {
       activeVendors,
       pendingVendors,
       totalRiders,
+      totalAgents,
+      onlineAgents,
       onlineRiders,
       totalProviders,
       ordersToday,
@@ -959,6 +965,94 @@ router.post("/riders", async (req, res) => {
   }
 });
 
+router.get("/hubs", async (_req, res) => {
+  try {
+    const hubs = await prisma.hub.findMany({
+      include: { _count: { select: { agents: true, orders: true } } },
+      orderBy: [{ active: "desc" }, { area: "asc" }, { name: "asc" }],
+    });
+    res.json(hubs);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load hubs" });
+  }
+});
+
+router.post("/hubs", async (req, res) => {
+  try {
+    const { name, area = "Abeokuta", address, latitude, longitude, active = true } = req.body || {};
+    if (!name || !address) return res.status(400).json({ error: "Hub name and address are required" });
+    const hub = await prisma.hub.create({
+      data: {
+        name: String(name).trim(),
+        area: String(area || "Abeokuta").trim(),
+        address: String(address).trim(),
+        latitude: latitude === undefined || latitude === null || latitude === "" ? null : Number(latitude),
+        longitude: longitude === undefined || longitude === null || longitude === "" ? null : Number(longitude),
+        active: !!active,
+      },
+    });
+    await logAction(req, { action: "Created logistics hub", targetType: "Hub", targetId: hub.id, targetLabel: hub.name });
+    res.status(201).json(hub);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to create hub" });
+  }
+});
+
+router.get("/agents", async (_req, res) => {
+  try {
+    const agents = await prisma.agent.findMany({
+      include: {
+        hub: true,
+        user: { select: { id: true, name: true, email: true, phone: true, approved: true, suspendedAt: true, avatarUrl: true } },
+        _count: { select: { orders: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(agents);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load agents" });
+  }
+});
+
+router.post("/agents", async (req, res) => {
+  try {
+    const { name, email, phone, password, zone = "Abeokuta", hubId, verified = true, isOnline = false } = req.body || {};
+    if (!name || !email) return res.status(400).json({ error: "Agent name and email are required" });
+
+    let hub = null;
+    if (hubId) {
+      hub = await prisma.hub.findUnique({ where: { id: hubId } });
+      if (!hub) return res.status(404).json({ error: "Hub not found" });
+    } else {
+      hub = await prisma.hub.findFirst({ where: { active: true }, orderBy: { createdAt: "asc" } });
+    }
+
+    const temporaryPassword = password || generateTempPassword();
+    const user = await prisma.user.upsert({
+      where: { email: String(email).trim().toLowerCase() },
+      update: { name, phone: phone || null, role: "AGENT", approved: true, suspendedAt: null },
+      create: {
+        name,
+        email: String(email).trim().toLowerCase(),
+        phone: phone || null,
+        role: "AGENT",
+        approved: true,
+        passwordHash: await bcrypt.hash(String(temporaryPassword), 10),
+      },
+    });
+    const agent = await prisma.agent.upsert({
+      where: { userId: user.id },
+      update: { zone, hubId: hub?.id || null, verified: !!verified, verifiedAt: verified ? new Date() : null, isOnline: !!isOnline },
+      create: { userId: user.id, zone, hubId: hub?.id || null, verified: !!verified, verifiedAt: verified ? new Date() : null, isOnline: !!isOnline },
+      include: { user: true, hub: true },
+    });
+    await logAction(req, { action: "Created agent by Super Admin", targetType: "Agent", targetId: agent.id, targetLabel: agent.user.name });
+    res.status(201).json({ ...agent, temporaryPassword: password ? undefined : temporaryPassword });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to create agent" });
+  }
+});
+
 /**
  * GET /admin/global-search?q=...
  * Unified Global Search across Order ID, Booking ID, Customer, Vendor, Rider, Phone, Email, Transaction Ref.
@@ -1087,6 +1181,74 @@ router.patch("/riders/:id", async (req, res) => {
     await logAction(req, { action: "Updated rider details", targetType: "Rider", targetId: updated.id, targetLabel: updated.zone });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.patch("/hubs/:id", async (req, res) => {
+  try {
+    const { name, area, address, latitude, longitude, active } = req.body || {};
+    const data = {};
+    if (name !== undefined) data.name = String(name).trim();
+    if (area !== undefined) data.area = String(area).trim();
+    if (address !== undefined) data.address = String(address).trim();
+    if (active !== undefined) data.active = active === true || String(active).toLowerCase() === "true";
+    if (latitude !== undefined) data.latitude = latitude === "" || latitude === null ? null : Number(latitude);
+    if (longitude !== undefined) data.longitude = longitude === "" || longitude === null ? null : Number(longitude);
+
+    const updated = await prisma.hub.update({
+      where: { id: req.params.id },
+      data,
+      include: { _count: { select: { agents: true, orders: true } } },
+    });
+    await logAction(req, { action: "Updated logistics hub", targetType: "Hub", targetId: updated.id, targetLabel: updated.name });
+    res.json(updated);
+  } catch (err) { res.status(400).json({ error: err.message || "Failed to update hub" }); }
+});
+
+router.patch("/agents/:id", async (req, res) => {
+  try {
+    const { name, phone, zone, hubId, verified, isOnline, bankName, bankAccountNumber, bankAccountName } = req.body || {};
+    if (hubId) {
+      const hub = await prisma.hub.findUnique({ where: { id: hubId } });
+      if (!hub) return res.status(404).json({ error: "Hub not found" });
+    }
+
+    const agent = await prisma.agent.findUnique({ where: { id: req.params.id }, include: { user: true } });
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+    if (name !== undefined || phone !== undefined) {
+      await prisma.user.update({
+        where: { id: agent.userId },
+        data: {
+          ...(name !== undefined ? { name: String(name).trim() } : {}),
+          ...(phone !== undefined ? { phone: phone ? String(phone).trim() : null } : {}),
+        },
+      });
+    }
+
+    const data = {};
+    if (zone !== undefined) data.zone = String(zone || "Abeokuta").trim();
+    if (hubId !== undefined) data.hubId = hubId || null;
+    if (verified !== undefined) {
+      data.verified = verified === true || String(verified).toLowerCase() === "true";
+      data.verifiedAt = data.verified ? new Date() : null;
+    }
+    if (isOnline !== undefined) data.isOnline = isOnline === true || String(isOnline).toLowerCase() === "true";
+    if (bankName !== undefined) data.bankName = bankName || null;
+    if (bankAccountNumber !== undefined) data.bankAccountNumber = bankAccountNumber || null;
+    if (bankAccountName !== undefined) data.bankAccountName = bankAccountName || null;
+
+    const updated = await prisma.agent.update({
+      where: { id: req.params.id },
+      data,
+      include: {
+        hub: true,
+        user: { select: { id: true, name: true, email: true, phone: true, approved: true, suspendedAt: true, avatarUrl: true } },
+        _count: { select: { orders: true } },
+      },
+    });
+    await logAction(req, { action: "Updated agent details", targetType: "Agent", targetId: updated.id, targetLabel: updated.user?.name || updated.zone });
+    res.json(updated);
+  } catch (err) { res.status(400).json({ error: err.message || "Failed to update agent" }); }
 });
 
 router.patch("/products/:id", async (req, res) => {

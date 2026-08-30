@@ -22,6 +22,8 @@ const NAV = [
   { id: "orders", label: "Orders", icon: "📦" },
   { id: "bookings", label: "Bookings", icon: "📅" },
   { id: "riderOps", label: "Riders", icon: "🛵" },
+  { id: "agentOps", label: "Agents", icon: "🤝" },
+  { id: "hubs", label: "Hubs", icon: "🏬" },
   { id: "dispatch", label: "Dispatch", icon: "⚡" },
   { section: "MANAGEMENT" },
   { id: "customers", label: "Customers", icon: "👥" },
@@ -111,6 +113,8 @@ const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
   vendor: [["Store Name", "name"], ["Category", "category"], ["Area", "area"], ["ETA", "eta"]],
   rider: [["Zone", "zone"], ["Rating", "rating", true]],
+  agent: [["Name", "name"], ["Phone", "phone"], ["Zone", "zone"], ["Hub ID", "hubId"], ["Online", "isOnline"], ["Verified", "verified"], ["Bank Name", "bankName"], ["Account Number", "bankAccountNumber"], ["Account Name", "bankAccountName"]],
+  hub: [["Hub Name", "name"], ["Area", "area"], ["Address", "address"], ["Latitude", "latitude", true], ["Longitude", "longitude", true], ["Active", "active"]],
   product: [["Product Name", "name"], ["Price", "price", true], ["Emoji", "emoji"], ["Subcategory", "subcategory"], ["Stock", "stock", true]],
   service: [["Service Name", "name"], ["Category", "category"], ["Price", "price", true], ["Description", "description"]],
   order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
@@ -403,6 +407,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
   const [customers, setCustomers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [riders, setRiders] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [hubs, setHubs] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
@@ -497,11 +503,11 @@ export default function SuperAdminControlCenter({ onLogout }) {
         SuperAdminAPI.tickets(), SuperAdminAPI.roles(), SuperAdminAPI.refunds(),
         PayoutAPI.list(), DisputeAPI.list(), AuditAPI.list(), SuperAdminAPI.notifications(),
         SuperAdminAPI.health(), SuperAdminAPI.integrations(), SuperAdminAPI.orders(),
-        SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.marketplaceCategories(), SuperAdminAPI.admins(),
-        SuperAdminAPI.fraudAlerts(), SuperAdminAPI.walletTransactions(),
-      ]);
+	        SuperAdminAPI.products(), SuperAdminAPI.services(), SuperAdminAPI.marketplaceCategories(), SuperAdminAPI.admins(),
+	        SuperAdminAPI.fraudAlerts(), SuperAdminAPI.walletTransactions(), SuperAdminAPI.agents(), SuperAdminAPI.hubs(),
+	      ]);
 
-      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig, od, pd, sv, cg, au, fa, wt] = rs;
+	      const [st, lo, cu, ve, ri, bk, lc, cm, pr, tk, rl, rf, py, ds, ad, nt, hl, ig, od, pd, sv, cg, au, fa, wt, ag, hb] = rs;
       if (st.status === "fulfilled" && st.value) setStats(st.value);
       if (lo.status === "fulfilled" && lo.value) setLiveOps(lo.value);
       if (cu.status === "fulfilled") setCustomers(Array.isArray(cu.value) ? cu.value : cu.value?.customers || []);
@@ -525,8 +531,10 @@ export default function SuperAdminControlCenter({ onLogout }) {
       if (sv.status === "fulfilled") setServices(Array.isArray(sv.value) ? sv.value : []);
       if (cg.status === "fulfilled") setCategories(Array.isArray(cg.value) ? cg.value : []);
       if (au.status === "fulfilled") setAdminUsers(Array.isArray(au.value) ? au.value : []);
-      if (fa.status === "fulfilled") setFraudAlerts(Array.isArray(fa.value) ? fa.value : []);
-      if (wt.status === "fulfilled") setWalletTransactions(Array.isArray(wt.value) ? wt.value : []);
+	      if (fa.status === "fulfilled") setFraudAlerts(Array.isArray(fa.value) ? fa.value : []);
+	      if (wt.status === "fulfilled") setWalletTransactions(Array.isArray(wt.value) ? wt.value : []);
+	      if (ag.status === "fulfilled") setAgents(Array.isArray(ag.value) ? ag.value : []);
+	      if (hb.status === "fulfilled") setHubs(Array.isArray(hb.value) ? hb.value : []);
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -596,6 +604,8 @@ export default function SuperAdminControlCenter({ onLogout }) {
       if (type === "user") await AuthAPI.editContact(id, editForm);
       else if (type === "vendor") await SuperAdminAPI.updateVendor(id, editForm);
       else if (type === "rider") await SuperAdminAPI.updateRider(id, editForm);
+      else if (type === "agent") await SuperAdminAPI.updateAgent(id, editForm);
+      else if (type === "hub") await SuperAdminAPI.updateHub(id, editForm);
       else if (type === "product") await SuperAdminAPI.updateProduct(id, editForm);
       else if (type === "service") await SuperAdminAPI.updateService(id, editForm);
       else if (type === "order") await SuperAdminAPI.updateOrder(id, editForm);
@@ -731,6 +741,35 @@ export default function SuperAdminControlCenter({ onLogout }) {
       reload();
     } catch (err) {
       alert("Add rider failed: " + (err.message || err));
+    }
+  };
+
+  const addHub = async () => {
+    const name = prompt("Hub name:", "Needly Abeokuta Hub");
+    if (!name) return;
+    const area = prompt("Hub area:", "Abeokuta");
+    const address = prompt("Hub address:", "Kuto, Abeokuta, Ogun State");
+    if (!address) return;
+    try {
+      await SuperAdminAPI.createHub({ name, area, address, active: true });
+      reload();
+    } catch (err) {
+      alert("Add hub failed: " + (err.message || err));
+    }
+  };
+
+  const addAgent = async () => {
+    const email = prompt("Agent email:");
+    if (!email) return;
+    const name = prompt("Agent full name:", "Needly Agent");
+    const zone = prompt("Agent pickup zone:", "Abeokuta");
+    const hubId = prompt("Hub ID. Leave empty for default active hub:", hubs[0]?.id || "hub-abeokuta-main");
+    try {
+      const created = await SuperAdminAPI.createAgent({ name: name || "Needly Agent", email, zone, hubId: hubId || undefined, verified: true });
+      alert(`Agent created.${created?.temporaryPassword ? ` Temporary password: ${created.temporaryPassword}` : ""}`);
+      reload();
+    } catch (err) {
+      alert("Add agent failed: " + (err.message || err));
     }
   };
 
@@ -1480,6 +1519,77 @@ export default function SuperAdminControlCenter({ onLogout }) {
             { key: "onlineLabel", label: "Availability" },
             { key: "verifiedLabel", label: "Verification" },
             { key: "rating", label: "Rating" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "agentOps") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <View>
+            <Text style={s.pageH}>Agent Hub Collectors</Text>
+            <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Agents collect multi-vendor/open-market items and drop them at a hub for rider pickup.</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={addAgent} style={s.btn}><Text style={s.btnTxt}>+ Add Agent</Text></Pressable>
+            <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+          </View>
+        </View>
+        <GenericList
+          items={agents.map((a) => ({
+            ...a,
+            name: a.user?.name || a.name || "Agent",
+            email: a.user?.email || "—",
+            phone: a.user?.phone || "—",
+            hubName: a.hub?.name || "No hub",
+            onlineLabel: a.isOnline ? "Online" : "Offline",
+            verifiedLabel: a.verified ? "Verified" : "Unverified",
+            ordersCount: a._count?.orders || 0,
+          }))}
+          type="agent"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "zone", label: "Zone" },
+            { key: "hubName", label: "Hub" },
+            { key: "phone", label: "Phone" },
+            { key: "onlineLabel", label: "Availability" },
+            { key: "verifiedLabel", label: "Verification" },
+            { key: "ordersCount", label: "Collections" },
+          ]}
+        />
+      </ScrollView>
+    );
+
+    if (activeTab === "hubs") return (
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <View>
+            <Text style={s.pageH}>Needly Pickup Hubs</Text>
+            <Text style={{ color: TEXT_SUB, fontSize: 12, marginTop: 4 }}>Riders pick hub-routed orders from these locations after an agent drops items there.</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={addHub} style={s.btn}><Text style={s.btnTxt}>+ Add Hub</Text></Pressable>
+            <Pressable onPress={reload} style={s.btnGhost}><Text style={s.btnGhostTxt}>Refresh</Text></Pressable>
+          </View>
+        </View>
+        <GenericList
+          items={hubs.map((h) => ({
+            ...h,
+            activeLabel: h.active ? "Active" : "Inactive",
+            agentsCount: h._count?.agents || 0,
+            ordersCount: h._count?.orders || 0,
+          }))}
+          type="hub"
+          filterKey="name"
+          fields={[
+            { key: "name", bold: true },
+            { key: "area", label: "Area" },
+            { key: "address", label: "Address" },
+            { key: "agentsCount", label: "Agents" },
+            { key: "ordersCount", label: "Orders" },
+            { key: "activeLabel", label: "Status" },
           ]}
         />
       </ScrollView>

@@ -217,7 +217,7 @@ export function OrdersProvider({ children }) {
 
   /* --- Order Mutations --- */
 
-  const placeOrder = useCallback(async (vendorId, items, deliveryAddress, deliveryPhone, deliveryLocation) => {
+  const placeOrder = useCallback(async (vendorId, items, deliveryAddress, deliveryPhone, deliveryLocation, fulfillmentOptions = {}) => {
     const order = await OrderAPI.place({
       vendorId,
       items,
@@ -225,6 +225,8 @@ export function OrdersProvider({ children }) {
       deliveryPhone,
       deliveryLatitude: deliveryLocation?.latitude,
       deliveryLongitude: deliveryLocation?.longitude,
+      useAgentHub: !!fulfillmentOptions.useAgentHub,
+      hubId: fulfillmentOptions.hubId,
     });
     await refreshOrders();
     await refreshVendors();

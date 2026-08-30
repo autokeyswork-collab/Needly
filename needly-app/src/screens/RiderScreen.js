@@ -300,8 +300,8 @@ export default function RiderScreen() {
                 <StatusPill status={o.status} />
               </View>
 
-              <Text style={styles.missionVendorName}>{o.vendor?.name || "Vendor Store"}</Text>
-              <Text style={styles.missionRoute}>📍 {o.vendor?.area || "Vendor Area"} → Customer Location</Text>
+              <Text style={styles.missionVendorName}>{o.fulfillmentType === "AGENT_HUB" ? (o.hub?.name || "Needly Hub") : (o.vendor?.name || "Vendor Store")}</Text>
+              <Text style={styles.missionRoute}>📍 {o.fulfillmentType === "AGENT_HUB" ? (o.hub?.area || "Hub") : (o.vendor?.area || "Vendor Area")} → Customer Location</Text>
 
               {o.status === "picked_up" && (o.deliveryAddress || o.deliveryPhone) && (
                 <View style={styles.addressBox}>
@@ -318,7 +318,7 @@ export default function RiderScreen() {
 
               {o.status === "ready" && (
                 <Pressable style={[styles.btn, { backgroundColor: PURPLE }]} onPress={() => advanceOrder(o.id).then(loadStats)}>
-                  <Text style={styles.btnText}>✓ Confirm Pickup from Vendor</Text>
+                  <Text style={styles.btnText}>✓ Confirm Pickup from {o.fulfillmentType === "AGENT_HUB" ? "Hub" : "Vendor"}</Text>
                 </Pressable>
               )}
               {o.status === "picked_up" && (
@@ -359,7 +359,12 @@ export default function RiderScreen() {
                   <Text style={{ fontSize: 13, fontWeight: "800", color: DARK_NAVY }}>Job #{o.id.slice(-6)}</Text>
                   <Pill tone="indigo">{o.vendor?.area || "Abeokuta"}</Pill>
                 </View>
-                <Text style={styles.jobVendorName}>{o.vendor?.name}</Text>
+                <Text style={styles.jobVendorName}>{o.fulfillmentType === "AGENT_HUB" ? (o.hub?.name || "Needly Hub") : o.vendor?.name}</Text>
+                {o.fulfillmentType === "AGENT_HUB" && (
+                  <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "700" }}>
+                    Hub pickup · {o.hub?.address || "Needly hub"}
+                  </Text>
+                )}
                 <Pressable style={styles.claimJobBtn} onPress={() => claimOrder(o.id).then(loadStats)}>
                   <Text style={styles.claimJobBtnText}>Accept Job · Earn {fmtNaira(600)}</Text>
                 </Pressable>

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { fmtNaira } from "../../theme/colors";
 import { useOrders } from "../../context/OrdersContext";
 import { useAuth } from "../../context/AuthContext";
-import { PaymentAPI } from "../../api/client";
+import { AgentAPI, PaymentAPI } from "../../api/client";
 import LocationAutocomplete from "../../components/LocationAutocomplete";
 import Thumb from "../../components/Thumb";
 
@@ -98,6 +98,9 @@ export default function CartScreen({ route, navigation }) {
   const [error, setError] = useState(null);
   const [checkoutUrl, setCheckoutUrl] = useState("");
   const [checkoutReference, setCheckoutReference] = useState("");
+  const [useAgentHub, setUseAgentHub] = useState(!!checkoutDraft.useAgentHub);
+  const [hubs, setHubs] = useState([]);
+  const [selectedHubId, setSelectedHubId] = useState(checkoutDraft.hubId || "");
   const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
   const [riderFeePercent, setRiderFeePercent] = useState(5);
   const [paymentGateways, setPaymentGateways] = useState([]);
@@ -118,7 +121,9 @@ export default function CartScreen({ route, navigation }) {
 
   const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
   const platformFeeAmount = Math.round(total * (Number(platformFeePercent || 0) / 100));
-  const deliveryEstimate = estimateDeliveryFee(vendor, deliveryLocation, deliveryFeeConfig);
+  const selectedHub = hubs.find((hub) => hub.id === selectedHubId) || hubs[0] || null;
+  const deliveryPickup = useAgentHub && selectedHub ? selectedHub : vendor;
+  const deliveryEstimate = estimateDeliveryFee(deliveryPickup, deliveryLocation, deliveryFeeConfig);
   const deliveryFeeAmount = deliveryEstimate.fee;
   const companyDeliveryFeeAmount = Math.round(deliveryFeeAmount * (Number(riderFeePercent || 0) / 100));
   const riderPayoutAmount = Math.max(0, deliveryFeeAmount - companyDeliveryFeeAmount);
@@ -138,6 +143,19 @@ export default function CartScreen({ route, navigation }) {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    AgentAPI.hubs()
+      .then((data) => {
+        if (!mounted) return;
+        const activeHubs = Array.isArray(data) ? data : [];
+        setHubs(activeHubs);
+        if (!selectedHubId && activeHubs[0]?.id) setSelectedHubId(activeHubs[0].id);
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [selectedHubId]);
 
   useEffect(() => {
     let mounted = true;
@@ -165,6 +183,8 @@ export default function CartScreen({ route, navigation }) {
     setDeliveryPhone((current) => current || draft.deliveryPhone || user?.phone || "");
     setPaymentEmail((current) => current || draft.paymentEmail || user?.email || "");
     setDeliveryLocation((current) => current || draft.deliveryLocation || null);
+    if (draft.useAgentHub !== undefined) setUseAgentHub(!!draft.useAgentHub);
+    if (draft.hubId) setSelectedHubId(draft.hubId);
   }, [customerActivity?.checkoutDrafts, customerActivityLoaded, user?.email, user?.phone, vendorId]);
 
   useEffect(() => {
@@ -175,8 +195,10 @@ export default function CartScreen({ route, navigation }) {
       paymentEmail,
       deliveryLocation,
       paymentGateway: selectedGateway,
+      useAgentHub,
+      hubId: selectedHubId,
     });
-  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, paymentEmail, saveCheckoutDraft, selectedGateway, vendorId]);
+  }, [customerActivityLoaded, deliveryAddress, deliveryPhone, deliveryLocation, paymentEmail, saveCheckoutDraft, selectedGateway, selectedHubId, useAgentHub, vendorId]);
 
   const useCurrentLocation = async () => {
     setGeoLoading(true);
@@ -261,6 +283,7 @@ export default function CartScreen({ route, navigation }) {
         deliveryAddress.trim(),
         deliveryPhone.trim(),
         deliveryLocation,
+        useAgentHub ? { useAgentHub: true, hubId: selectedHub?.id } : undefined,
       );
       const payment = await PaymentAPI.initialize(id, selectedGateway, cleanPaymentEmail);
       const authorizationUrl = String(payment?.authorizationUrl || "").trim();
@@ -448,10 +471,32 @@ export default function CartScreen({ route, navigation }) {
                 style={styles.phoneInput}
               />
             </View>
-            {!isValidEmail(cleanPaymentEmail) && (
-              <Text style={styles.inlineError}>Enter a valid email address to continue to payment.</Text>
-            )}
-          </View>
+	            {!isValidEmail(cleanPaymentEmail) && (
+	              <Text style={styles.inlineError}>Enter a valid email address to continue to payment.</Text>
+	            )}
+
+	            <View style={styles.hubOption}>
+	              <View style={{ flex: 1, minWidth: 0 }}>
+	                <Text style={styles.hubTitle}>Use Needly hub pickup</Text>
+	                <Text style={styles.hubText}>
+	                  Agent collects from vendor and drops at {selectedHub?.name || "Needly hub"} for rider pickup.
+	                </Text>
+	              </View>
+	              <Switch
+	                value={useAgentHub}
+	                onValueChange={setUseAgentHub}
+	                disabled={!hubs.length}
+	                trackColor={{ true: GREEN, false: "#CBD5E1" }}
+	                thumbColor="#fff"
+	              />
+	            </View>
+	            {useAgentHub && selectedHub && (
+	              <View style={styles.hubSelected}>
+	                <Text style={styles.hubSelectedTitle}>{selectedHub.name}</Text>
+	                <Text style={styles.hubSelectedText}>{selectedHub.address}</Text>
+	              </View>
+	            )}
+	          </View>
 
           <View style={[styles.sectionCard, { marginHorizontal: sidePad }]}>
             <View style={styles.sectionHeader}>
@@ -577,6 +622,12 @@ const styles = StyleSheet.create({
   phoneWrap: { height: 50, borderRadius: 16, borderWidth: 1, borderColor: "#DFD8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 },
   inputInvalid: { borderColor: RED, backgroundColor: "#FFF7F7" },
   phoneInput: { flex: 1, color: INK, fontSize: 14, fontWeight: "700", outlineStyle: "none" },
+  hubOption: { marginTop: 14, borderRadius: 18, borderWidth: 1, borderColor: "#E6DDFF", backgroundColor: SOFT, padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  hubTitle: { color: INK, fontSize: 13.5, fontWeight: "900" },
+  hubText: { color: MUTED, fontSize: 11.5, lineHeight: 16, fontWeight: "700", marginTop: 2 },
+  hubSelected: { marginTop: 9, borderRadius: 16, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0", padding: 11 },
+  hubSelectedTitle: { color: GREEN, fontSize: 12.8, fontWeight: "900" },
+  hubSelectedText: { color: INK, fontSize: 11.5, lineHeight: 15.5, fontWeight: "700", marginTop: 2 },
   paymentOptionList: { gap: 10 },
   paymentOption: { borderRadius: 18, borderWidth: 1, borderColor: "#E5DEF5", backgroundColor: "#FFFFFF", padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
   paymentOptionActive: { borderColor: PURPLE, backgroundColor: SOFT },

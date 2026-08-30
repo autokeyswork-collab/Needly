@@ -4,6 +4,7 @@ import CustomerStack from "./CustomerStack";
 import VendorScreen from "../screens/VendorScreen";
 import ManagerScreen from "../screens/ManagerScreen";
 import RiderScreen from "../screens/RiderScreen";
+import AgentScreen from "../screens/AgentScreen";
 import AdminScreen from "../screens/AdminScreen";
 import SuperAdminControlCenter from "../screens/SuperAdminControlCenter";
 import AppHeader from "./AppHeader";
@@ -23,6 +24,7 @@ export default function RootNavigator() {
     VENDOR: VendorScreen,
     MANAGER: ManagerScreen,
     RIDER: RiderScreen,
+    AGENT: AgentScreen,
     ADMIN: AdminScreen,
     SUPER_ADMIN: () => <SuperAdminControlCenter onLogout={logout} />,
   };
@@ -31,7 +33,7 @@ export default function RootNavigator() {
 
   const isSuperAdmin = roleKey === "SUPER_ADMIN";
 
-  const usesOwnHeader = isSuperAdmin || roleKey === "CUSTOMER" || roleKey === "VENDOR" || roleKey === "ADMIN";
+  const usesOwnHeader = isSuperAdmin || roleKey === "CUSTOMER" || roleKey === "VENDOR" || roleKey === "AGENT" || roleKey === "ADMIN";
 
   return (
     <View style={{ flex: 1 }}>
