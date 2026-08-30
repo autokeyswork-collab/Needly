@@ -8,52 +8,15 @@ import { COLORS } from "../../theme/colors";
 import { AuthAPI } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { preparePickedImageDataUrl, PROFILE_IMAGE_LIMIT_BYTES } from "../../utils/imageUpload";
+import { NIGERIA_MAJOR_LOCATIONS, uniqueNigeriaLocations } from "../../data/nigeriaLocations";
 
 const INK = "#15183F";
 const MUTED = "#747792";
 const PURPLE = "#6F45E9";
 const PURPLE_DARK = "#35109B";
 
-const FALLBACK_LOCATIONS = [
-  { state: "Ogun", city: "Abeokuta" },
-  { state: "Lagos", city: "Lagos" },
-  { state: "Oyo", city: "Ibadan" },
-  { state: "FCT", city: "Abuja" },
-  { state: "Rivers", city: "Port Harcourt" },
-  { state: "Abia", city: "Umuahia" },
-  { state: "Adamawa", city: "Yola" },
-  { state: "Akwa Ibom", city: "Uyo" },
-  { state: "Anambra", city: "Awka" },
-  { state: "Bauchi", city: "Bauchi" },
-  { state: "Bayelsa", city: "Yenagoa" },
-  { state: "Benue", city: "Makurdi" },
-  { state: "Borno", city: "Maiduguri" },
-  { state: "Cross River", city: "Calabar" },
-  { state: "Delta", city: "Asaba" },
-  { state: "Ebonyi", city: "Abakaliki" },
-  { state: "Edo", city: "Benin City" },
-  { state: "Ekiti", city: "Ado-Ekiti" },
-  { state: "Enugu", city: "Enugu" },
-  { state: "FCT", city: "Abuja" },
-  { state: "Gombe", city: "Gombe" },
-  { state: "Imo", city: "Owerri" },
-  { state: "Jigawa", city: "Dutse" },
-  { state: "Kaduna", city: "Kaduna" },
-  { state: "Kano", city: "Kano" },
-  { state: "Katsina", city: "Katsina" },
-  { state: "Kebbi", city: "Birnin Kebbi" },
-  { state: "Kogi", city: "Lokoja" },
-  { state: "Kwara", city: "Ilorin" },
-  { state: "Nasarawa", city: "Lafia" },
-  { state: "Niger", city: "Minna" },
-  { state: "Ondo", city: "Akure" },
-  { state: "Osun", city: "Osogbo" },
-  { state: "Plateau", city: "Jos" },
-  { state: "Sokoto", city: "Sokoto" },
-  { state: "Taraba", city: "Jalingo" },
-  { state: "Yobe", city: "Damaturu" },
-  { state: "Zamfara", city: "Gusau" },
-];
+const FALLBACK_LOCATIONS = uniqueNigeriaLocations(NIGERIA_MAJOR_LOCATIONS)
+  .map((location) => ({ state: location.state, city: location.city }));
 
 function uniqueByCity(locations) {
   const seen = new Set();
@@ -114,7 +77,7 @@ export default function CustomerAccountScreen({ navigation }) {
   const quickLocations = useMemo(() => {
     const priority = [
       ...locations.filter((item) => item.city === locationCity),
-      ...locations.filter((item) => ["Abeokuta", "Lagos", "Ibadan", "Abuja", "Port Harcourt"].includes(item.city)),
+      ...locations.filter((item) => ["Abeokuta", "Lagos", "Ibadan", "Abuja", "Port Harcourt", "Kano", "Enugu"].includes(item.city)),
       ...locations,
     ];
     return uniqueByCity(priority).slice(0, 8);

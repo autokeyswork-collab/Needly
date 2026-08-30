@@ -20,6 +20,7 @@ import NeedlyLogo from "../../components/NeedlyLogo";
 import LocationAutocomplete from "../../components/LocationAutocomplete";
 import { LOGIN_HERO_MARKET } from "../../data/customerAssets";
 import { HomeAPI } from "../../api/client";
+import { NIGERIA_MAJOR_LOCATIONS, nigeriaLocationLabel, uniqueNigeriaLocations } from "../../data/nigeriaLocations";
 
 const ROLES = [
   { value: "CUSTOMER", label: "Customer", sub: "Shop & order", icon: "person", family: "Ionicons" },
@@ -27,39 +28,8 @@ const ROLES = [
   { value: "RIDER", label: "Rider", sub: "Deliver & earn", icon: "motorbike", family: "MaterialCommunityIcons" },
 ];
 
-const ABEOKUTA_AREAS = [
-  "Oke-Ilewo",
-  "Ibara",
-  "Panseke",
-  "Adigbe",
-  "Kuto",
-  "Ita Eko",
-  "Lafenwa",
-  "Hilltop",
-  "Omida",
-  "Asero",
-  "Obantoko",
-  "Camp",
-  "Isale Ake",
-  "Sapon",
-  "Lantoro",
-  "Totoro",
-  "Onikolobo",
-  "Olomore",
-  "Elega",
-  "Mawuko",
-  "Oke-Sokori",
-  "Ago Ika",
-  "Ijeun Titun",
-  "Idi Aba",
-  "Elite",
-  "Fajol",
-  "Olorunsogo",
-  "Kobape",
-  "Osiele",
-  "Odeda",
-];
-const RIDER_ZONES = ["Panseke / Ibara Zone", "Kuto / Oke-Ilewo Zone", "Adigbe / Ita Eko Zone", "Lafenwa / Hilltop Zone"];
+const NIGERIA_AREA_OPTIONS = uniqueNigeriaLocations(NIGERIA_MAJOR_LOCATIONS).map(nigeriaLocationLabel);
+const RIDER_ZONES = NIGERIA_AREA_OPTIONS.map((location) => `${location} Zone`);
 const PURPLE = "#6F45E9";
 const PURPLE_DARK = "#24105F";
 const ORANGE = "#F47C00";
@@ -103,12 +73,12 @@ export default function RegisterScreen({ navigation, route }) {
   const [businessName, setBusinessName] = useState("");
   const [vendorCategory, setVendorCategory] = useState("Local Market");
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [vendorArea, setVendorArea] = useState("Oke-Ilewo");
+  const [vendorArea, setVendorArea] = useState("Abeokuta, Ogun");
   const [areaOpen, setAreaOpen] = useState(false);
   const [vendorAddress, setVendorAddress] = useState("");
 
   // Rider Fields
-  const [riderZone, setRiderZone] = useState("Panseke / Ibara Zone");
+  const [riderZone, setRiderZone] = useState("Abeokuta, Ogun Zone");
 
   const [validationError, setValidationError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -119,7 +89,7 @@ export default function RegisterScreen({ navigation, route }) {
 
   useEffect(() => {
     let cancelled = false;
-    HomeAPI.categories("Abeokuta")
+    HomeAPI.categories()
       .then((items) => {
         if (cancelled) return;
         const labels = (Array.isArray(items) ? items : [])
@@ -361,10 +331,10 @@ export default function RegisterScreen({ navigation, route }) {
               <View style={styles.heroStory}>
                 <View style={styles.locationChip}>
                   <Ionicons name="location" size={20} color="#fff" />
-                  <Text style={styles.locationChipText}>Abeokuta, Nigeria</Text>
+                  <Text style={styles.locationChipText}>Nigeria</Text>
                 </View>
                 <Text style={styles.storyTitle}>Support Local, Grow Local</Text>
-                <Text style={styles.storyText}>Create your Needly account to shop, sell, or deliver across Abeokuta.</Text>
+                <Text style={styles.storyText}>Create your Needly account to shop, sell, or deliver across Nigeria.</Text>
               </View>
             </ImageBackground>
           ) : (
@@ -372,7 +342,7 @@ export default function RegisterScreen({ navigation, route }) {
               <NeedlyLogo size="medium" theme="dark" variant="icon" showBadges={false} />
               <View style={styles.mobileLocationChip}>
                 <Ionicons name="location" size={15} color="#fff" />
-                <Text style={styles.mobileLocationText}>Abeokuta, Nigeria</Text>
+                <Text style={styles.mobileLocationText}>Nigeria</Text>
               </View>
             </View>
           )}
@@ -535,7 +505,7 @@ export default function RegisterScreen({ navigation, route }) {
               )}
             </View>
 
-            <Text style={styles.subLabel}>Abeokuta area location</Text>
+            <Text style={styles.subLabel}>Nigeria service location</Text>
             <View style={styles.dropdownWrap}>
               <Pressable
                 style={[styles.dropdownButton, areaOpen && styles.dropdownButtonOpen]}
@@ -551,7 +521,7 @@ export default function RegisterScreen({ navigation, route }) {
               {areaOpen && (
                 <View style={styles.dropdownMenu}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                    {ABEOKUTA_AREAS.map((area) => (
+                    {NIGERIA_AREA_OPTIONS.map((area) => (
                       <Pressable
                         key={area}
                         onPress={() => {
@@ -574,7 +544,9 @@ export default function RegisterScreen({ navigation, route }) {
               onChangeText={setVendorAddress}
               onSelectLocation={(loc) => {
                 setVendorAddress(loc.address);
-                if (loc.area) setVendorArea(loc.area);
+                if (loc.area) {
+                  setVendorArea([loc.area, loc.city, loc.state].filter(Boolean).join(", "));
+                }
               }}
               placeholder="Search store street address or landmark..."
             />

@@ -9,39 +9,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { COLORS } from "../theme/colors";
+import { NIGERIA_MAJOR_LOCATIONS } from "../data/nigeriaLocations";
 
-const POPULAR_LOCATIONS = [
-  { id: "loc-1", title: "Panseke Commercial Hub", subtitle: "Panseke, Abeokuta, Ogun State", area: "Panseke", lat: 7.1583, lng: 3.3658 },
-  { id: "loc-2", title: "Oke-Ilewo Lalubu Street", subtitle: "Oke-Ilewo, Abeokuta, Ogun State", area: "Oke-Ilewo", lat: 7.1545, lng: 3.3550 },
-  { id: "loc-3", title: "Ibara Housing Estate Road", subtitle: "Ibara, Abeokuta, Ogun State", area: "Ibara", lat: 7.1510, lng: 3.3520 },
-  { id: "loc-4", title: "Adigbe Main Road", subtitle: "Adigbe, Abeokuta, Ogun State", area: "Adigbe", lat: 7.1784, lng: 3.4024 },
-  { id: "loc-5", title: "Kuto Market Junction", subtitle: "Kuto, Abeokuta, Ogun State", area: "Kuto", lat: 7.1488, lng: 3.3515 },
-  { id: "loc-6", title: "Ita Eko Roundabout", subtitle: "Ita Eko, Abeokuta, Ogun State", area: "Ita Eko", lat: 7.1580, lng: 3.3490 },
-  { id: "loc-7", title: "Lafenwa Market Area", subtitle: "Lafenwa, Abeokuta, Ogun State", area: "Lafenwa", lat: 7.1650, lng: 3.3320 },
-  { id: "loc-8", title: "Hilltop OOPL Resort Zone", subtitle: "Hilltop, Abeokuta, Ogun State", area: "Hilltop", lat: 7.1420, lng: 3.3600 },
-  { id: "loc-9", title: "Omida Market", subtitle: "Omida, Abeokuta, Ogun State", area: "Omida", lat: 7.1574, lng: 3.3458 },
-  { id: "loc-10", title: "Asero Estate Road", subtitle: "Asero, Abeokuta, Ogun State", area: "Asero", lat: 7.1306, lng: 3.3775 },
-  { id: "loc-11", title: "Obantoko Junction", subtitle: "Obantoko, Abeokuta, Ogun State", area: "Obantoko", lat: 7.0971, lng: 3.3956 },
-  { id: "loc-12", title: "Camp Roundabout", subtitle: "Camp, Abeokuta, Ogun State", area: "Camp", lat: 7.1688, lng: 3.3609 },
-  { id: "loc-13", title: "Isale Ake Palace Area", subtitle: "Isale Ake, Abeokuta, Ogun State", area: "Isale Ake", lat: 7.1621, lng: 3.3428 },
-  { id: "loc-14", title: "Sapon Market Area", subtitle: "Sapon, Abeokuta, Ogun State", area: "Sapon", lat: 7.1616, lng: 3.3509 },
-  { id: "loc-15", title: "Lantoro Road", subtitle: "Lantoro, Abeokuta, Ogun State", area: "Lantoro", lat: 7.1644, lng: 3.3567 },
-  { id: "loc-16", title: "Totoro Road", subtitle: "Totoro, Abeokuta, Ogun State", area: "Totoro", lat: 7.1692, lng: 3.3472 },
-  { id: "loc-17", title: "Onikolobo", subtitle: "Onikolobo, Abeokuta, Ogun State", area: "Onikolobo", lat: 7.1544, lng: 3.3749 },
-  { id: "loc-18", title: "Olomore", subtitle: "Olomore, Abeokuta, Ogun State", area: "Olomore", lat: 7.1795, lng: 3.3519 },
-  { id: "loc-19", title: "Elega", subtitle: "Elega, Abeokuta, Ogun State", area: "Elega", lat: 7.1768, lng: 3.3409 },
-  { id: "loc-20", title: "Mawuko", subtitle: "Mawuko, Abeokuta, Ogun State", area: "Mawuko", lat: 7.1218, lng: 3.3354 },
-  { id: "loc-21", title: "Oke-Sokori", subtitle: "Oke-Sokori, Abeokuta, Ogun State", area: "Oke-Sokori", lat: 7.1664, lng: 3.3536 },
-  { id: "loc-22", title: "Ago Ika", subtitle: "Ago Ika, Abeokuta, Ogun State", area: "Ago Ika", lat: 7.1697, lng: 3.3355 },
-  { id: "loc-23", title: "Ijeun Titun", subtitle: "Ijeun Titun, Abeokuta, Ogun State", area: "Ijeun Titun", lat: 7.1475, lng: 3.3623 },
-  { id: "loc-24", title: "Idi Aba", subtitle: "Idi Aba, Abeokuta, Ogun State", area: "Idi Aba", lat: 7.1270, lng: 3.3612 },
-  { id: "loc-25", title: "Elite Road", subtitle: "Elite, Abeokuta, Ogun State", area: "Elite", lat: 7.1294, lng: 3.3498 },
-  { id: "loc-26", title: "Fajol Estate", subtitle: "Fajol, Abeokuta, Ogun State", area: "Fajol", lat: 7.1258, lng: 3.3409 },
-  { id: "loc-27", title: "Olorunsogo", subtitle: "Olorunsogo, Abeokuta, Ogun State", area: "Olorunsogo", lat: 7.1378, lng: 3.3447 },
-  { id: "loc-28", title: "Kobape Road", subtitle: "Kobape, Abeokuta, Ogun State", area: "Kobape", lat: 7.0975, lng: 3.4387 },
-  { id: "loc-29", title: "Osiele", subtitle: "Osiele, Abeokuta, Ogun State", area: "Osiele", lat: 7.1275, lng: 3.4305 },
-  { id: "loc-30", title: "Odeda Road", subtitle: "Odeda, Abeokuta, Ogun State", area: "Odeda", lat: 7.2310, lng: 3.5287 },
-];
+const POPULAR_LOCATIONS = NIGERIA_MAJOR_LOCATIONS.map((loc) => ({
+  ...loc,
+  lat: loc.latitude,
+  lng: loc.longitude,
+}));
 
 export default function LocationAutocomplete({
   value,
@@ -94,10 +68,11 @@ export default function LocationAutocomplete({
   const fetchOnlineSuggestions = async (searchText, existingLocalMatches) => {
     setLoading(true);
     try {
+      const scopedQuery = /\bnigeria\b/i.test(searchText) ? searchText : `${searchText}, Nigeria`;
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchText
-        )}&addressdetails=1&limit=5`,
+          scopedQuery
+        )}&addressdetails=1&limit=8&countrycodes=ng&accept-language=en`,
         { headers: { "User-Agent": "NeedlyMarketplaceApp/1.0" } }
       );
       const data = await res.json();
@@ -106,7 +81,9 @@ export default function LocationAutocomplete({
           id: `osm-${item.place_id || idx}`,
           title: item.display_name.split(",")[0] || item.display_name,
           subtitle: item.display_name,
-          area: item.address?.suburb || item.address?.city || item.address?.town || "Service Area",
+          area: item.address?.suburb || item.address?.city || item.address?.town || item.address?.state || "Nigeria",
+          city: item.address?.city || item.address?.town || item.address?.municipality || item.address?.county || "",
+          state: item.address?.state || "",
           lat: parseFloat(item.lat),
           lng: parseFloat(item.lon),
         }));

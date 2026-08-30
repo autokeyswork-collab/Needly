@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { COLORS, fmtNaira } from "../theme/colors";
@@ -7,45 +7,15 @@ import { STATUS_FLOW, STATUS_LABEL } from "../data/appConstants";
 import { useOrders } from "../context/OrdersContext";
 import { useAuth } from "../context/AuthContext";
 import { AuthAPI, VendorAPI, RiderAPI, OrderAPI, AuditAPI, PayoutAPI, OperationalIssueAPI, normalizeOrder } from "../api/client";
+import { NIGERIA_MAJOR_LOCATIONS, uniqueNigeriaLocations } from "../data/nigeriaLocations";
 
 const PURPLE = "#6F45E9";
 const DARK_NAVY = "#15183F";
 const EMERALD = "#10B981";
 const MANGO = "#F59E0B";
 const CHILI = "#EF4444";
-const ABEOKUTA_PROFILE_CITIES = [
-  "Abeokuta",
-  "Oke-Ilewo",
-  "Ibara",
-  "Panseke",
-  "Adigbe",
-  "Kuto",
-  "Ita Eko",
-  "Lafenwa",
-  "Hilltop",
-  "Omida",
-  "Asero",
-  "Obantoko",
-  "Camp",
-  "Isale Ake",
-  "Sapon",
-  "Lantoro",
-  "Totoro",
-  "Onikolobo",
-  "Olomore",
-  "Elega",
-  "Mawuko",
-  "Oke-Sokori",
-  "Ago Ika",
-  "Ijeun Titun",
-  "Idi Aba",
-  "Elite",
-  "Fajol",
-  "Olorunsogo",
-  "Kobape",
-  "Osiele",
-  "Odeda",
-];
+const PROFILE_LOCATIONS = uniqueNigeriaLocations(NIGERIA_MAJOR_LOCATIONS)
+  .map((location) => ({ state: location.state, city: location.city }));
 
 const ADMIN_TABS = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -102,6 +72,14 @@ export default function AdminScreen() {
   const [savingAdminProfile, setSavingAdminProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [profileNotice, setProfileNotice] = useState("");
+
+  const adminStateOptions = useMemo(() => {
+    return Array.from(new Set(PROFILE_LOCATIONS.map((item) => item.state).filter(Boolean))).sort();
+  }, []);
+
+  const adminCityOptions = useMemo(() => {
+    return PROFILE_LOCATIONS.filter((item) => !adminProfileDraft.locationState || item.state === adminProfileDraft.locationState);
+  }, [adminProfileDraft.locationState]);
 
   const loadPending = useCallback(async () => {
     try { setPending(await AuthAPI.pendingApprovals()); } catch (err) { /* non-fatal */ }
@@ -389,7 +367,7 @@ export default function AdminScreen() {
                 <Text style={styles.headerPersonIcon}>👤</Text>
                 <Text style={styles.headerPersonText} numberOfLines={1}>{adminName}</Text>
               </Pressable>
-              <Text style={styles.headerSubtitle} numberOfLines={1}>{adminRoleLabel} · Abeokuta operations</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>{adminRoleLabel} · Nigeria operations</Text>
             </View>
           </View>
           <View style={styles.headerActionGroup}>
@@ -545,13 +523,20 @@ export default function AdminScreen() {
               <View style={styles.profileTwoCol}>
                 <View style={styles.profileCol}>
                   <Text style={styles.profileLabel}>State</Text>
-                  <TextInput
-                    value={adminProfileDraft.locationState}
-                    onChangeText={(locationState) => setAdminProfileDraft((d) => ({ ...d, locationState }))}
-                    placeholder="Ogun"
-                    placeholderTextColor="#94A3B8"
-                    style={styles.profileInput}
-                  />
+                  <View style={styles.profilePickerShell}>
+                    <Picker
+                      selectedValue={adminProfileDraft.locationState || "Ogun"}
+                      onValueChange={(locationState) => {
+                        const firstCity = PROFILE_LOCATIONS.find((item) => item.state === locationState)?.city || "";
+                        setAdminProfileDraft((d) => ({ ...d, locationState, locationCity: firstCity || d.locationCity }));
+                      }}
+                      style={styles.profilePicker}
+                    >
+                      {adminStateOptions.map((state) => (
+                        <Picker.Item key={state} label={state} value={state} />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
                 <View style={styles.profileCol}>
                   <Text style={styles.profileLabel}>City</Text>
@@ -563,7 +548,7 @@ export default function AdminScreen() {
                     >
                       {Array.from(new Set([
                         adminProfileDraft.locationCity,
-                        ...ABEOKUTA_PROFILE_CITIES,
+                        ...adminCityOptions.map((item) => item.city),
                       ].filter(Boolean))).map((city) => (
                         <Picker.Item key={city} label={city} value={city} />
                       ))}
@@ -892,7 +877,7 @@ export default function AdminScreen() {
         {activeTab === "vendors" && (
           <View style={styles.pageWrap}>
             <Text style={styles.pageHeaderTitle}>🏪 Vendor Roster ({effectiveVendors.length})</Text>
-            <Text style={styles.pageHeaderSub}>All registered store partners across Abeokuta commercial hubs.</Text>
+            <Text style={styles.pageHeaderSub}>All registered store partners across active Needly service locations.</Text>
 
             <View style={{ gap: 10 }}>
               {effectiveVendors.map((v) => {
@@ -973,7 +958,7 @@ export default function AdminScreen() {
         {activeTab === "riders" && (
           <View style={styles.pageWrap}>
             <Text style={styles.pageHeaderTitle}>🛵 Rider Fleet Roster ({riderRoster.length})</Text>
-            <Text style={styles.pageHeaderSub}>Active dispatch riders across Abeokuta zones.</Text>
+            <Text style={styles.pageHeaderSub}>Active dispatch riders across Needly delivery zones.</Text>
 
             <View style={{ gap: 10 }}>
               {riderRoster.map((r) => {
