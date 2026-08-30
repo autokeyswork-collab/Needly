@@ -109,7 +109,7 @@ router.get("/stats/overview", async (req, res) => {
       prisma.order.count({ where: { status: "CANCELLED" } }),
       emptyIfMissingTable(prisma.booking.count({ where: { status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } } }), 0),
       prisma.order.findMany({ select: { total: true, status: true } }),
-      prisma.payment.findMany({ select: { amount: true, platformFeeAmount: true, companyDeliveryFeeAmount: true, riderPayoutAmount: true, status: true } }),
+      prisma.payment.findMany({ select: { amount: true, platformFeeAmount: true, companyDeliveryFeeAmount: true, riderPayoutAmount: true, agentPayoutAmount: true, status: true } }),
       prisma.payout.findMany({ select: { amount: true, status: true, riderId: true } }),
       prisma.supportTicket ? emptyIfMissingTable(prisma.supportTicket.count({ where: { status: { in: ["OPEN", "ASSIGNED", "WAITING"] } } }), 0) : Promise.resolve(0),
       prisma.refund ? emptyIfMissingTable(prisma.refund.count({ where: { status: "REQUESTED" } }), 0) : Promise.resolve(0),
@@ -132,6 +132,7 @@ router.get("/stats/overview", async (req, res) => {
       0,
     );
     const riderEarningsTotal = paidPayments.reduce((sum, payment) => sum + (payment.riderPayoutAmount || 0), 0);
+    const agentEarningsTotal = paidPayments.reduce((sum, payment) => sum + (payment.agentPayoutAmount || 0), 0);
     const vendorPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
     const riderPayoutsTotal = payouts.filter((p) => p.status === "PAID").reduce((sum, p) => sum + p.amount, 0);
 
@@ -156,6 +157,8 @@ router.get("/stats/overview", async (req, res) => {
       platformFeePercent,
       riderFeePercent: 5,
       riderEarningsTotal,
+      agentCollectionFee: Number(process.env.AGENT_COLLECTION_FEE_NAIRA || 300),
+      agentEarningsTotal,
       vendorPayoutsTotal,
       riderPayoutsTotal,
       pendingRefundsCount,

@@ -18,6 +18,7 @@ const DEFAULT_DELIVERY_BASE_FEE = Number(process.env.DELIVERY_BASE_FEE_NAIRA || 
 const DEFAULT_DELIVERY_PER_KM = Number(process.env.DELIVERY_PER_KM_NAIRA || 120);
 const DEFAULT_DELIVERY_MIN_FEE = Number(process.env.DELIVERY_MIN_FEE_NAIRA || 500);
 const DEFAULT_DELIVERY_MAX_FEE = Number(process.env.DELIVERY_MAX_FEE_NAIRA || 3500);
+const DEFAULT_AGENT_COLLECTION_FEE = Number(process.env.AGENT_COLLECTION_FEE_NAIRA || 300);
 
 function frontendUrl(path) {
   const base = process.env.FRONTEND_BASE_URL || process.env.APP_PUBLIC_URL || "https://needly-frontend-seven.vercel.app";
@@ -80,10 +81,11 @@ function calculateDeliveryFee(order) {
   };
 }
 
-function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmount = 0, deliveryDistanceKm = null) {
+function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmount = 0, deliveryDistanceKm = null, agentFeeAmount = 0) {
   const safeVendorAmount = Math.max(0, Math.round(Number(vendorAmount || 0)));
   const safePercent = Math.max(0, Number(platformFeePercent || 0));
   const safeDeliveryFee = Math.max(0, Math.round(Number(deliveryFeeAmount || 0)));
+  const safeAgentFee = Math.max(0, Math.round(Number(agentFeeAmount || 0)));
   const platformFeeAmount = Math.round(safeVendorAmount * (safePercent / 100));
   const companyDeliveryFeeAmount = Math.round(safeDeliveryFee * (DEFAULT_RIDER_FEE_PERCENT / 100));
   const riderPayoutAmount = Math.max(0, safeDeliveryFee - companyDeliveryFeeAmount);
@@ -95,9 +97,11 @@ function calculatePaymentSplit(vendorAmount, platformFeePercent, deliveryFeeAmou
     deliveryDistanceKm,
     riderFeePercent: DEFAULT_RIDER_FEE_PERCENT,
     riderPayoutAmount,
+    agentFeeAmount: safeAgentFee,
+    agentPayoutAmount: safeAgentFee,
     companyDeliveryFeeAmount,
     companyAmount: platformFeeAmount + companyDeliveryFeeAmount,
-    customerAmount: safeVendorAmount + platformFeeAmount + safeDeliveryFee,
+    customerAmount: safeVendorAmount + platformFeeAmount + safeDeliveryFee + safeAgentFee,
   };
 }
 
@@ -136,7 +140,7 @@ async function markVendorOnboardingPaid(reference) {
 async function markOrderPaymentPaid(reference, req) {
   const payment = await prisma.payment.findUnique({
     where: { reference },
-    include: { order: { include: { customer: true, rider: { include: { user: true } }, vendor: { include: { owner: true, manager: true } } } } },
+    include: { order: { include: { customer: true, agent: { include: { user: true } }, rider: { include: { user: true } }, vendor: { include: { owner: true, manager: true } } } } },
   });
 
   if (!payment || payment.status === "PAID") return payment;
@@ -210,6 +214,26 @@ async function markOrderPaymentPaid(reference, req) {
           paymentReference: payment.reference,
           deliveryFeeAmount: payment.deliveryFeeAmount,
           companyDeliveryFeeAmount: payment.companyDeliveryFeeAmount,
+        },
+        txClient: tx,
+      });
+    }
+
+    if (payment.order.agent?.userId && payment.agentPayoutAmount > 0) {
+      await createWalletCredit({
+        userId: payment.order.agent.userId,
+        amount: payment.agentPayoutAmount,
+        reference: `${payment.reference}:agent`,
+        type: "AGENT_EARNING",
+        category: "HUB_COLLECTION_PAYOUT",
+        gateway: payment.gateway || "checkout",
+        description: `Agent hub collection payout for order #${payment.orderId.slice(-6)}`,
+        metadata: {
+          orderId: payment.orderId,
+          paymentId: payment.id,
+          paymentReference: payment.reference,
+          agentFeeAmount: payment.agentFeeAmount,
+          fulfillmentType: payment.order.fulfillmentType,
         },
         txClient: tx,
       });
@@ -298,6 +322,7 @@ router.get("/platform-fee", requireAuth, async (_req, res) => {
     deliveryPerKm: DEFAULT_DELIVERY_PER_KM,
     deliveryMinFee: DEFAULT_DELIVERY_MIN_FEE,
     deliveryMaxFee: DEFAULT_DELIVERY_MAX_FEE,
+    agentCollectionFee: DEFAULT_AGENT_COLLECTION_FEE,
   });
 });
 
@@ -346,7 +371,8 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
 
   const platformFeePercent = await getPlatformFeePercent();
   const delivery = calculateDeliveryFee(order);
-  const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm);
+  const agentFeeAmount = order.fulfillmentType === "AGENT_HUB" ? DEFAULT_AGENT_COLLECTION_FEE : 0;
+  const split = calculatePaymentSplit(order.total, platformFeePercent, delivery.deliveryFeeAmount, delivery.deliveryDistanceKm, agentFeeAmount);
   const reference = `needly_${order.id}_${Date.now()}`;
   const storedEmail = String(order.customer.email || "").trim().toLowerCase();
   const customerEmail = requestedEmail || storedEmail;
@@ -389,6 +415,8 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
         deliveryDistanceKm: split.deliveryDistanceKm,
         riderFeePercent: split.riderFeePercent,
         riderPayoutAmount: split.riderPayoutAmount,
+        agentFeeAmount: split.agentFeeAmount,
+        agentPayoutAmount: split.agentPayoutAmount,
         companyDeliveryFeeAmount: split.companyDeliveryFeeAmount,
         companyAmount: split.companyAmount,
       },
@@ -411,6 +439,8 @@ router.post("/initialize", requireAuth, requireRole("CUSTOMER"), async (req, res
       deliveryFeeAmount: split.deliveryFeeAmount,
       deliveryDistanceKm: split.deliveryDistanceKm,
       riderPayoutAmount: split.riderPayoutAmount,
+      agentFeeAmount: split.agentFeeAmount,
+      agentPayoutAmount: split.agentPayoutAmount,
       companyDeliveryFeeAmount: split.companyDeliveryFeeAmount,
       gateway: txn.gateway || gateway || "paystack",
       status: "PENDING",

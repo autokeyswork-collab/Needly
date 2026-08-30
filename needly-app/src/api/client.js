@@ -175,6 +175,8 @@ export function normalizeOrder(o) {
     deliveryFeeAmount: o.payment?.deliveryFeeAmount ?? 0,
     deliveryDistanceKm: o.payment?.deliveryDistanceKm ?? null,
     riderPayoutAmount: o.payment?.riderPayoutAmount ?? 0,
+    agentFeeAmount: o.payment?.agentFeeAmount ?? 0,
+    agentPayoutAmount: o.payment?.agentPayoutAmount ?? 0,
     companyDeliveryFeeAmount: o.payment?.companyDeliveryFeeAmount ?? 0,
     paymentGateway: o.payment?.gateway || null,
     vendorReceived: !!o.payment?.vendorReceived,

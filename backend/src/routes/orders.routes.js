@@ -526,6 +526,24 @@ router.post("/:id/agent-claim", requireAuth, requireRole("AGENT"), async (req, r
     where: { id: req.params.id },
     include: ORDER_INCLUDE,
   });
+  if (order?.payment?.status === "PAID" && order.agent?.userId && order.payment.agentPayoutAmount > 0) {
+    await createWalletCredit({
+      userId: order.agent.userId,
+      amount: order.payment.agentPayoutAmount,
+      reference: `${order.payment.reference}:agent`,
+      type: "AGENT_EARNING",
+      category: "HUB_COLLECTION_PAYOUT",
+      gateway: order.payment.gateway || "checkout",
+      description: `Agent hub collection payout for order #${order.id.slice(-6)}`,
+      metadata: {
+        orderId: order.id,
+        paymentId: order.payment.id,
+        paymentReference: order.payment.reference,
+        agentFeeAmount: order.payment.agentFeeAmount,
+        creditedOnClaim: true,
+      },
+    });
+  }
   emit(req, `order:${order.id}`, "order:updated", order);
   res.json(order);
 });

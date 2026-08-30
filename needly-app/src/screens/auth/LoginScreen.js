@@ -31,6 +31,7 @@ const ACCOUNT_TYPES = [
   { key: "CUSTOMER", label: "Customer", icon: "person", family: "Ionicons" },
   { key: "VENDOR", label: "Vendor", icon: "storefront", family: "MaterialCommunityIcons" },
   { key: "RIDER", label: "Rider", icon: "motorbike", family: "MaterialCommunityIcons" },
+  { key: "AGENT", label: "Agent", icon: "account-tie", family: "MaterialCommunityIcons" },
   { key: "PROVIDER", label: "Provider", icon: "briefcase", family: "FontAwesome" },
 ];
 
@@ -85,7 +86,7 @@ export default function LoginScreen({ navigation }) {
     const emailParam = params.get("email");
     const roleParam = (params.get("role") || "").toUpperCase();
     if (emailParam) setEmail(emailParam.trim().toLowerCase());
-    if (["CUSTOMER", "VENDOR", "RIDER", "PROVIDER"].includes(roleParam)) {
+    if (["CUSTOMER", "VENDOR", "RIDER", "AGENT", "PROVIDER"].includes(roleParam)) {
       setAccountType(roleParam);
     } else if (roleParam === "MANAGER" || roleParam === "ADMIN") {
       setAccountType("PROVIDER");
@@ -378,7 +379,15 @@ export default function LoginScreen({ navigation }) {
 
               <View style={[styles.signupRow, isCompact && styles.signupRowCompact]}>
                 <Text style={styles.signupText}>Don’t have an account?</Text>
-                <Pressable onPress={() => navigation.navigate("Register", { role: accountType === "PROVIDER" ? "VENDOR" : accountType })}>
+                <Pressable
+                  onPress={() => {
+                    if (accountType === "AGENT") {
+                      Alert.alert("Agent account", "Agent accounts are created by Super Admin. Ask Super Admin to add the agent, then sign in here.");
+                      return;
+                    }
+                    navigation.navigate("Register", { role: accountType === "PROVIDER" ? "VENDOR" : accountType });
+                  }}
+                >
                   <Text style={styles.signupLink}>Sign up</Text>
                 </Pressable>
               </View>
@@ -487,14 +496,14 @@ const styles = StyleSheet.create({
   welcomeTextCompact: { fontSize: 13.5, lineHeight: 20, marginTop: 7 },
   purpleText: { color: PURPLE, fontWeight: "900" },
   roleSelector: { minHeight: 104, borderRadius: 16, borderWidth: 1.3, borderColor: "rgba(218,219,232,0.82)", flexDirection: "row", overflow: "hidden", marginBottom: 30, backgroundColor: "rgba(255,255,255,0.74)" },
-  roleSelectorMobile: { minHeight: 58, marginBottom: 14, borderRadius: 13 },
-  roleSelectorCompact: { minHeight: 58, marginBottom: 14, borderRadius: 13 },
+  roleSelectorMobile: { minHeight: 60, marginBottom: 14, borderRadius: 13 },
+  roleSelectorCompact: { minHeight: 60, marginBottom: 14, borderRadius: 13 },
   roleTab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, borderRightWidth: 1, borderRightColor: "rgba(230,231,239,0.8)", backgroundColor: "rgba(255,255,255,0.62)" },
-  roleTabCompact: { gap: 5, paddingHorizontal: 2 },
+  roleTabCompact: { gap: 4, paddingHorizontal: 1 },
   roleTabActive: { backgroundColor: PURPLE },
   roleText: { color: INK, fontSize: 15, fontWeight: "900" },
-  roleTextMobile: { fontSize: 10.5 },
-  roleTextCompact: { fontSize: 10.5 },
+  roleTextMobile: { fontSize: 9.5 },
+  roleTextCompact: { fontSize: 9.2 },
   roleTextActive: { color: "#fff" },
   errorBox: { backgroundColor: "#FFF1F2", borderWidth: 1, borderColor: "#FFCDD5", borderRadius: 16, padding: 12, marginBottom: 18 },
   errorText: { color: "#B4233C", fontSize: 13.5, fontWeight: "800", lineHeight: 19 },

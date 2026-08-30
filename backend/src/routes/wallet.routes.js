@@ -6,7 +6,7 @@ const { broadcastNotification } = require("../sockets/orderSocket");
 
 const router = express.Router();
 
-const CREDIT_TYPES = new Set(["FUNDING", "ADJUSTMENT", "ORDER_PAYMENT", "RIDER_EARNING", "COMPANY_FEE", "TRANSFER_IN", "WITHDRAWAL_REVERSAL"]);
+const CREDIT_TYPES = new Set(["FUNDING", "ADJUSTMENT", "ORDER_PAYMENT", "RIDER_EARNING", "AGENT_EARNING", "COMPANY_FEE", "TRANSFER_IN", "WITHDRAWAL_REVERSAL"]);
 const DEBIT_TYPES = new Set(["BILL_PAYMENT", "TRANSFER", "TRANSFER_OUT", "REVERSAL", "WITHDRAWAL"]);
 const BILL_CATEGORIES = new Set(["AIRTIME", "DATA", "ELECTRICITY", "TV", "INTERNET", "WATER", "GAS"]);
 

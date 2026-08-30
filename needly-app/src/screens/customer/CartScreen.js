@@ -103,6 +103,7 @@ export default function CartScreen({ route, navigation }) {
   const [selectedHubId, setSelectedHubId] = useState(checkoutDraft.hubId || "");
   const [platformFeePercent, setPlatformFeePercent] = useState(2.5);
   const [riderFeePercent, setRiderFeePercent] = useState(5);
+  const [agentCollectionFee, setAgentCollectionFee] = useState(300);
   const [paymentGateways, setPaymentGateways] = useState([]);
   const [selectedGateway, setSelectedGateway] = useState(checkoutDraft.paymentGateway || "");
   const [deliveryFeeConfig, setDeliveryFeeConfig] = useState({
@@ -127,7 +128,8 @@ export default function CartScreen({ route, navigation }) {
   const deliveryFeeAmount = deliveryEstimate.fee;
   const companyDeliveryFeeAmount = Math.round(deliveryFeeAmount * (Number(riderFeePercent || 0) / 100));
   const riderPayoutAmount = Math.max(0, deliveryFeeAmount - companyDeliveryFeeAmount);
-  const customerTotal = total + platformFeeAmount + deliveryFeeAmount;
+  const agentFeeAmount = useAgentHub ? Math.max(0, Math.round(Number(agentCollectionFee || 0))) : 0;
+  const customerTotal = total + platformFeeAmount + deliveryFeeAmount + agentFeeAmount;
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
   const cleanPaymentEmail = paymentEmail.trim().toLowerCase();
   const canCheckout = deliveryAddress.trim() && deliveryPhone.trim() && isValidEmail(cleanPaymentEmail) && selectedGateway && itemCount > 0 && !submitting;
@@ -138,6 +140,7 @@ export default function CartScreen({ route, navigation }) {
       if (mounted && Number.isFinite(Number(res?.platformFeePercent))) {
         setPlatformFeePercent(Number(res.platformFeePercent));
         if (Number.isFinite(Number(res?.riderFeePercent))) setRiderFeePercent(Number(res.riderFeePercent));
+        if (Number.isFinite(Number(res?.agentCollectionFee))) setAgentCollectionFee(Number(res.agentCollectionFee));
         setDeliveryFeeConfig((prev) => ({ ...prev, ...res }));
       }
     });
@@ -398,8 +401,14 @@ export default function CartScreen({ route, navigation }) {
               </Text>
               <Text style={styles.splitValue}>{fmtNaira(deliveryFeeAmount)}</Text>
             </View>
+            {useAgentHub && (
+              <View style={styles.splitRow}>
+                <Text style={styles.splitLabel}>Agent hub collection</Text>
+                <Text style={styles.splitValue}>{fmtNaira(agentFeeAmount)}</Text>
+              </View>
+            )}
             <Text style={styles.splitFinePrint}>
-              Rider receives {fmtNaira(riderPayoutAmount)}. Needly keeps {riderFeePercent}% of delivery ({fmtNaira(companyDeliveryFeeAmount)}).
+              Rider receives {fmtNaira(riderPayoutAmount)}. {useAgentHub ? `Agent receives ${fmtNaira(agentFeeAmount)}. ` : ""}Needly keeps {riderFeePercent}% of delivery ({fmtNaira(companyDeliveryFeeAmount)}).
             </Text>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Customer pays</Text>
