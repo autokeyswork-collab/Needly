@@ -76,6 +76,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [vendorArea, setVendorArea] = useState("Abeokuta, Ogun");
   const [areaOpen, setAreaOpen] = useState(false);
   const [vendorAddress, setVendorAddress] = useState("");
+  const [vendorLocation, setVendorLocation] = useState(null);
 
   // Rider Fields
   const [riderZone, setRiderZone] = useState("Abeokuta, Ogun Zone");
@@ -138,6 +139,8 @@ export default function RegisterScreen({ navigation, route }) {
         category: vendorCategory,
         area: vendorArea,
         address: vendorAddress.trim(),
+        latitude: vendorLocation?.latitude ?? null,
+        longitude: vendorLocation?.longitude ?? null,
         eta: "20-35 min",
       };
     } else if (role === "RIDER") {
@@ -207,6 +210,8 @@ export default function RegisterScreen({ navigation, route }) {
         category: vendorCategory,
         area: vendorArea,
         address: vendorAddress.trim(),
+        latitude: vendorLocation?.latitude ?? null,
+        longitude: vendorLocation?.longitude ?? null,
       };
     } else if (role === "RIDER") {
       payload.riderProfile = {
@@ -544,6 +549,10 @@ export default function RegisterScreen({ navigation, route }) {
               onChangeText={setVendorAddress}
               onSelectLocation={(loc) => {
                 setVendorAddress(loc.address);
+                setVendorLocation({
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                });
                 if (loc.area) {
                   setVendorArea([loc.area, loc.city, loc.state].filter(Boolean).join(", "));
                 }

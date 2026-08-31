@@ -443,6 +443,8 @@ model Location {
   active      Boolean  @default(true)
   deliveryFee Int      @default(500)
   maxDistance Int      @default(25)
+  latitude    Float?
+  longitude   Float?
   createdAt   DateTime @default(now())
 }
 

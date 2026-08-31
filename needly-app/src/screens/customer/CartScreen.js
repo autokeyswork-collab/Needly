@@ -64,6 +64,26 @@ async function reverseGeocode(latitude, longitude) {
   }
 }
 
+async function geocodeNigeriaAddress(address) {
+  const clean = String(address || "").trim();
+  if (!clean) return null;
+  try {
+    const scopedQuery = /\bnigeria\b/i.test(clean) ? clean : `${clean}, Nigeria`;
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(scopedQuery)}&addressdetails=1&limit=1&countrycodes=ng`,
+      { headers: { "User-Agent": "NeedlyMarketplaceApp/1.0" } },
+    );
+    const data = await res.json();
+    const first = Array.isArray(data) ? data[0] : null;
+    const latitude = Number(first?.lat);
+    const longitude = Number(first?.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return { latitude, longitude, accuracy: 250 };
+  } catch (err) {
+    return null;
+  }
+}
+
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
@@ -280,12 +300,16 @@ export default function CartScreen({ route, navigation }) {
     setSubmitting(true);
     setError(null);
     try {
+      const checkoutLocation = deliveryLocation || await geocodeNigeriaAddress(deliveryAddress.trim());
+      if (checkoutLocation && !deliveryLocation) {
+        setDeliveryLocation(checkoutLocation);
+      }
       const id = await placeOrder(
         vendor.id,
         items.map((item) => ({ productId: item.id, qty: item.qty, addOns: [] })),
         deliveryAddress.trim(),
         deliveryPhone.trim(),
-        deliveryLocation,
+        checkoutLocation,
         useAgentHub ? { useAgentHub: true, hubId: selectedHub?.id } : undefined,
       );
       const payment = await PaymentAPI.initialize(id, selectedGateway, cleanPaymentEmail);

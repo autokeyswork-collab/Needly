@@ -8,14 +8,15 @@ import { getSocket } from "../../api/socket";
 import { PaymentAPI, ReviewAPI } from "../../api/client";
 import StarRating from "../../components/StarRating";
 import CustomerBottomNav from "../../components/CustomerBottomNav";
+import { NIGERIA_MAJOR_LOCATIONS } from "../../data/nigeriaLocations";
 
 const DISPUTE_REASONS = ["Missing item", "Wrong item", "Item damaged", "Arrived late", "Other"];
-const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
-const ABEOKUTA_BOUNDS = {
-  minLat: 7.08,
-  maxLat: 7.24,
-  minLng: 3.25,
-  maxLng: 3.47,
+const NIGERIA_CENTER = { latitude: 9.082, longitude: 8.6753 };
+const NIGERIA_BOUNDS = {
+  minLat: 4.2,
+  maxLat: 13.9,
+  minLng: 2.6,
+  maxLng: 14.7,
 };
 
 function hasCoords(point) {
@@ -41,22 +42,79 @@ function distanceKm(a, b) {
   return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
 }
 
+function lookupNigeriaPoint(...values) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  if (!haystack) return null;
+  const exact = NIGERIA_MAJOR_LOCATIONS.find((loc) =>
+    [loc.area, loc.city, loc.title].filter(Boolean).some((value) => haystack.includes(String(value).toLowerCase()))
+    && (!loc.state || haystack.includes(String(loc.state).toLowerCase()) || haystack.includes("nigeria"))
+  );
+  const loose = exact || NIGERIA_MAJOR_LOCATIONS.find((loc) =>
+    [loc.area, loc.city, loc.title].filter(Boolean).some((value) => haystack.includes(String(value).toLowerCase()))
+  );
+  return loose ? { latitude: loose.latitude, longitude: loose.longitude } : null;
+}
+
+function boundedNigeriaPoint(point) {
+  if (!hasCoords(point)) return null;
+  const latitude = Number(point.latitude);
+  const longitude = Number(point.longitude);
+  if (latitude < NIGERIA_BOUNDS.minLat || latitude > NIGERIA_BOUNDS.maxLat) return null;
+  if (longitude < NIGERIA_BOUNDS.minLng || longitude > NIGERIA_BOUNDS.maxLng) return null;
+  return { latitude, longitude };
+}
+
+function boundsFor(points) {
+  const usable = Object.values(points).filter(hasCoords).map((point) => ({
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+  }));
+  if (!usable.length) {
+    return { ...NIGERIA_BOUNDS };
+  }
+  if (usable.length === 1) {
+    const only = usable[0];
+    return {
+      minLat: Math.max(NIGERIA_BOUNDS.minLat, only.latitude - 0.08),
+      maxLat: Math.min(NIGERIA_BOUNDS.maxLat, only.latitude + 0.08),
+      minLng: Math.max(NIGERIA_BOUNDS.minLng, only.longitude - 0.08),
+      maxLng: Math.min(NIGERIA_BOUNDS.maxLng, only.longitude + 0.08),
+    };
+  }
+  const minLat = Math.min(...usable.map((p) => p.latitude));
+  const maxLat = Math.max(...usable.map((p) => p.latitude));
+  const minLng = Math.min(...usable.map((p) => p.longitude));
+  const maxLng = Math.max(...usable.map((p) => p.longitude));
+  const latPad = Math.max(0.05, (maxLat - minLat) * 0.35);
+  const lngPad = Math.max(0.05, (maxLng - minLng) * 0.35);
+  return {
+    minLat: Math.max(NIGERIA_BOUNDS.minLat, minLat - latPad),
+    maxLat: Math.min(NIGERIA_BOUNDS.maxLat, maxLat + latPad),
+    minLng: Math.max(NIGERIA_BOUNDS.minLng, minLng - lngPad),
+    maxLng: Math.min(NIGERIA_BOUNDS.maxLng, maxLng + lngPad),
+  };
+}
+
 function buildTrackingPoints(order) {
-  const vendor = hasCoords(order.vendor)
+  const vendor = boundedNigeriaPoint(order.vendor)
     ? { latitude: order.vendor.latitude, longitude: order.vendor.longitude }
-    : ABEOKUTA_CENTER;
-  const customer = hasCoords({ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude })
+    : lookupNigeriaPoint(order.vendor?.address, order.vendor?.area);
+  const hub = boundedNigeriaPoint(order.hub)
+    ? { latitude: order.hub.latitude, longitude: order.hub.longitude }
+    : lookupNigeriaPoint(order.hub?.address, order.hub?.area);
+  const pickup = order.fulfillmentType === "AGENT_HUB" && hub ? hub : vendor;
+  const customer = boundedNigeriaPoint({ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude })
     ? { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
-    : null;
-  const riderReported = hasCoords({ latitude: order.riderLatitude, longitude: order.riderLongitude })
+    : lookupNigeriaPoint(order.deliveryAddress);
+  const riderReported = boundedNigeriaPoint({ latitude: order.riderLatitude, longitude: order.riderLongitude })
     ? { latitude: order.riderLatitude, longitude: order.riderLongitude }
     : null;
-  const simulatedRider = order.status === "PICKED_UP" && customer
-    ? lerp(vendor, customer, 0.58)
+  const simulatedRider = order.status === "PICKED_UP" && pickup && customer
+    ? lerp(pickup, customer, 0.58)
     : order.riderName
-      ? lerp(ABEOKUTA_CENTER, vendor, 0.72)
+      ? lerp(customer || pickup || NIGERIA_CENTER, pickup || customer || NIGERIA_CENTER, 0.72)
       : null;
-  return { vendor, customer, rider: riderReported || simulatedRider };
+  return { vendor: pickup || vendor || NIGERIA_CENTER, hub, customer, rider: riderReported || simulatedRider };
 }
 
 function markerPosition(point, bounds) {
@@ -69,30 +127,15 @@ function markerPosition(point, bounds) {
   };
 }
 
-function inAbeokuta(point) {
-  if (!hasCoords(point)) return false;
-  const latitude = Number(point.latitude);
-  const longitude = Number(point.longitude);
-  return latitude >= ABEOKUTA_BOUNDS.minLat
-    && latitude <= ABEOKUTA_BOUNDS.maxLat
-    && longitude >= ABEOKUTA_BOUNDS.minLng
-    && longitude <= ABEOKUTA_BOUNDS.maxLng;
-}
-
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
 function TrackingMap({ order }) {
-  const rawPoints = buildTrackingPoints(order);
-  const points = {
-    vendor: inAbeokuta(rawPoints.vendor) ? rawPoints.vendor : ABEOKUTA_CENTER,
-    customer: inAbeokuta(rawPoints.customer) ? rawPoints.customer : null,
-    rider: inAbeokuta(rawPoints.rider) ? rawPoints.rider : null,
-  };
-  const bounds = ABEOKUTA_BOUNDS;
+  const points = buildTrackingPoints(order);
+  const bounds = boundsFor(points);
   const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
-  const center = points.customer || points.vendor || ABEOKUTA_CENTER;
+  const center = points.customer || points.vendor || points.hub || NIGERIA_CENTER;
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${center.latitude},${center.longitude}`;
   const riderDistance = points.rider && points.customer ? distanceKm(points.rider, points.customer) : null;
   const destination = points.customer || points.vendor;
@@ -109,7 +152,7 @@ function TrackingMap({ order }) {
       <View style={styles.mapHeader}>
         <View>
           <Text style={styles.mapTitle}>Live geo tracking</Text>
-          <Text style={styles.mapSubtitle}>Abeokuta service area only</Text>
+          <Text style={styles.mapSubtitle}>Nigeria-wide delivery tracking</Text>
         </View>
         <Pressable disabled={!hasCoords(points.rider)} onPress={openDirections} style={[styles.mapBtn, !hasCoords(points.rider) && { opacity: 0.45 }]}>
           <Text style={styles.mapBtnText}>Open map</Text>
@@ -140,8 +183,8 @@ function TrackingMap({ order }) {
         <View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap</Text></View>
       </View>
       <View style={styles.geoRows}>
-        <Text style={styles.geoLine}>Vendor: {order.vendor?.address || order.vendor?.area || "Abeokuta"} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
-        <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS not attached inside Abeokuta"}</Text>
+        <Text style={styles.geoLine}>Pickup: {order.hub?.address || order.vendor?.address || order.vendor?.area || "Needly pickup"} · {points.vendor.latitude.toFixed(5)}, {points.vendor.longitude.toFixed(5)}</Text>
+        <Text style={styles.geoLine}>Customer: {points.customer ? `${points.customer.latitude.toFixed(5)}, ${points.customer.longitude.toFixed(5)}` : "GPS or Nigerian location not attached"}</Text>
         <Text style={styles.geoLine}>Rider: {points.rider ? `${points.rider.latitude.toFixed(5)}, ${points.rider.longitude.toFixed(5)}${riderDistance ? ` · ${riderDistance.toFixed(1)} km away` : ""}` : "Not assigned yet"}</Text>
       </View>
     </View>

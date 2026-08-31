@@ -396,11 +396,19 @@ router.get("/locations", async (req, res) => {
 });
 
 router.post("/locations", async (req, res) => {
-  const { name, state = "Ogun", type = "CITY", deliveryFee = 500, maxDistance = 25 } = req.body;
+  const { name, state = "Ogun", type = "CITY", deliveryFee = 500, maxDistance = 25, latitude, longitude } = req.body;
   if (!name) return res.status(400).json({ error: "Location name is required" });
   try {
     const loc = await prisma.location.create({
-      data: { name: name.trim(), state: String(state || "Ogun").trim() || "Ogun", type, deliveryFee: Number(deliveryFee), maxDistance: Number(maxDistance) },
+      data: {
+        name: name.trim(),
+        state: String(state || "Ogun").trim() || "Ogun",
+        type,
+        deliveryFee: Number(deliveryFee),
+        maxDistance: Number(maxDistance),
+        latitude: latitude === undefined || latitude === null || latitude === "" ? null : Number(latitude),
+        longitude: longitude === undefined || longitude === null || longitude === "" ? null : Number(longitude),
+      },
     });
     await logAction(req, { action: "Added location", targetType: "Location", targetId: loc.id, targetLabel: loc.name });
     res.status(201).json(loc);
@@ -1172,7 +1180,18 @@ router.patch("/users/:id", async (req, res) => {
 
 router.patch("/vendors/:id", async (req, res) => {
   try {
-    const updated = await prisma.vendor.update({ where: { id: req.params.id }, data: req.body });
+    const { name, category, area, eta, rating, latitude, longitude, isOpen, address } = req.body || {};
+    const data = {};
+    if (name !== undefined) data.name = String(name).trim();
+    if (category !== undefined) data.category = String(category).trim();
+    if (area !== undefined) data.area = String(area).trim();
+    if (eta !== undefined) data.eta = String(eta).trim();
+    if (address !== undefined) data.address = address ? String(address).trim() : null;
+    if (rating !== undefined) data.rating = Number(rating);
+    if (latitude !== undefined) data.latitude = latitude === "" || latitude === null ? null : Number(latitude);
+    if (longitude !== undefined) data.longitude = longitude === "" || longitude === null ? null : Number(longitude);
+    if (isOpen !== undefined) data.isOpen = isOpen === true || String(isOpen).toLowerCase() === "true";
+    const updated = await prisma.vendor.update({ where: { id: req.params.id }, data });
     await logAction(req, { action: "Updated vendor details", targetType: "Vendor", targetId: updated.id, targetLabel: updated.name });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -1180,7 +1199,18 @@ router.patch("/vendors/:id", async (req, res) => {
 
 router.patch("/riders/:id", async (req, res) => {
   try {
-    const updated = await prisma.rider.update({ where: { id: req.params.id }, data: req.body });
+    const { zone, rating, latitude, longitude, isOnline, verified } = req.body || {};
+    const data = {};
+    if (zone !== undefined) data.zone = String(zone).trim();
+    if (rating !== undefined) data.rating = Number(rating);
+    if (latitude !== undefined) data.latitude = latitude === "" || latitude === null ? null : Number(latitude);
+    if (longitude !== undefined) data.longitude = longitude === "" || longitude === null ? null : Number(longitude);
+    if (isOnline !== undefined) data.isOnline = isOnline === true || String(isOnline).toLowerCase() === "true";
+    if (verified !== undefined) {
+      data.verified = verified === true || String(verified).toLowerCase() === "true";
+      data.verifiedAt = data.verified ? new Date() : null;
+    }
+    const updated = await prisma.rider.update({ where: { id: req.params.id }, data });
     await logAction(req, { action: "Updated rider details", targetType: "Rider", targetId: updated.id, targetLabel: updated.zone });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -1209,7 +1239,7 @@ router.patch("/hubs/:id", async (req, res) => {
 
 router.patch("/agents/:id", async (req, res) => {
   try {
-    const { name, phone, zone, hubId, verified, isOnline, bankName, bankAccountNumber, bankAccountName } = req.body || {};
+    const { name, phone, zone, hubId, verified, isOnline, latitude, longitude, bankName, bankAccountNumber, bankAccountName } = req.body || {};
     if (hubId) {
       const hub = await prisma.hub.findUnique({ where: { id: hubId } });
       if (!hub) return res.status(404).json({ error: "Hub not found" });
@@ -1236,6 +1266,8 @@ router.patch("/agents/:id", async (req, res) => {
       data.verifiedAt = data.verified ? new Date() : null;
     }
     if (isOnline !== undefined) data.isOnline = isOnline === true || String(isOnline).toLowerCase() === "true";
+    if (latitude !== undefined) data.latitude = latitude === "" || latitude === null ? null : Number(latitude);
+    if (longitude !== undefined) data.longitude = longitude === "" || longitude === null ? null : Number(longitude);
     if (bankName !== undefined) data.bankName = bankName || null;
     if (bankAccountNumber !== undefined) data.bankAccountNumber = bankAccountNumber || null;
     if (bankAccountName !== undefined) data.bankAccountName = bankAccountName || null;
@@ -1288,7 +1320,17 @@ router.patch("/bookings/:id", async (req, res) => {
 
 router.patch("/locations/:id", async (req, res) => {
   try {
-    const updated = await prisma.location.update({ where: { id: req.params.id }, data: req.body });
+    const { name, state, type, active, deliveryFee, maxDistance, latitude, longitude } = req.body || {};
+    const data = {};
+    if (name !== undefined) data.name = String(name).trim();
+    if (state !== undefined) data.state = String(state).trim();
+    if (type !== undefined) data.type = String(type).trim();
+    if (active !== undefined) data.active = active === true || String(active).toLowerCase() === "true";
+    if (deliveryFee !== undefined) data.deliveryFee = Number(deliveryFee);
+    if (maxDistance !== undefined) data.maxDistance = Number(maxDistance);
+    if (latitude !== undefined) data.latitude = latitude === "" || latitude === null ? null : Number(latitude);
+    if (longitude !== undefined) data.longitude = longitude === "" || longitude === null ? null : Number(longitude);
+    const updated = await prisma.location.update({ where: { id: req.params.id }, data });
     await logAction(req, { action: "Updated location details", targetType: "Location", targetId: updated.id, targetLabel: updated.name });
     res.json(updated);
   } catch (err) { res.status(400).json({ error: err.message }); }

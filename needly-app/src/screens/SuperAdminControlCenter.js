@@ -90,20 +90,48 @@ const categoryIcon = (category = "") => {
   if (c.includes("home") || c.includes("clean")) return "🧹";
   return "📦";
 };
-const ABEOKUTA_CENTER = { latitude: 7.1475, longitude: 3.3619 };
-const ABEOKUTA_BOUNDS = {
-  minLat: 7.08,
-  maxLat: 7.24,
-  minLng: 3.25,
-  maxLng: 3.47,
+const NIGERIA_CENTER = { latitude: 9.082, longitude: 8.6753 };
+const NIGERIA_BOUNDS = {
+  minLat: 4.2,
+  maxLat: 13.9,
+  minLng: 2.6,
+  maxLng: 14.7,
 };
 const hasCoords = (item = {}) => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude));
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const isInsideAbeokuta = (point = {}) => hasCoords(point)
-  && Number(point.latitude) >= ABEOKUTA_BOUNDS.minLat
-  && Number(point.latitude) <= ABEOKUTA_BOUNDS.maxLat
-  && Number(point.longitude) >= ABEOKUTA_BOUNDS.minLng
-  && Number(point.longitude) <= ABEOKUTA_BOUNDS.maxLng;
+const isInsideNigeria = (point = {}) => hasCoords(point)
+  && Number(point.latitude) >= NIGERIA_BOUNDS.minLat
+  && Number(point.latitude) <= NIGERIA_BOUNDS.maxLat
+  && Number(point.longitude) >= NIGERIA_BOUNDS.minLng
+  && Number(point.longitude) <= NIGERIA_BOUNDS.maxLng;
+const mapBoundsFor = (points = []) => {
+  const usable = points.filter(isInsideNigeria).map((point) => ({
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+  }));
+  if (!usable.length) return NIGERIA_BOUNDS;
+  if (usable.length === 1) {
+    const only = usable[0];
+    return {
+      minLat: clamp(only.latitude - 0.08, NIGERIA_BOUNDS.minLat, NIGERIA_BOUNDS.maxLat),
+      maxLat: clamp(only.latitude + 0.08, NIGERIA_BOUNDS.minLat, NIGERIA_BOUNDS.maxLat),
+      minLng: clamp(only.longitude - 0.08, NIGERIA_BOUNDS.minLng, NIGERIA_BOUNDS.maxLng),
+      maxLng: clamp(only.longitude + 0.08, NIGERIA_BOUNDS.minLng, NIGERIA_BOUNDS.maxLng),
+    };
+  }
+  const minLat = Math.min(...usable.map((p) => p.latitude));
+  const maxLat = Math.max(...usable.map((p) => p.latitude));
+  const minLng = Math.min(...usable.map((p) => p.longitude));
+  const maxLng = Math.max(...usable.map((p) => p.longitude));
+  const latPad = Math.max(0.05, (maxLat - minLat) * 0.3);
+  const lngPad = Math.max(0.05, (maxLng - minLng) * 0.3);
+  return {
+    minLat: clamp(minLat - latPad, NIGERIA_BOUNDS.minLat, NIGERIA_BOUNDS.maxLat),
+    maxLat: clamp(maxLat + latPad, NIGERIA_BOUNDS.minLat, NIGERIA_BOUNDS.maxLat),
+    minLng: clamp(minLng - lngPad, NIGERIA_BOUNDS.minLng, NIGERIA_BOUNDS.maxLng),
+    maxLng: clamp(maxLng + lngPad, NIGERIA_BOUNDS.minLng, NIGERIA_BOUNDS.maxLng),
+  };
+};
 const projectMapPoint = (point, bounds) => ({
   left: `${clamp(((Number(point.longitude) - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100, 4, 96)}%`,
   top: `${clamp((1 - ((Number(point.latitude) - bounds.minLat) / (bounds.maxLat - bounds.minLat))) * 100, 5, 95)}%`,
@@ -111,15 +139,15 @@ const projectMapPoint = (point, bounds) => ({
 
 const editFieldsMap = {
   user: [["Full Name", "name"], ["Email", "email"], ["Phone", "phone"], ["Role", "role"]],
-  vendor: [["Store Name", "name"], ["Category", "category"], ["Area", "area"], ["ETA", "eta"]],
-  rider: [["Zone", "zone"], ["Rating", "rating", true]],
-  agent: [["Name", "name"], ["Phone", "phone"], ["Zone", "zone"], ["Hub ID", "hubId"], ["Online", "isOnline"], ["Verified", "verified"], ["Bank Name", "bankName"], ["Account Number", "bankAccountNumber"], ["Account Name", "bankAccountName"]],
+  vendor: [["Store Name", "name"], ["Category", "category"], ["Area", "area"], ["ETA", "eta"], ["Latitude", "latitude", true], ["Longitude", "longitude", true]],
+  rider: [["Zone", "zone"], ["Rating", "rating", true], ["Latitude", "latitude", true], ["Longitude", "longitude", true]],
+  agent: [["Name", "name"], ["Phone", "phone"], ["Zone", "zone"], ["Hub ID", "hubId"], ["Online", "isOnline"], ["Latitude", "latitude", true], ["Longitude", "longitude", true], ["Verified", "verified"], ["Bank Name", "bankName"], ["Account Number", "bankAccountNumber"], ["Account Name", "bankAccountName"]],
   hub: [["Hub Name", "name"], ["Area", "area"], ["Address", "address"], ["Latitude", "latitude", true], ["Longitude", "longitude", true], ["Active", "active"]],
   product: [["Product Name", "name"], ["Price", "price", true], ["Emoji", "emoji"], ["Subcategory", "subcategory"], ["Stock", "stock", true]],
   service: [["Service Name", "name"], ["Category", "category"], ["Price", "price", true], ["Description", "description"]],
   order: [["Status", "status"], ["Cancel Reason", "cancelReason"]],
   booking: [["Status", "status"], ["Provider Name", "providerName"], ["Total", "total", true], ["Cancel Reason", "cancelReason"]],
-  location: [["Location Name", "name"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true]],
+  location: [["Location Name", "name"], ["State", "state"], ["Type", "type"], ["Delivery Fee", "deliveryFee", true], ["Max Radius", "maxDistance", true], ["Latitude", "latitude", true], ["Longitude", "longitude", true], ["Active", "active"]],
   category: [["Key", "key"], ["Label", "label"], ["Slug", "slug"], ["Type", "type"], ["Flow", "flow"], ["Parent ID", "parentId"], ["Division ID", "divisionId"], ["Description", "description"], ["Icon", "icon"], ["Image URL", "image"], ["Banner URL", "bannerImage"], ["Image Key", "imageKey"], ["Position", "position", true], ["Featured", "isFeatured"], ["Homepage", "showOnHomepage"], ["Location", "location"], ["Active", "active"]],
   commission: [["Target Name", "targetName"], ["Fee %", "ratePercent", true]],
   promotion: [
@@ -331,19 +359,19 @@ function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 320 }
       return [...deliveryPoint, ...vendorPoint, ...riderPoint];
     }),
   ];
-  const abeokutaPoints = points.filter(isInsideAbeokuta);
-  const displayPoints = abeokutaPoints.length ? abeokutaPoints : [{
-    id: "abeokuta-center",
-    latitude: ABEOKUTA_CENTER.latitude,
-    longitude: ABEOKUTA_CENTER.longitude,
-    label: "Abeokuta",
-    type: "Needly Service Area",
+  const nigeriaPoints = points.filter(isInsideNigeria);
+  const displayPoints = nigeriaPoints.length ? nigeriaPoints : [{
+    id: "nigeria-center",
+    latitude: NIGERIA_CENTER.latitude,
+    longitude: NIGERIA_CENTER.longitude,
+    label: "Nigeria",
+    type: "Needly Operations",
     icon: "📍",
     color: PURPLE,
   }];
-  const bounds = ABEOKUTA_BOUNDS;
+  const bounds = mapBoundsFor(displayPoints);
   const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
-  const center = displayPoints[0] || ABEOKUTA_CENTER;
+  const center = displayPoints[0] || NIGERIA_CENTER;
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${Number(center.latitude)},${Number(center.longitude)}`;
   const fullMapUrl = `https://www.openstreetmap.org/?mlat=${Number(center.latitude)}&mlon=${Number(center.longitude)}#map=13/${Number(center.latitude)}/${Number(center.longitude)}`;
   const openMap = () => Linking.openURL(fullMapUrl).catch(() => {});
@@ -377,9 +405,9 @@ function LiveMapGraphic({ orders = [], riders = [], vendors = [], height = 320 }
       })}
 
       <View style={s.mapInfoCard}>
-        <Text style={s.mapInfoTitle}>Abeokuta Live Map</Text>
+        <Text style={s.mapInfoTitle}>Nigeria Live Map</Text>
         <Text numberOfLines={1} style={s.mapInfoSub}>
-          {displayPoints.length} live point(s) inside Abeokuta
+          {displayPoints.length} live point(s) across Nigeria
         </Text>
         <View style={{ flexDirection: "row", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
           <Badge label={`${vendors.filter(hasCoords).length} Vendors`} color={AMBER} bg={AMBER_BG} />
@@ -625,12 +653,23 @@ export default function SuperAdminControlCenter({ onLogout }) {
   };
 
   const addZone = async () => {
-    const name = prompt("Location / delivery zone name:", "Abeokuta");
+    const name = prompt("Location / delivery zone name:", "Lagos");
     if (!name) return;
+    const state = prompt("State:", "Lagos");
     const deliveryFee = prompt("Delivery fee in naira:", "500");
     const maxDistance = prompt("Max delivery radius in km:", "25");
+    const latitude = prompt("Latitude (optional, for map tracking):", "");
+    const longitude = prompt("Longitude (optional, for map tracking):", "");
     try {
-      await SuperAdminAPI.createLocation({ name, type: "ZONE", deliveryFee: Number(deliveryFee || 500), maxDistance: Number(maxDistance || 25) });
+      await SuperAdminAPI.createLocation({
+        name,
+        state: state || "Lagos",
+        type: "ZONE",
+        deliveryFee: Number(deliveryFee || 500),
+        maxDistance: Number(maxDistance || 25),
+        latitude,
+        longitude,
+      });
       reload();
     } catch (err) {
       alert("Add zone failed: " + (err.message || err));
