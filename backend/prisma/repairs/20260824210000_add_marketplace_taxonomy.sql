@@ -28,6 +28,17 @@ ALTER TABLE "Category"
   ADD COLUMN IF NOT EXISTS "customFields" JSONB,
   ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'Category_slug_key'
+      AND table_name = 'Category'
+  ) THEN
+    ALTER TABLE "Category" DROP CONSTRAINT "Category_slug_key";
+  END IF;
+END $$;
+
 DROP INDEX IF EXISTS "Category_slug_key";
 
 UPDATE "Category"
@@ -195,6 +206,11 @@ UPDATE "Category" child
 SET "parentId" = NULL
 WHERE "parentId" IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "Category" parent WHERE parent."id" = child."parentId");
+
+UPDATE "Category"
+SET "location" = NULL,
+    "updatedAt" = NOW()
+WHERE "location" = 'Abeokuta';
 
 CREATE UNIQUE INDEX IF NOT EXISTS "Category_slug_key" ON "Category"("slug");
 CREATE INDEX IF NOT EXISTS "Category_parentId_idx" ON "Category"("parentId");
